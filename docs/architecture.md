@@ -2,8 +2,6 @@
 
 ## Tech Stack
 
-Follows the same stack as [plutus](~/repos/plutus).
-
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 |

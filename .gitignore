@@ -1,0 +1,19 @@
+# Binary
+clockkeeper
+tmp/
+
+# Environment
+.env
+
+# Node
+node_modules/
+
+# Frontend build output
+web/build/
+
+# SvelteKit generated
+web/.svelte-kit/
+
+# Generated code
+gen/
+web/src/lib/gen/

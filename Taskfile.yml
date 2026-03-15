@@ -1,0 +1,80 @@
+version: "3"
+
+dotenv: [".env"]
+
+includes:
+  db: Taskfile.db.yml
+
+tasks:
+  default:
+    cmds:
+      - task: run
+
+  dev:
+    desc: Start full development environment (postgres + backend + frontend)
+    cmds:
+      - docker compose up -d postgres
+      - defer: docker compose stop postgres
+      - |
+        for i in $(seq 1 60); do
+          if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 0.5
+        done
+        echo "Postgres did not become ready in 30s" >&2
+        exit 1
+      - task: db:migrate
+      - |
+        trap 'kill 0' EXIT
+        go tool air &
+        pnpm --dir web run dev &
+        wait
+
+  build:
+    desc: Build the Clock Keeper binary
+    cmds:
+      - go build -o clockkeeper ./cmd/
+
+  run:
+    desc: Run the Clock Keeper server
+    cmds:
+      - go run ./cmd/
+
+  test:
+    desc: Run all tests
+    cmds:
+      - task: test:unit
+
+  test:unit:
+    desc: Run unit tests
+    cmds:
+      - go test ./...
+
+  gen:
+    desc: Run all code generation (Ent + Protobuf)
+    cmds:
+      - task: gen:ent
+      - task: gen:proto
+
+  gen:ent:
+    desc: Generate Ent code
+    cmds:
+      - go generate ./ent
+
+  gen:proto:
+    desc: Generate Protobuf + ConnectRPC code
+    cmds:
+      - buf generate
+
+  frontend:build:
+    desc: Build the Svelte frontend
+    dir: web
+    cmds:
+      - pnpm run build
+
+  frontend:dev:
+    desc: Start frontend dev server
+    dir: web
+    cmds:
+      - pnpm run dev

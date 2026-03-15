@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: clockkeeper
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d clockkeeper"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  clockkeeper:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: clockkeeper
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    command: >
+      sh -c "
+      set -e;
+      echo 'Running migrations...';
+      atlas migrate apply --dir file:///app/migrations --url postgres://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME?sslmode=disable;
+      echo 'Starting application...';
+      exec /app/clockkeeper
+      "
+
+volumes:
+  pgdata:

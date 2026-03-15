@@ -16,8 +16,6 @@ Digital companion app for in-person Blood on the Clocktower games. Storyteller-f
 - **Code gen**: buf (proto → Go + TypeScript)
 - **Task runner**: Taskfile
 
-Architecture mirrors [plutus](~/repos/plutus). When unsure about patterns, check that repo.
-
 ## Project Structure
 
 ```

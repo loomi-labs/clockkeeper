@@ -1,0 +1,51 @@
+version: "3"
+
+vars:
+  ATLAS_URL: "postgres://postgres:postgres@localhost:5432/clockkeeper?sslmode=disable"
+  MIGRATIONS_DIR: "ent/migrate/migrations"
+
+tasks:
+  up:
+    desc: Start PostgreSQL and run migrations
+    cmds:
+      - docker compose up -d postgres
+      - |
+        for i in $(seq 1 60); do
+          if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Postgres did not become ready in 60s" >&2
+        exit 1
+      - task: migrate
+
+  migrate:new:
+    desc: Generate a new migration from schema changes
+    cmds:
+      - >
+        atlas migrate diff {{.CLI_ARGS}}
+        --dir "file://{{.MIGRATIONS_DIR}}"
+        --to "ent://ent/schema"
+        --dev-url "docker://postgres/18/dev?search_path=public"
+
+  migrate:
+    desc: Apply all pending migrations
+    cmds:
+      - >
+        atlas migrate apply
+        --dir "file://{{.MIGRATIONS_DIR}}"
+        --url "{{.ATLAS_URL}}"
+
+  migrate:status:
+    desc: Show migration status
+    cmds:
+      - >
+        atlas migrate status
+        --dir "file://{{.MIGRATIONS_DIR}}"
+        --url "{{.ATLAS_URL}}"
+
+  migrate:create:blank:
+    desc: Create a blank migration file
+    cmds:
+      - atlas migrate new {{.CLI_ARGS}} --dir "file://{{.MIGRATIONS_DIR}}"
