@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -21,8 +22,17 @@ const (
 	FieldUsername = "username"
 	// FieldPasswordHash holds the string denoting the password_hash field in the database.
 	FieldPasswordHash = "password_hash"
+	// EdgeScripts holds the string denoting the scripts edge name in mutations.
+	EdgeScripts = "scripts"
 	// Table holds the table name of the user in the database.
 	Table = "users"
+	// ScriptsTable is the table that holds the scripts relation/edge.
+	ScriptsTable = "scripts"
+	// ScriptsInverseTable is the table name for the Script entity.
+	// It exists in this package in order to avoid circular dependency with the "script" package.
+	ScriptsInverseTable = "scripts"
+	// ScriptsColumn is the table column denoting the scripts relation/edge.
+	ScriptsColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -83,4 +93,25 @@ func ByUsername(opts ...sql.OrderTermOption) OrderOption {
 // ByPasswordHash orders the results by the password_hash field.
 func ByPasswordHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPasswordHash, opts...).ToFunc()
+}
+
+// ByScriptsCount orders the results by scripts count.
+func ByScriptsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newScriptsStep(), opts...)
+	}
+}
+
+// ByScripts orders the results by scripts terms.
+func ByScripts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newScriptsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newScriptsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ScriptsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ScriptsTable, ScriptsColumn),
+	)
 }

@@ -27,7 +27,7 @@ func TestIssueToken_Valid(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
-	err = auth.validate("Bearer " + token)
+	_, err = auth.validate("Bearer " + token)
 	assert.NoError(t, err)
 }
 
@@ -38,16 +38,16 @@ func TestIssueToken_WrongSecret(t *testing.T) {
 	token, err := issuer.IssueToken("alice")
 	require.NoError(t, err)
 
-	err = validator.validate("Bearer " + token)
+	_, err = validator.validate("Bearer " + token)
 	assert.Error(t, err)
 }
 
 func TestValidate_MissingHeader(t *testing.T) {
 	auth := NewAuthInterceptor("secret")
 
-	err := auth.validate("")
+	_, err := auth.validate("")
 	assert.Error(t, err)
 
-	err = auth.validate("NotBearer token")
+	_, err = auth.validate("NotBearer token")
 	assert.Error(t, err)
 }

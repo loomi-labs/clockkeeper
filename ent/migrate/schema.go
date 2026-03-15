@@ -8,6 +8,58 @@ import (
 )
 
 var (
+	// GamesColumns holds the columns for the "games" table.
+	GamesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "player_count", Type: field.TypeInt},
+		{Name: "traveller_count", Type: field.TypeInt, Default: 0},
+		{Name: "selected_roles", Type: field.TypeJSON},
+		{Name: "selected_travellers", Type: field.TypeJSON},
+		{Name: "state", Type: field.TypeEnum, Enums: []string{"setup", "in_progress", "completed"}, Default: "setup"},
+		{Name: "script_id", Type: field.TypeInt},
+	}
+	// GamesTable holds the schema information for the "games" table.
+	GamesTable = &schema.Table{
+		Name:       "games",
+		Columns:    GamesColumns,
+		PrimaryKey: []*schema.Column{GamesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "games_scripts_games",
+				Columns:    []*schema.Column{GamesColumns[8]},
+				RefColumns: []*schema.Column{ScriptsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// ScriptsColumns holds the columns for the "scripts" table.
+	ScriptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString},
+		{Name: "edition", Type: field.TypeString, Default: "custom"},
+		{Name: "character_ids", Type: field.TypeJSON},
+		{Name: "is_system", Type: field.TypeBool, Default: false},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "user_id", Type: field.TypeInt, Nullable: true},
+	}
+	// ScriptsTable holds the schema information for the "scripts" table.
+	ScriptsTable = &schema.Table{
+		Name:       "scripts",
+		Columns:    ScriptsColumns,
+		PrimaryKey: []*schema.Column{ScriptsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "scripts_users_scripts",
+				Columns:    []*schema.Column{ScriptsColumns[8]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -24,9 +76,13 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		GamesTable,
+		ScriptsTable,
 		UsersTable,
 	}
 )
 
 func init() {
+	GamesTable.ForeignKeys[0].RefTable = ScriptsTable
+	ScriptsTable.ForeignKeys[0].RefTable = UsersTable
 }

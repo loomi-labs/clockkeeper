@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -58,6 +59,21 @@ func (_c *UserCreate) SetUsername(v string) *UserCreate {
 func (_c *UserCreate) SetPasswordHash(v string) *UserCreate {
 	_c.mutation.SetPasswordHash(v)
 	return _c
+}
+
+// AddScriptIDs adds the "scripts" edge to the Script entity by IDs.
+func (_c *UserCreate) AddScriptIDs(ids ...int) *UserCreate {
+	_c.mutation.AddScriptIDs(ids...)
+	return _c
+}
+
+// AddScripts adds the "scripts" edges to the Script entity.
+func (_c *UserCreate) AddScripts(v ...*Script) *UserCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddScriptIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -170,6 +186,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
 		_node.PasswordHash = value
+	}
+	if nodes := _c.mutation.ScriptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ScriptsTable,
+			Columns: []string{user.ScriptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(script.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

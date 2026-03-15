@@ -5,7 +5,9 @@ package ent
 import (
 	"time"
 
+	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
+	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -13,6 +15,86 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	gameMixin := schema.Game{}.Mixin()
+	gameMixinFields0 := gameMixin[0].Fields()
+	_ = gameMixinFields0
+	gameFields := schema.Game{}.Fields()
+	_ = gameFields
+	// gameDescCreatedAt is the schema descriptor for created_at field.
+	gameDescCreatedAt := gameMixinFields0[0].Descriptor()
+	// game.DefaultCreatedAt holds the default value on creation for the created_at field.
+	game.DefaultCreatedAt = gameDescCreatedAt.Default.(func() time.Time)
+	// gameDescUpdatedAt is the schema descriptor for updated_at field.
+	gameDescUpdatedAt := gameMixinFields0[1].Descriptor()
+	// game.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	game.DefaultUpdatedAt = gameDescUpdatedAt.Default.(func() time.Time)
+	// game.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	game.UpdateDefaultUpdatedAt = gameDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// gameDescPlayerCount is the schema descriptor for player_count field.
+	gameDescPlayerCount := gameFields[1].Descriptor()
+	// game.PlayerCountValidator is a validator for the "player_count" field. It is called by the builders before save.
+	game.PlayerCountValidator = func() func(int) error {
+		validators := gameDescPlayerCount.Validators
+		fns := [...]func(int) error{
+			validators[0].(func(int) error),
+			validators[1].(func(int) error),
+		}
+		return func(player_count int) error {
+			for _, fn := range fns {
+				if err := fn(player_count); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// gameDescTravellerCount is the schema descriptor for traveller_count field.
+	gameDescTravellerCount := gameFields[2].Descriptor()
+	// game.DefaultTravellerCount holds the default value on creation for the traveller_count field.
+	game.DefaultTravellerCount = gameDescTravellerCount.Default.(int)
+	// game.TravellerCountValidator is a validator for the "traveller_count" field. It is called by the builders before save.
+	game.TravellerCountValidator = func() func(int) error {
+		validators := gameDescTravellerCount.Validators
+		fns := [...]func(int) error{
+			validators[0].(func(int) error),
+			validators[1].(func(int) error),
+		}
+		return func(traveller_count int) error {
+			for _, fn := range fns {
+				if err := fn(traveller_count); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	scriptMixin := schema.Script{}.Mixin()
+	scriptMixinFields0 := scriptMixin[0].Fields()
+	_ = scriptMixinFields0
+	scriptFields := schema.Script{}.Fields()
+	_ = scriptFields
+	// scriptDescCreatedAt is the schema descriptor for created_at field.
+	scriptDescCreatedAt := scriptMixinFields0[0].Descriptor()
+	// script.DefaultCreatedAt holds the default value on creation for the created_at field.
+	script.DefaultCreatedAt = scriptDescCreatedAt.Default.(func() time.Time)
+	// scriptDescUpdatedAt is the schema descriptor for updated_at field.
+	scriptDescUpdatedAt := scriptMixinFields0[1].Descriptor()
+	// script.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	script.DefaultUpdatedAt = scriptDescUpdatedAt.Default.(func() time.Time)
+	// script.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	script.UpdateDefaultUpdatedAt = scriptDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// scriptDescName is the schema descriptor for name field.
+	scriptDescName := scriptFields[0].Descriptor()
+	// script.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	script.NameValidator = scriptDescName.Validators[0].(func(string) error)
+	// scriptDescEdition is the schema descriptor for edition field.
+	scriptDescEdition := scriptFields[1].Descriptor()
+	// script.DefaultEdition holds the default value on creation for the edition field.
+	script.DefaultEdition = scriptDescEdition.Default.(string)
+	// scriptDescIsSystem is the schema descriptor for is_system field.
+	scriptDescIsSystem := scriptFields[3].Descriptor()
+	// script.DefaultIsSystem holds the default value on creation for the is_system field.
+	script.DefaultIsSystem = scriptDescIsSystem.Default.(bool)
 	userMixin := schema.User{}.Mixin()
 	userMixinFields0 := userMixin[0].Fields()
 	_ = userMixinFields0

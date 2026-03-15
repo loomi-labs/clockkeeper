@@ -11,7 +11,9 @@ import (
 	"testing"
 
 	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/game"
 	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
+	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 	"github.com/loomi-labs/clockkeeper/internal/database"
 
@@ -22,7 +24,12 @@ import (
 // validation function. When a new migration is added without a corresponding
 // validator, TestMigrationCoverage fails — forcing you to write one.
 var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db *sql.DB, client *ent.Client){
-	"20260315162621_initial": validateInitialSchema,
+	"20260315162621_initial":                       validateInitialSchema,
+	"20260315175834_add_scripts_and_games":          validateScriptsAndGames,
+	"20260315191827_add_traveller_count":            validateTravellerCount,
+	"20260315195303_add_selected_travellers":        validateSelectedTravellers,
+	"20260316163815_add_system_scripts":              validateSystemScripts,
+	"20260316165946_add_script_soft_delete":          validateScriptSoftDelete,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -93,6 +100,8 @@ func TestMigrationCoverage(t *testing.T) {
 // TestSchemaCompleteness ensures all schema entities are covered by the migration test.
 func TestSchemaCompleteness(t *testing.T) {
 	knownEntities := []string{
+		"game.go",
+		"script.go",
 		"user.go",
 	}
 
@@ -206,6 +215,116 @@ func validateInitialSchema(t *testing.T, ctx context.Context, _ *sql.DB, client 
 	}
 	if adminUser.PasswordHash == "" {
 		t.Error("user password_hash is empty")
+	}
+}
+
+// validateScriptsAndGames checks that scripts and games tables exist with seeded data.
+func validateScriptsAndGames(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	s, err := client.Script.Query().
+		Where(script.Name("My TB Script")).
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query seeded script: %v", err)
+	}
+	if s.Edition != "tb" {
+		t.Errorf("expected edition 'tb', got %q", s.Edition)
+	}
+
+	g, err := client.Game.Query().
+		Where(game.StateEQ(game.StateSetup)).
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query seeded game: %v", err)
+	}
+	if g.PlayerCount != 7 {
+		t.Errorf("expected player_count 7, got %d", g.PlayerCount)
+	}
+}
+
+// validateTravellerCount checks that the traveller_count column exists with default 0.
+func validateTravellerCount(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.TravellerCount != 0 {
+		t.Errorf("expected default traveller_count 0, got %d", g.TravellerCount)
+	}
+}
+
+// validateSelectedTravellers checks that the selected_travellers column exists with default empty.
+func validateSelectedTravellers(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if len(g.SelectedTravellers) != 0 {
+		t.Errorf("expected empty selected_travellers, got %v", g.SelectedTravellers)
+	}
+}
+
+// validateSystemScripts checks that the system scripts were seeded and user_id is nullable.
+func validateSystemScripts(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	// Verify all 3 system scripts exist.
+	systemScripts, err := client.Script.Query().
+		Where(script.IsSystem(true)).
+		All(ctx)
+	if err != nil {
+		t.Fatalf("failed to query system scripts: %v", err)
+	}
+	if len(systemScripts) != 3 {
+		t.Fatalf("expected 3 system scripts, got %d", len(systemScripts))
+	}
+
+	editions := map[string]bool{}
+	for _, s := range systemScripts {
+		editions[s.Edition] = true
+		if s.UserID != nil {
+			t.Errorf("system script %q should have nil user_id", s.Name)
+		}
+		if len(s.CharacterIds) == 0 {
+			t.Errorf("system script %q has no character_ids", s.Name)
+		}
+	}
+	for _, ed := range []string{"tb", "bmr", "snv"} {
+		if !editions[ed] {
+			t.Errorf("missing system script for edition %q", ed)
+		}
+	}
+
+	// Verify user-owned script still exists with user_id set.
+	userScript, err := client.Script.Query().
+		Where(script.IsSystem(false)).
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query user script: %v", err)
+	}
+	if userScript.UserID == nil {
+		t.Error("user script should have a user_id")
+	}
+}
+
+// validateScriptSoftDelete checks that the deleted_at column exists and is nullable.
+func validateScriptSoftDelete(t *testing.T, ctx context.Context, db *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	// Verify deleted_at is NULL for all existing scripts.
+	scripts, err := client.Script.Query().All(ctx)
+	if err != nil {
+		t.Fatalf("failed to query scripts: %v", err)
+	}
+	for _, s := range scripts {
+		if s.DeletedAt != nil {
+			t.Errorf("script %q should have nil deleted_at", s.Name)
+		}
 	}
 }
 

@@ -5,8 +5,34 @@ package clockkeeper.v1;
 option go_package = "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1;clockkeeperv1";
 
 service ClockKeeperService {
+  // Auth
   rpc Login(LoginRequest) returns (LoginResponse) {}
+
+  // Characters (read-only, from embedded data)
+  rpc ListCharacters(ListCharactersRequest) returns (ListCharactersResponse) {}
+
+  // Editions (templates for creating scripts)
+  rpc ListEditions(ListEditionsRequest) returns (ListEditionsResponse) {}
+
+  // Scripts
+  rpc ListScripts(ListScriptsRequest) returns (ListScriptsResponse) {}
+  rpc GetScript(GetScriptRequest) returns (GetScriptResponse) {}
+  rpc CreateScript(CreateScriptRequest) returns (CreateScriptResponse) {}
+  rpc CreateScriptFromEdition(CreateScriptFromEditionRequest) returns (CreateScriptFromEditionResponse) {}
+  rpc UpdateScript(UpdateScriptRequest) returns (UpdateScriptResponse) {}
+  rpc DeleteScript(DeleteScriptRequest) returns (DeleteScriptResponse) {}
+  rpc ImportScript(ImportScriptRequest) returns (ImportScriptResponse) {}
+
+  // Games
+  rpc CreateGame(CreateGameRequest) returns (CreateGameResponse) {}
+  rpc GetGame(GetGameRequest) returns (GetGameResponse) {}
+  rpc RandomizeRoles(RandomizeRolesRequest) returns (RandomizeRolesResponse) {}
+  rpc UpdateGameRoles(UpdateGameRolesRequest) returns (UpdateGameRolesResponse) {}
+  rpc UpdateGameTravellers(UpdateGameTravellersRequest) returns (UpdateGameTravellersResponse) {}
+  rpc GetSetupChecklist(GetSetupChecklistRequest) returns (GetSetupChecklistResponse) {}
 }
+
+// --- Auth ---
 
 message LoginRequest {
   string username = 1;
@@ -15,4 +41,201 @@ message LoginRequest {
 
 message LoginResponse {
   string token = 1;
+}
+
+// --- Characters ---
+
+message Character {
+  string id = 1;
+  string name = 2;
+  string team = 3;
+  string edition = 4;
+  string ability = 5;
+  bool setup = 6;
+  repeated string reminders = 7;
+  repeated string reminders_global = 8;
+  string first_night_reminder = 9;
+  string other_night_reminder = 10;
+  int32 first_night = 11;
+  int32 other_night = 12;
+}
+
+message ListCharactersRequest {
+  string edition = 1;
+  string team = 2;
+}
+
+message ListCharactersResponse {
+  repeated Character characters = 1;
+}
+
+// --- Editions ---
+
+message Edition {
+  string id = 1;
+  string name = 2;
+  repeated string character_ids = 3;
+}
+
+message ListEditionsRequest {}
+
+message ListEditionsResponse {
+  repeated Edition editions = 1;
+}
+
+// --- Scripts ---
+
+message Script {
+  int64 id = 1;
+  string name = 2;
+  string edition = 3;
+  repeated string character_ids = 4;
+  repeated Character characters = 5;
+  bool is_system = 6;
+}
+
+message ListScriptsRequest {}
+
+message ListScriptsResponse {
+  repeated Script scripts = 1;
+}
+
+message GetScriptRequest {
+  int64 id = 1;
+}
+
+message GetScriptResponse {
+  Script script = 1;
+}
+
+message CreateScriptRequest {
+  string name = 1;
+  repeated string character_ids = 2;
+}
+
+message CreateScriptResponse {
+  Script script = 1;
+}
+
+message CreateScriptFromEditionRequest {
+  string edition_id = 1;
+  string name = 2;
+}
+
+message CreateScriptFromEditionResponse {
+  Script script = 1;
+}
+
+message UpdateScriptRequest {
+  int64 id = 1;
+  string name = 2;
+  repeated string character_ids = 3;
+}
+
+message UpdateScriptResponse {
+  Script script = 1;
+}
+
+message DeleteScriptRequest {
+  int64 id = 1;
+}
+
+message DeleteScriptResponse {}
+
+message ImportScriptRequest {
+  string json = 1;
+}
+
+message ImportScriptResponse {
+  Script script = 1;
+}
+
+// --- Games ---
+
+message RoleDistribution {
+  int32 townsfolk = 1;
+  int32 outsiders = 2;
+  int32 minions = 3;
+  int32 demons = 4;
+}
+
+message ReminderToken {
+  string character_id = 1;
+  string character_name = 2;
+  string text = 3;
+}
+
+message Game {
+  int64 id = 1;
+  int64 script_id = 2;
+  int32 player_count = 3;
+  repeated string selected_role_ids = 4;
+  string state = 5;
+  RoleDistribution distribution = 6;
+  repeated Character selected_characters = 7;
+  repeated ReminderToken reminder_tokens = 8;
+  int32 traveller_count = 9;
+  repeated string selected_traveller_ids = 10;
+  repeated Character selected_traveller_characters = 11;
+}
+
+message CreateGameRequest {
+  int64 script_id = 1;
+  int32 player_count = 2;
+  int32 traveller_count = 3;
+}
+
+message CreateGameResponse {
+  Game game = 1;
+}
+
+message GetGameRequest {
+  int64 id = 1;
+}
+
+message GetGameResponse {
+  Game game = 1;
+}
+
+message RandomizeRolesRequest {
+  int64 game_id = 1;
+}
+
+message RandomizeRolesResponse {
+  Game game = 1;
+}
+
+message UpdateGameRolesRequest {
+  int64 game_id = 1;
+  repeated string selected_role_ids = 2;
+}
+
+message UpdateGameRolesResponse {
+  Game game = 1;
+}
+
+message UpdateGameTravellersRequest {
+  int64 game_id = 1;
+  repeated string selected_traveller_ids = 2;
+}
+
+message UpdateGameTravellersResponse {
+  Game game = 1;
+}
+
+// --- Setup Checklist ---
+
+message SetupStep {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  bool requires_action = 4;
+}
+
+message GetSetupChecklistRequest {
+  int64 game_id = 1;
+}
+
+message GetSetupChecklistResponse {
+  repeated SetupStep steps = 1;
 }

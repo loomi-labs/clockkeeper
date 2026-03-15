@@ -6,11 +6,11 @@ Digital companion app for in-person Blood on the Clocktower games. Storyteller-f
 
 - @docs/project-overview.md — Vision, scope, MVP definition
 - @docs/architecture.md — Tech stack, system design, testing strategy
-- `@docs/user-stories.md` — User stories by feature area
+- @docs/user-stories.m` — User stories by feature area
 
 ## Tech Stack
 
-- **Backend**: Go 1.25, ConnectRPC + Protocol Buffers, Ent ORM, PostgreSQL 18
+- **Backend**: Go, ConnectRPC + Protocol Buffers, Ent ORM, PostgreSQL 18
 - **Frontend**: Svelte 5 + SvelteKit, Tailwind 4, pnpm
 - **Build**: Docker multi-stage, frontend embedded in Go binary via `//go:embed`
 - **Code gen**: buf (proto → Go + TypeScript)
