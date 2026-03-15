@@ -3,7 +3,7 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
-	"github.com/rapha/clockkeeper/ent/schema/mixin"
+	"github.com/loomi-labs/clockkeeper/ent/schema/mixin"
 )
 
 // User holds the schema definition for the User entity.

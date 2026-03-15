@@ -1,4 +1,4 @@
-module github.com/rapha/clockkeeper
+module github.com/loomi-labs/clockkeeper
 
 go 1.26.1
 

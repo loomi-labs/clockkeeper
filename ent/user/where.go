@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/rapha/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/predicate"
 )
 
 // ID filters vertices based on their ID field.

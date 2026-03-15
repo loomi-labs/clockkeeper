@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
-	"github.com/rapha/clockkeeper/ent"
-	"github.com/rapha/clockkeeper/gen/clockkeeper/v1/clockkeeperv1connect"
+	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1/clockkeeperv1connect"
 )
 
 // Server is the HTTP server that serves the API and frontend.

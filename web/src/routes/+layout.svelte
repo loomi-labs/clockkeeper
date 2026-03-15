@@ -19,7 +19,9 @@
 	});
 </script>
 
-{#if authenticated && !page.url.pathname.startsWith('/login')}
+{#if page.url.pathname.startsWith('/login')}
+	{@render children()}
+{:else if authenticated}
 	<div class="min-h-dvh bg-gray-950 text-gray-100">
 		<nav class="border-b border-gray-800 bg-gray-900">
 			<div class="mx-auto flex max-w-screen-xl items-center justify-between px-4 py-3">
@@ -36,6 +38,4 @@
 			{@render children()}
 		</main>
 	</div>
-{:else}
-	{@render children()}
 {/if}

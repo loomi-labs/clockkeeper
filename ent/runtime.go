@@ -5,8 +5,8 @@ package ent
 import (
 	"time"
 
-	"github.com/rapha/clockkeeper/ent/schema"
-	"github.com/rapha/clockkeeper/ent/user"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
+	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
 // The init function reads all schema descriptors with runtime code

@@ -9,12 +9,12 @@ import (
 	"log"
 	"reflect"
 
-	"github.com/rapha/clockkeeper/ent/migrate"
+	"github.com/loomi-labs/clockkeeper/ent/migrate"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
-	"github.com/rapha/clockkeeper/ent/user"
+	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
 // Client is the client that holds all ent builders.

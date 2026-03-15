@@ -2,12 +2,13 @@ package web
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"log/slog"
 
 	"connectrpc.com/connect"
-	"github.com/rapha/clockkeeper/ent"
-	"github.com/rapha/clockkeeper/ent/user"
-	clockkeeperv1 "github.com/rapha/clockkeeper/gen/clockkeeper/v1"
+	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/user"
+	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 )
 
 // ClockKeeperServiceHandler implements the ConnectRPC ClockKeeperService.
@@ -23,17 +24,19 @@ func (h *ClockKeeperServiceHandler) Login(ctx context.Context, req *connect.Requ
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid credentials"))
+			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
 		}
-		return nil, connect.NewError(connect.CodeInternal, err)
+		slog.Error("login query failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 	if !CheckPassword(req.Msg.Password, u.PasswordHash) {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid credentials"))
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
 	}
 
 	token, err := h.auth.IssueToken(req.Msg.Username)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		slog.Error("issue token failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
 	return connect.NewResponse(&clockkeeperv1.LoginResponse{Token: token}), nil

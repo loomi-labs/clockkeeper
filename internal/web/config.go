@@ -1,6 +1,6 @@
 package web
 
-import "github.com/rapha/clockkeeper/internal/env"
+import "github.com/loomi-labs/clockkeeper/internal/env"
 
 // Config holds web server configuration.
 type Config struct {

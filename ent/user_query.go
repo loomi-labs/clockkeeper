@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/rapha/clockkeeper/ent/predicate"
-	"github.com/rapha/clockkeeper/ent/user"
+	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
 // UserQuery is the builder for querying User entities.

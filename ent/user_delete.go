@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/rapha/clockkeeper/ent/predicate"
-	"github.com/rapha/clockkeeper/ent/user"
+	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
 // UserDelete is the builder for deleting a User entity.

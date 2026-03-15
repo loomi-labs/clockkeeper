@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/rapha/clockkeeper/internal/database"
-	"github.com/rapha/clockkeeper/internal/logger"
-	"github.com/rapha/clockkeeper/internal/web"
+	"github.com/loomi-labs/clockkeeper/internal/database"
+	"github.com/loomi-labs/clockkeeper/internal/logger"
+	"github.com/loomi-labs/clockkeeper/internal/web"
 )
 
 // CreateUserCmd creates a new user in the database.

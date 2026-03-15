@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -10,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	clockkeeper "github.com/rapha/clockkeeper"
-	"github.com/rapha/clockkeeper/internal/database"
-	"github.com/rapha/clockkeeper/internal/logger"
-	"github.com/rapha/clockkeeper/internal/web"
+	clockkeeper "github.com/loomi-labs/clockkeeper"
+	"github.com/loomi-labs/clockkeeper/internal/database"
+	"github.com/loomi-labs/clockkeeper/internal/logger"
+	"github.com/loomi-labs/clockkeeper/internal/web"
 )
 
 // ServeCmd starts the Clock Keeper server.
@@ -25,6 +26,10 @@ func (s *ServeCmd) Run() error {
 
 	dbConfig := database.LoadConfigFromEnv()
 	webConfig := web.LoadConfigFromEnv()
+
+	if webConfig.JWTSecretKey == "" {
+		return fmt.Errorf("JWT_SECRET_KEY or JWT_SECRET_KEY_FILE must be set")
+	}
 
 	db, sqlDB, err := database.NewClient(dbConfig)
 	if err != nil {
