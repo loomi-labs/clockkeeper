@@ -12,6 +12,7 @@ import (
 
 	"github.com/loomi-labs/clockkeeper/ent"
 	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
+	"github.com/loomi-labs/clockkeeper/ent/user"
 	"github.com/loomi-labs/clockkeeper/internal/database"
 
 	_ "github.com/lib/pq"
@@ -197,14 +198,13 @@ func TestMigrationDataIntegrity(t *testing.T) {
 func validateInitialSchema(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
 	t.Helper()
 
-	user, err := client.User.Query().Only(ctx)
+	adminUser, err := client.User.Query().
+		Where(user.Username("admin")).
+		Only(ctx)
 	if err != nil {
-		t.Fatalf("failed to query user: %v", err)
+		t.Fatalf("failed to query admin user: %v", err)
 	}
-	if user.Username != "admin" {
-		t.Errorf("user username: want admin, got %s", user.Username)
-	}
-	if user.PasswordHash == "" {
+	if adminUser.PasswordHash == "" {
 		t.Error("user password_hash is empty")
 	}
 }

@@ -17,3 +17,6 @@ web/.svelte-kit/
 # Generated code
 gen/
 web/src/lib/gen/
+
+# Test artifacts
+web/test-results/
