@@ -9,7 +9,7 @@
 	let scripts = $state<Script[]>([]);
 	let editions = $state<Edition[]>([]);
 	let selectedScriptId = $state<bigint | undefined>();
-	let playerCount = $state(8);
+	let totalCount = $state(8);
 	let travellerCount = $state(0);
 	let loading = $state(true);
 	let creating = $state(false);
@@ -36,11 +36,19 @@
 		15: { townsfolk: 9, outsiders: 2, minions: 3, demons: 1 }
 	};
 
+	const playerCount = $derived(Math.min(totalCount, 15));
+	const minTravellers = $derived(Math.max(0, totalCount - 15));
 	const currentDist = $derived(distributions[playerCount]);
 	const selectedScript = $derived(scripts.find((s) => s.id === selectedScriptId));
 	const totalPeople = $derived(playerCount + travellerCount);
-	const maxTravellers = $derived(25 - playerCount);
 	const showTotalWarning = $derived(totalPeople > 20);
+
+	// When totalCount changes, ensure travellerCount is at least the minimum.
+	$effect(() => {
+		if (travellerCount < minTravellers) {
+			travellerCount = minTravellers;
+		}
+	});
 
 	onMount(async () => {
 		try {
@@ -150,12 +158,12 @@
 		<!-- Step 2: Player count -->
 		{#if selectedScriptId}
 			<section class="space-y-3">
-				<h2 class="text-lg font-semibold text-gray-300">2. Player Count</h2>
+				<h2 class="text-lg font-semibold text-gray-300">2. How many people?</h2>
 				<div class="flex flex-wrap gap-2">
-					{#each Array.from({ length: 11 }, (_, i) => i + 5) as n}
+					{#each Array.from({ length: 16 }, (_, i) => i + 5) as n}
 						<button
-							onclick={() => (playerCount = n)}
-							class="h-10 w-10 rounded-lg text-sm font-medium transition-colors {playerCount === n
+							onclick={() => (totalCount = n)}
+							class="h-10 w-10 rounded-lg text-sm font-medium transition-colors {totalCount === n
 								? 'bg-indigo-500 text-white'
 								: 'border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800'}"
 						>
@@ -163,6 +171,12 @@
 						</button>
 					{/each}
 				</div>
+
+				{#if totalCount > 15}
+					<p class="text-sm text-gray-400">
+						Max 15 players — {totalCount - 15} will be {totalCount - 15 === 1 ? 'a traveller' : 'travellers'}
+					</p>
+				{/if}
 
 				{#if currentDist}
 					<div class="rounded-lg border border-gray-700 bg-gray-900 p-4">
@@ -177,16 +191,16 @@
 				<h2 class="text-lg font-semibold text-gray-300">3. Travellers</h2>
 				<div class="flex items-center gap-3">
 					<button
-						onclick={() => (travellerCount = Math.max(0, travellerCount - 1))}
-						disabled={travellerCount <= 0}
+						onclick={() => (travellerCount = Math.max(minTravellers, travellerCount - 1))}
+						disabled={travellerCount <= minTravellers}
 						class="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-700 bg-gray-900 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-30"
 					>
 						-
 					</button>
 					<span class="w-8 text-center text-lg font-medium text-white">{travellerCount}</span>
 					<button
-						onclick={() => (travellerCount = Math.min(maxTravellers, travellerCount + 1))}
-						disabled={travellerCount >= maxTravellers}
+						onclick={() => (travellerCount = travellerCount + 1)}
+						disabled={totalPeople >= 25}
 						class="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-700 bg-gray-900 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-30"
 					>
 						+
