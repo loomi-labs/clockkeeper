@@ -12,6 +12,7 @@ import (
 	"time"
 
 	clockkeeper "github.com/loomi-labs/clockkeeper"
+	"github.com/loomi-labs/clockkeeper/internal/botc"
 	"github.com/loomi-labs/clockkeeper/internal/database"
 	"github.com/loomi-labs/clockkeeper/internal/logger"
 	"github.com/loomi-labs/clockkeeper/internal/web"
@@ -40,12 +41,23 @@ func (s *ServeCmd) Run() error {
 
 	slog.Info("database connected")
 
+	registry, err := botc.NewRegistry(clockkeeper.RolesJSON, clockkeeper.JinxesJSON, clockkeeper.NightSheetJSON)
+	if err != nil {
+		return fmt.Errorf("loading game data: %w", err)
+	}
+	slog.Info("game data loaded", "characters", len(registry.AllCharacters()))
+
 	staticFiles, err := fs.Sub(clockkeeper.StaticFiles, "web/build")
 	if err != nil {
 		return err
 	}
 
-	server := web.NewServer(webConfig, db, staticFiles)
+	characterIcons, err := fs.Sub(clockkeeper.CharacterIcons, "data/characters")
+	if err != nil {
+		return err
+	}
+
+	server := web.NewServer(webConfig, db, registry, staticFiles, characterIcons)
 
 	go func() {
 		if listenErr := server.ListenAndServe(); listenErr != nil && listenErr != http.ErrServerClosed {

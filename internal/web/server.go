@@ -12,6 +12,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/loomi-labs/clockkeeper/ent"
 	"github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1/clockkeeperv1connect"
+	"github.com/loomi-labs/clockkeeper/internal/botc"
 )
 
 // Server is the HTTP server that serves the API and frontend.
@@ -21,13 +22,14 @@ type Server struct {
 }
 
 // NewServer creates a new web server with all services wired.
-func NewServer(config *Config, db *ent.Client, staticFiles fs.FS) *Server {
+func NewServer(config *Config, db *ent.Client, registry *botc.Registry, staticFiles fs.FS, characterIcons fs.FS) *Server {
 	auth := NewAuthInterceptor(config.JWTSecretKey)
 
 	handler := &ClockKeeperServiceHandler{
-		config: config,
-		db:     db,
-		auth:   auth,
+		config:   config,
+		db:       db,
+		auth:     auth,
+		registry: registry,
 	}
 
 	mux := http.NewServeMux()
@@ -38,6 +40,11 @@ func NewServer(config *Config, db *ent.Client, staticFiles fs.FS) *Server {
 		connect.WithInterceptors(auth),
 	)
 	mux.Handle(rpcPath, rpcHandler)
+
+	// Character icon images.
+	if characterIcons != nil {
+		mux.Handle("/characters/", http.StripPrefix("/characters/", http.FileServer(http.FS(characterIcons))))
+	}
 
 	// Svelte SPA (catch-all with fallback to index.html for client-side routing).
 	if staticFiles != nil {

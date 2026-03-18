@@ -56,9 +56,13 @@ jobs:
 
       - name: Install Atlas
         uses: ariga/setup-atlas@v0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install buf
         uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Go dependencies
         run: go mod download

@@ -11,7 +11,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -62,9 +64,81 @@ func (_u *UserUpdate) SetNillablePasswordHash(v *string) *UserUpdate {
 	return _u
 }
 
+// AddScriptIDs adds the "scripts" edge to the Script entity by IDs.
+func (_u *UserUpdate) AddScriptIDs(ids ...int) *UserUpdate {
+	_u.mutation.AddScriptIDs(ids...)
+	return _u
+}
+
+// AddScripts adds the "scripts" edges to the Script entity.
+func (_u *UserUpdate) AddScripts(v ...*Script) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddScriptIDs(ids...)
+}
+
+// AddGameIDs adds the "games" edge to the Game entity by IDs.
+func (_u *UserUpdate) AddGameIDs(ids ...int) *UserUpdate {
+	_u.mutation.AddGameIDs(ids...)
+	return _u
+}
+
+// AddGames adds the "games" edges to the Game entity.
+func (_u *UserUpdate) AddGames(v ...*Game) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGameIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
+}
+
+// ClearScripts clears all "scripts" edges to the Script entity.
+func (_u *UserUpdate) ClearScripts() *UserUpdate {
+	_u.mutation.ClearScripts()
+	return _u
+}
+
+// RemoveScriptIDs removes the "scripts" edge to Script entities by IDs.
+func (_u *UserUpdate) RemoveScriptIDs(ids ...int) *UserUpdate {
+	_u.mutation.RemoveScriptIDs(ids...)
+	return _u
+}
+
+// RemoveScripts removes "scripts" edges to Script entities.
+func (_u *UserUpdate) RemoveScripts(v ...*Script) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveScriptIDs(ids...)
+}
+
+// ClearGames clears all "games" edges to the Game entity.
+func (_u *UserUpdate) ClearGames() *UserUpdate {
+	_u.mutation.ClearGames()
+	return _u
+}
+
+// RemoveGameIDs removes the "games" edge to Game entities by IDs.
+func (_u *UserUpdate) RemoveGameIDs(ids ...int) *UserUpdate {
+	_u.mutation.RemoveGameIDs(ids...)
+	return _u
+}
+
+// RemoveGames removes "games" edges to Game entities.
+func (_u *UserUpdate) RemoveGames(v ...*Game) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGameIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -139,6 +213,96 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
 	}
+	if _u.mutation.ScriptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ScriptsTable,
+			Columns: []string{user.ScriptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(script.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedScriptsIDs(); len(nodes) > 0 && !_u.mutation.ScriptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ScriptsTable,
+			Columns: []string{user.ScriptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(script.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ScriptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ScriptsTable,
+			Columns: []string{user.ScriptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(script.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.GamesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GamesTable,
+			Columns: []string{user.GamesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(game.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGamesIDs(); len(nodes) > 0 && !_u.mutation.GamesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GamesTable,
+			Columns: []string{user.GamesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(game.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GamesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GamesTable,
+			Columns: []string{user.GamesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(game.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -193,9 +357,81 @@ func (_u *UserUpdateOne) SetNillablePasswordHash(v *string) *UserUpdateOne {
 	return _u
 }
 
+// AddScriptIDs adds the "scripts" edge to the Script entity by IDs.
+func (_u *UserUpdateOne) AddScriptIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.AddScriptIDs(ids...)
+	return _u
+}
+
+// AddScripts adds the "scripts" edges to the Script entity.
+func (_u *UserUpdateOne) AddScripts(v ...*Script) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddScriptIDs(ids...)
+}
+
+// AddGameIDs adds the "games" edge to the Game entity by IDs.
+func (_u *UserUpdateOne) AddGameIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.AddGameIDs(ids...)
+	return _u
+}
+
+// AddGames adds the "games" edges to the Game entity.
+func (_u *UserUpdateOne) AddGames(v ...*Game) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGameIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
+}
+
+// ClearScripts clears all "scripts" edges to the Script entity.
+func (_u *UserUpdateOne) ClearScripts() *UserUpdateOne {
+	_u.mutation.ClearScripts()
+	return _u
+}
+
+// RemoveScriptIDs removes the "scripts" edge to Script entities by IDs.
+func (_u *UserUpdateOne) RemoveScriptIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.RemoveScriptIDs(ids...)
+	return _u
+}
+
+// RemoveScripts removes "scripts" edges to Script entities.
+func (_u *UserUpdateOne) RemoveScripts(v ...*Script) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveScriptIDs(ids...)
+}
+
+// ClearGames clears all "games" edges to the Game entity.
+func (_u *UserUpdateOne) ClearGames() *UserUpdateOne {
+	_u.mutation.ClearGames()
+	return _u
+}
+
+// RemoveGameIDs removes the "games" edge to Game entities by IDs.
+func (_u *UserUpdateOne) RemoveGameIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.RemoveGameIDs(ids...)
+	return _u
+}
+
+// RemoveGames removes "games" edges to Game entities.
+func (_u *UserUpdateOne) RemoveGames(v ...*Game) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGameIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -299,6 +535,96 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
+	}
+	if _u.mutation.ScriptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ScriptsTable,
+			Columns: []string{user.ScriptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(script.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedScriptsIDs(); len(nodes) > 0 && !_u.mutation.ScriptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ScriptsTable,
+			Columns: []string{user.ScriptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(script.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ScriptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ScriptsTable,
+			Columns: []string{user.ScriptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(script.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.GamesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GamesTable,
+			Columns: []string{user.GamesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(game.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGamesIDs(); len(nodes) > 0 && !_u.mutation.GamesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GamesTable,
+			Columns: []string{user.GamesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(game.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GamesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GamesTable,
+			Columns: []string{user.GamesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(game.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &User{config: _u.config}
 	_spec.Assign = _node.assignValues

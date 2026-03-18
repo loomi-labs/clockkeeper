@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+@font-face {
+	font-family: 'Goudy Stout';
+	src: url('/fonts/GoudyStM.woff2') format('woff2');
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+}

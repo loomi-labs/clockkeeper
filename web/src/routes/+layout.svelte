@@ -17,6 +17,11 @@
 			goto('/login');
 		}
 	});
+
+	const navLinks = [
+		{ href: '/scripts', label: 'Scripts' },
+		{ href: '/games/new', label: 'New Game' }
+	];
 </script>
 
 {#if page.url.pathname.startsWith('/login')}
@@ -25,7 +30,17 @@
 	<div class="min-h-dvh bg-gray-950 text-gray-100">
 		<nav class="border-b border-gray-800 bg-gray-900">
 			<div class="mx-auto flex max-w-screen-xl items-center justify-between px-4 py-3">
-				<a href="/" class="text-xl font-bold text-indigo-400">Clock Keeper</a>
+				<div class="flex items-center gap-6">
+					<a href="/" class="text-xl font-bold text-indigo-400">Clock Keeper</a>
+					{#each navLinks as link}
+						<a
+							href={link.href}
+							class="text-sm transition-colors {page.url.pathname.startsWith(link.href) ? 'text-white' : 'text-gray-400 hover:text-gray-200'}"
+						>
+							{link.label}
+						</a>
+					{/each}
+				</div>
 				<button
 					onclick={logout}
 					class="rounded-lg px-3 py-1.5 text-sm text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200"
