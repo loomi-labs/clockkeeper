@@ -118,7 +118,8 @@
 				<div class="grid gap-3 sm:grid-cols-3">
 					{#each editions as edition}
 						{@const style = editionStyles[edition.id] ?? { border: 'border-gray-700', bg: 'bg-gray-900', activeBorder: 'border-indigo-500', activeBg: 'bg-indigo-500/10' }}
-						{@const isSelected = selectedScript?.edition === edition.id}
+						{@const editionCharSet = new Set(edition.characterIds)}
+					{@const isSelected = selectedScript?.characterIds.some((id) => editionCharSet.has(id)) ?? false}
 						<button
 							onclick={() => selectEdition(edition.id)}
 							class="flex flex-col items-center rounded-lg border p-5 transition-all hover:scale-[1.02] hover:brightness-110 {isSelected
