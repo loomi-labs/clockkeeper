@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { client } from '~/lib/api';
+	import { getErrorMessage } from '~/lib/errors';
 	import type { Script, Edition } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 
 	let scripts = $state<Script[]>([]);
@@ -29,7 +30,7 @@
 			const ed = charToEdition.get(cid);
 			if (ed) editionSet.add(ed);
 		}
-		return ['tb', 'bmr', 'snv'].filter((e) => editionSet.has(e));
+		return editions.map((e) => e.id).filter((e) => editionSet.has(e));
 	}
 
 	function scriptCardStyle(eds: string[]): { classes: string; inlineStyle: string } {
@@ -66,8 +67,8 @@
 				}
 			}
 			charToEdition = map;
-		} catch (err: any) {
-			error = err.message || 'Failed to load';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to load');
 		} finally {
 			loading = false;
 		}
@@ -79,8 +80,8 @@
 			if (resp.script) {
 				goto(`/scripts/${resp.script.id}`);
 			}
-		} catch (err: any) {
-			error = err.message || 'Failed to create script';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to create script');
 		}
 	}
 
@@ -90,8 +91,8 @@
 			if (resp.script) {
 				goto(`/scripts/${resp.script.id}`);
 			}
-		} catch (err: any) {
-			error = err.message || 'Failed to create script';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to create script');
 		}
 	}
 
@@ -99,8 +100,8 @@
 		try {
 			await client.deleteScript({ id });
 			scripts = scripts.filter((s) => s.id !== id);
-		} catch (err: any) {
-			error = err.message || 'Failed to delete script';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to delete script');
 		}
 	}
 
@@ -111,8 +112,8 @@
 			if (resp.script) {
 				goto(`/scripts/${resp.script.id}`);
 			}
-		} catch (err: any) {
-			importError = err.message || 'Failed to import';
+		} catch (err) {
+			importError = getErrorMessage(err, 'Failed to import');
 		}
 	}
 </script>

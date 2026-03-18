@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { client } from '~/lib/api';
+	import { getErrorMessage } from '~/lib/errors';
 	import type { Script, Character } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import { Team } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import TeamSection from '~/lib/components/TeamSection.svelte';
@@ -139,8 +140,8 @@
 			});
 			lastSavedName = currentName;
 			lastSavedIds = currentIds;
-		} catch (err: any) {
-			error = err.message || 'Failed to save';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to save');
 		}
 	}
 
@@ -153,8 +154,8 @@
 			name = script?.name ?? '';
 			lastSavedName = name;
 			lastSavedIds = script?.characterIds ?? [];
-		} catch (err: any) {
-			error = err.message || 'Failed to load script';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to load script');
 		} finally {
 			loading = false;
 		}
@@ -197,8 +198,8 @@
 			if (resp.script) {
 				goto(`/scripts/${resp.script.id}`);
 			}
-		} catch (err: any) {
-			error = err.message || 'Failed to duplicate script';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to duplicate script');
 		}
 	}
 
@@ -207,8 +208,8 @@
 		try {
 			await client.deleteScript({ id: script.id });
 			goto('/scripts');
-		} catch (err: any) {
-			error = err.message || 'Failed to delete script';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to delete script');
 		}
 	}
 

@@ -13,12 +13,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMain(m *testing.M) {
+	database.StartSharedContainer(m)
+}
+
 func testHandler(t *testing.T) *ClockKeeperServiceHandler {
 	t.Helper()
 
-	config := database.SetupPostgreSQLContainer(t)
-	migrator := database.NewMigrator(t, config)
-	migrator.ApplyN(t, -1)
+	config := database.CreateTestDatabase(t)
 
 	client, _, err := database.NewClient(config)
 	if err != nil {
@@ -42,11 +44,7 @@ func testHandler(t *testing.T) *ClockKeeperServiceHandler {
 }
 
 func TestLogin_Success(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user.
@@ -72,11 +70,7 @@ func TestLogin_Success(t *testing.T) {
 }
 
 func TestLogin_WrongPassword(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	hash, err := HashPassword("correct")
@@ -96,11 +90,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 }
 
 func TestLogin_NonexistentUser(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	_, err := handler.Login(ctx, connect.NewRequest(&clockkeeperv1.LoginRequest{
@@ -117,11 +107,7 @@ func authedCtx(username string) context.Context {
 }
 
 func TestListScripts_IncludesSystemScripts(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user and a user-owned script.
@@ -161,11 +147,7 @@ func TestListScripts_IncludesSystemScripts(t *testing.T) {
 }
 
 func TestUpdateScript_BlocksSystemScript(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user for auth context.
@@ -199,11 +181,7 @@ func TestUpdateScript_BlocksSystemScript(t *testing.T) {
 }
 
 func TestDeleteScript_BlocksSystemScript(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user for auth context.
@@ -238,11 +216,7 @@ func TestDeleteScript_BlocksSystemScript(t *testing.T) {
 // --- Script ownership tests ---
 
 func TestUpdateScript_BlocksOtherUser(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create two users.
@@ -271,11 +245,7 @@ func TestUpdateScript_BlocksOtherUser(t *testing.T) {
 }
 
 func TestDeleteScript_BlocksOtherUser(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	hash, err := HashPassword("pass")
@@ -300,11 +270,7 @@ func TestDeleteScript_BlocksOtherUser(t *testing.T) {
 }
 
 func TestUpdateScript_OwnerSucceeds(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	hash, err := HashPassword("pass")
@@ -328,11 +294,7 @@ func TestUpdateScript_OwnerSucceeds(t *testing.T) {
 }
 
 func TestDeleteScript_OwnerSucceeds(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 
 	hash, err := HashPassword("pass")
@@ -389,11 +351,7 @@ func createTestGame(t *testing.T, handler *ClockKeeperServiceHandler) (ownerUser
 }
 
 func TestCreateGame_SetsOwner(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	_, gameID := createTestGame(t, handler)
 
 	// Verify owner can access the game.
@@ -405,11 +363,7 @@ func TestCreateGame_SetsOwner(t *testing.T) {
 }
 
 func TestGetGame_BlocksOtherUser(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 	_, gameID := createTestGame(t, handler)
 
@@ -427,11 +381,7 @@ func TestGetGame_BlocksOtherUser(t *testing.T) {
 }
 
 func TestRandomizeRoles_BlocksOtherUser(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 	_, gameID := createTestGame(t, handler)
 
@@ -448,11 +398,7 @@ func TestRandomizeRoles_BlocksOtherUser(t *testing.T) {
 }
 
 func TestUpdateGameRoles_BlocksOtherUser(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	ctx := context.Background()
 	_, gameID := createTestGame(t, handler)
 
@@ -470,11 +416,7 @@ func TestUpdateGameRoles_BlocksOtherUser(t *testing.T) {
 }
 
 func TestRandomizeRoles_OwnerSucceeds(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	handler := testHandler(t)
+handler := testHandler(t)
 	_, gameID := createTestGame(t, handler)
 
 	resp, err := handler.RandomizeRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
@@ -482,4 +424,201 @@ func TestRandomizeRoles_OwnerSucceeds(t *testing.T) {
 	}))
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Msg.Game.SelectedRoleIds, "expected roles to be assigned")
+}
+
+// --- Game handler tests ---
+
+func TestCreateGame_InvalidPlayerCount(t *testing.T) {
+handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	// Find a system script.
+	scriptsResp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	require.NoError(t, err)
+	var scriptID int64
+	for _, s := range scriptsResp.Msg.Scripts {
+		if s.IsSystem {
+			scriptID = s.Id
+			break
+		}
+	}
+	require.NotZero(t, scriptID)
+
+	_, err = handler.CreateGame(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+		ScriptId:    scriptID,
+		PlayerCount: 3,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestCreateGame_InvalidScript(t *testing.T) {
+handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	_, err = handler.CreateGame(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+		ScriptId:    99999,
+		PlayerCount: 7,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+func TestCreateGame_ReturnsDistribution(t *testing.T) {
+handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	scriptsResp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	require.NoError(t, err)
+	var scriptID int64
+	for _, s := range scriptsResp.Msg.Scripts {
+		if s.IsSystem {
+			scriptID = s.Id
+			break
+		}
+	}
+	require.NotZero(t, scriptID)
+
+	resp, err := handler.CreateGame(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+		ScriptId:    scriptID,
+		PlayerCount: 7,
+	}))
+	require.NoError(t, err)
+	require.NotNil(t, resp.Msg.Game.Distribution)
+	assert.Equal(t, int32(5), resp.Msg.Game.Distribution.Townsfolk)
+	assert.Equal(t, int32(0), resp.Msg.Game.Distribution.Outsiders)
+	assert.Equal(t, int32(1), resp.Msg.Game.Distribution.Minions)
+	assert.Equal(t, int32(1), resp.Msg.Game.Distribution.Demons)
+}
+
+func TestRandomizeRoles_ReturnsCorrectCount(t *testing.T) {
+handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	resp, err := handler.RandomizeRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+		GameId: gameID,
+	}))
+	require.NoError(t, err)
+	assert.Len(t, resp.Msg.Game.SelectedRoleIds, 7, "expected role count to equal player count")
+}
+
+func TestUpdateGameRoles_Persists(t *testing.T) {
+handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	roles := []string{"washerwoman", "imp"}
+	_, err := handler.UpdateGameRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+		GameId:          gameID,
+		SelectedRoleIds: roles,
+	}))
+	require.NoError(t, err)
+
+	// Get the game again and verify roles persisted.
+	getResp, err := handler.GetGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.GetGameRequest{
+		Id: gameID,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, roles, getResp.Msg.Game.SelectedRoleIds)
+}
+
+func TestUpdateGameTravellers_Success(t *testing.T) {
+handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	// Find a valid traveller ID via ListCharacters.
+	charsResp, err := handler.ListCharacters(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.ListCharactersRequest{
+		Team: clockkeeperv1.Team_TEAM_TRAVELLER,
+	}))
+	require.NoError(t, err)
+	require.NotEmpty(t, charsResp.Msg.Characters, "expected at least one traveller character")
+
+	travellerID := charsResp.Msg.Characters[0].Id
+
+	resp, err := handler.UpdateGameTravellers(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGameTravellersRequest{
+		GameId:               gameID,
+		SelectedTravellerIds: []string{travellerID},
+	}))
+	require.NoError(t, err)
+	assert.Contains(t, resp.Msg.Game.SelectedTravellerIds, travellerID)
+}
+
+func TestUpdateGameTravellers_RejectsNonTraveller(t *testing.T) {
+handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	// "washerwoman" is a townsfolk, not a traveller.
+	_, err := handler.UpdateGameTravellers(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGameTravellersRequest{
+		GameId:               gameID,
+		SelectedTravellerIds: []string{"washerwoman"},
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestGetSetupChecklist_ReturnsSteps(t *testing.T) {
+handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	// Randomize roles first so the checklist has something to work with.
+	_, err := handler.RandomizeRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+		GameId: gameID,
+	}))
+	require.NoError(t, err)
+
+	resp, err := handler.GetSetupChecklist(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.GetSetupChecklistRequest{
+		GameId: gameID,
+	}))
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.Msg.Steps, "expected setup checklist to have steps")
+}
+
+func TestGetDistribution_Valid(t *testing.T) {
+handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	resp, err := handler.GetDistribution(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.GetDistributionRequest{
+		PlayerCount: 7,
+	}))
+	require.NoError(t, err)
+	require.NotNil(t, resp.Msg.Distribution)
+	assert.Equal(t, int32(5), resp.Msg.Distribution.Townsfolk)
+	assert.Equal(t, int32(0), resp.Msg.Distribution.Outsiders)
+	assert.Equal(t, int32(1), resp.Msg.Distribution.Minions)
+	assert.Equal(t, int32(1), resp.Msg.Distribution.Demons)
+}
+
+func TestGetDistribution_InvalidCount(t *testing.T) {
+handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	_, err = handler.GetDistribution(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.GetDistributionRequest{
+		PlayerCount: 3,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }

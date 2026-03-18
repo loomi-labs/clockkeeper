@@ -3,7 +3,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { client } from '~/lib/api';
-	import type { Script, Edition } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
+	import { getErrorMessage } from '~/lib/errors';
+	import type { Script, Edition, RoleDistribution } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import DistributionBar from '~/lib/components/DistributionBar.svelte';
 
 	let scripts = $state<Script[]>([]);
@@ -14,6 +15,7 @@
 	let loading = $state(true);
 	let creating = $state(false);
 	let error = $state('');
+	let currentDist = $state<RoleDistribution | undefined>();
 
 	const editionStyles: Record<string, { border: string; bg: string; activeBorder: string; activeBg: string }> = {
 		tb: { border: 'border-rose-800/60', bg: 'bg-rose-950/40', activeBorder: 'border-rose-500', activeBg: 'bg-rose-900/50' },
@@ -21,24 +23,8 @@
 		snv: { border: 'border-violet-700/60', bg: 'bg-violet-950/40', activeBorder: 'border-violet-500', activeBg: 'bg-violet-900/50' }
 	};
 
-	// Distribution table for display.
-	const distributions: Record<number, { townsfolk: number; outsiders: number; minions: number; demons: number }> = {
-		5: { townsfolk: 3, outsiders: 0, minions: 1, demons: 1 },
-		6: { townsfolk: 3, outsiders: 1, minions: 1, demons: 1 },
-		7: { townsfolk: 5, outsiders: 0, minions: 1, demons: 1 },
-		8: { townsfolk: 5, outsiders: 1, minions: 1, demons: 1 },
-		9: { townsfolk: 5, outsiders: 2, minions: 1, demons: 1 },
-		10: { townsfolk: 7, outsiders: 0, minions: 2, demons: 1 },
-		11: { townsfolk: 7, outsiders: 1, minions: 2, demons: 1 },
-		12: { townsfolk: 7, outsiders: 2, minions: 2, demons: 1 },
-		13: { townsfolk: 9, outsiders: 0, minions: 3, demons: 1 },
-		14: { townsfolk: 9, outsiders: 1, minions: 3, demons: 1 },
-		15: { townsfolk: 9, outsiders: 2, minions: 3, demons: 1 }
-	};
-
 	const playerCount = $derived(Math.min(totalCount, 15));
 	const minTravellers = $derived(Math.max(0, totalCount - 15));
-	const currentDist = $derived(distributions[playerCount]);
 	const selectedScript = $derived(scripts.find((s) => s.id === selectedScriptId));
 	const totalPeople = $derived(playerCount + travellerCount);
 	const showTotalWarning = $derived(totalPeople > 20);
@@ -48,6 +34,14 @@
 		if (travellerCount < minTravellers) {
 			travellerCount = minTravellers;
 		}
+	});
+
+	// Fetch distribution from API when player count changes.
+	$effect(() => {
+		const pc = playerCount;
+		client.getDistribution({ playerCount: pc }).then((resp) => {
+			currentDist = resp.distribution;
+		});
 	});
 
 	onMount(async () => {
@@ -64,8 +58,8 @@
 			if (scriptParam) {
 				selectedScriptId = BigInt(scriptParam);
 			}
-		} catch (err: any) {
-			error = err.message || 'Failed to load';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to load');
 		} finally {
 			loading = false;
 		}
@@ -91,8 +85,8 @@
 			if (resp.game) {
 				goto(`/games/${resp.game.id}`);
 			}
-		} catch (err: any) {
-			error = err.message || 'Failed to create game';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to create game');
 		} finally {
 			creating = false;
 		}
@@ -182,7 +176,7 @@
 				{#if currentDist}
 					<div class="rounded-lg border border-gray-700 bg-gray-900 p-4">
 						<p class="mb-2 text-sm text-gray-400">Expected distribution for {playerCount} players:</p>
-						<DistributionBar current={currentDist} travellers={travellerCount} />
+						<DistributionBar current={{ townsfolk: currentDist.townsfolk, outsiders: currentDist.outsiders, minions: currentDist.minions, demons: currentDist.demons }} travellers={travellerCount} />
 					</div>
 				{/if}
 			</section>

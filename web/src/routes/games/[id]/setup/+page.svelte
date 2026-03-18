@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { client } from '~/lib/api';
+	import { getErrorMessage } from '~/lib/errors';
 	import type { SetupStep } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 
 	let steps = $state<SetupStep[]>([]);
@@ -18,8 +19,8 @@
 			const id = BigInt(page.params.id);
 			const resp = await client.getSetupChecklist({ gameId: id });
 			steps = resp.steps;
-		} catch (err: any) {
-			error = err.message || 'Failed to load checklist';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to load checklist');
 		} finally {
 			loading = false;
 		}

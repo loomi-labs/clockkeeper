@@ -23,3 +23,6 @@ web/src/lib/gen/
 
 # Test artifacts
 web/test-results/
+
+# Temporary docs
+docs/tmp/

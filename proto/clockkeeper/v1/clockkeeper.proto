@@ -30,6 +30,7 @@ service ClockKeeperService {
   rpc UpdateGameRoles(UpdateGameRolesRequest) returns (UpdateGameRolesResponse) {}
   rpc UpdateGameTravellers(UpdateGameTravellersRequest) returns (UpdateGameTravellersResponse) {}
   rpc GetSetupChecklist(GetSetupChecklistRequest) returns (GetSetupChecklistResponse) {}
+  rpc GetDistribution(GetDistributionRequest) returns (GetDistributionResponse) {}
 }
 
 // --- Enums ---
@@ -257,4 +258,14 @@ message GetSetupChecklistRequest {
 
 message GetSetupChecklistResponse {
   repeated SetupStep steps = 1;
+}
+
+// --- Distribution ---
+
+message GetDistributionRequest {
+  int32 player_count = 1;
+}
+
+message GetDistributionResponse {
+  RoleDistribution distribution = 1;
 }

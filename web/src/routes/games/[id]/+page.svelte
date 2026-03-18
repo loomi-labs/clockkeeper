@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { client } from '~/lib/api';
+	import { getErrorMessage } from '~/lib/errors';
 	import type { Game, Character, Script } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import { Team } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import CharacterCard from '~/lib/components/CharacterCard.svelte';
@@ -82,8 +83,8 @@
 				const scriptResp = await client.getScript({ id: game.scriptId });
 				script = scriptResp.script;
 			}
-		} catch (err: any) {
-			error = err.message || 'Failed to load game';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to load game');
 		} finally {
 			loading = false;
 		}
@@ -96,8 +97,8 @@
 		try {
 			const resp = await client.randomizeRoles({ gameId: game.id });
 			game = resp.game;
-		} catch (err: any) {
-			error = err.message || 'Failed to randomize roles';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to randomize roles');
 		} finally {
 			randomizing = false;
 		}
@@ -115,8 +116,8 @@
 				selectedRoleIds: newIds
 			});
 			game = resp.game;
-		} catch (err: any) {
-			error = err.message || 'Failed to update roles';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to update roles');
 		}
 	}
 
@@ -125,8 +126,8 @@
 			try {
 				const resp = await client.listCharacters({ edition: script?.edition ?? '', team: Team.TRAVELLER });
 				allTravellers = resp.characters;
-			} catch (err: any) {
-				error = err.message || 'Failed to load travellers';
+			} catch (err) {
+				error = getErrorMessage(err, 'Failed to load travellers');
 				return;
 			}
 		}
@@ -142,8 +143,8 @@
 				selectedTravellerIds: newIds
 			});
 			game = resp.game;
-		} catch (err: any) {
-			error = err.message || 'Failed to add traveller';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to add traveller');
 		}
 	}
 
@@ -156,8 +157,8 @@
 				selectedTravellerIds: newIds
 			});
 			game = resp.game;
-		} catch (err: any) {
-			error = err.message || 'Failed to remove traveller';
+		} catch (err) {
+			error = getErrorMessage(err, 'Failed to remove traveller');
 		}
 	}
 </script>

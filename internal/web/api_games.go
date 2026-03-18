@@ -207,6 +207,22 @@ func (h *ClockKeeperServiceHandler) GetSetupChecklist(ctx context.Context, req *
 	}), nil
 }
 
+func (h *ClockKeeperServiceHandler) GetDistribution(ctx context.Context, req *connect.Request[clockkeeperv1.GetDistributionRequest]) (*connect.Response[clockkeeperv1.GetDistributionResponse], error) {
+	d, err := botc.DistributionForPlayerCount(int(req.Msg.PlayerCount))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	return connect.NewResponse(&clockkeeperv1.GetDistributionResponse{
+		Distribution: &clockkeeperv1.RoleDistribution{
+			Townsfolk: int32(d.Townsfolk),
+			Outsiders: int32(d.Outsiders),
+			Minions:   int32(d.Minions),
+			Demons:    int32(d.Demons),
+		},
+	}), nil
+}
+
 // getOwnedGame fetches a game by ID and verifies the current user owns it.
 func (h *ClockKeeperServiceHandler) getOwnedGame(ctx context.Context, gameID int) (*ent.Game, error) {
 	u, err := h.currentUser(ctx)
