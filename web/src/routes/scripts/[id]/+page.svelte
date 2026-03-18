@@ -169,8 +169,12 @@
 	async function openAddCharacter() {
 		showAddCharacter = true;
 		if (allCharacters.length === 0) {
-			const resp = await client.listCharacters({});
-			allCharacters = resp.characters;
+			try {
+				const resp = await client.listCharacters({});
+				allCharacters = resp.characters;
+			} catch (err) {
+				error = getErrorMessage(err, 'Failed to load characters');
+			}
 		}
 	}
 

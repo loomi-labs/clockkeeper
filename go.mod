@@ -3,7 +3,7 @@ module github.com/loomi-labs/clockkeeper
 go 1.26.1
 
 require (
-	ariga.io/atlas v0.32.1-0.20250325101103-175b25e1c1b9
+	ariga.io/atlas v0.32.1
 	connectrpc.com/connect v1.19.1
 	entgo.io/ent v0.14.5
 	github.com/alecthomas/kong v1.14.0

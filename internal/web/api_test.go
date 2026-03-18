@@ -241,7 +241,7 @@ handler := testHandler(t)
 		Name: "Hacked",
 	}))
 	require.Error(t, err)
-	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
 
 func TestDeleteScript_BlocksOtherUser(t *testing.T) {
@@ -266,7 +266,7 @@ handler := testHandler(t)
 		Id: int64(script.ID),
 	}))
 	require.Error(t, err)
-	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
 
 func TestUpdateScript_OwnerSucceeds(t *testing.T) {
@@ -377,7 +377,7 @@ handler := testHandler(t)
 		Id: gameID,
 	}))
 	require.Error(t, err)
-	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
 
 func TestRandomizeRoles_BlocksOtherUser(t *testing.T) {
@@ -394,7 +394,7 @@ handler := testHandler(t)
 		GameId: gameID,
 	}))
 	require.Error(t, err)
-	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
 
 func TestUpdateGameRoles_BlocksOtherUser(t *testing.T) {
@@ -412,7 +412,7 @@ handler := testHandler(t)
 		SelectedRoleIds: []string{"washerwoman"},
 	}))
 	require.Error(t, err)
-	assert.Equal(t, connect.CodePermissionDenied, connect.CodeOf(err))
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
 
 func TestRandomizeRoles_OwnerSucceeds(t *testing.T) {
@@ -618,6 +618,97 @@ handler := testHandler(t)
 
 	_, err = handler.GetDistribution(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.GetDistributionRequest{
 		PlayerCount: 3,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestGetScript_BlocksOtherUser(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	userA, err := handler.db.User.Create().SetUsername("userA").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("userB").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	// User A creates a script.
+	script, err := handler.db.Script.Create().
+		SetName("Private Script").
+		SetCharacterIds([]string{"washerwoman"}).
+		SetUserID(userA.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// User B tries to read it.
+	_, err = handler.GetScript(authedCtx("userB"), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
+		Id: int64(script.ID),
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+func TestGetScript_OwnerSucceeds(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	userA, err := handler.db.User.Create().SetUsername("userA").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	script, err := handler.db.Script.Create().
+		SetName("My Script").
+		SetCharacterIds([]string{"washerwoman"}).
+		SetUserID(userA.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	resp, err := handler.GetScript(authedCtx("userA"), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
+		Id: int64(script.ID),
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, "My Script", resp.Msg.Script.Name)
+}
+
+func TestGetScript_SystemScriptAccessible(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	// Find a system script.
+	listResp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	require.NoError(t, err)
+
+	var systemID int64
+	for _, s := range listResp.Msg.Scripts {
+		if s.IsSystem {
+			systemID = s.Id
+			break
+		}
+	}
+	require.NotZero(t, systemID)
+
+	resp, err := handler.GetScript(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
+		Id: systemID,
+	}))
+	require.NoError(t, err)
+	assert.True(t, resp.Msg.Script.IsSystem)
+}
+
+func TestUpdateGameRoles_RejectsUnknownCharacter(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, gameID := createTestGame(t, handler)
+
+	_, err := handler.UpdateGameRoles(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+		GameId:          gameID,
+		SelectedRoleIds: []string{"washerwoman", "nonexistent_character"},
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))

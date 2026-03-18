@@ -22,10 +22,14 @@ func GenerateSetupChecklist(chars []*Character, registry *Registry) []SetupStep 
 	for _, c := range chars {
 		tokenNames = append(tokenNames, c.Name)
 	}
+	desc := "No character tokens to prepare."
+	if len(tokenNames) > 0 {
+		desc = fmt.Sprintf("Get out these character tokens: %s", strings.Join(tokenNames, ", "))
+	}
 	steps = append(steps, SetupStep{
 		ID:             "prepare_tokens",
 		Title:          "Prepare character tokens",
-		Description:    fmt.Sprintf("Get out these character tokens: %s", strings.Join(tokenNames, ", ")),
+		Description:    desc,
 		RequiresAction: true,
 	})
 

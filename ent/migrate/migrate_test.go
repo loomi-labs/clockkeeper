@@ -30,7 +30,8 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260315195303_add_selected_travellers":        validateSelectedTravellers,
 	"20260316163815_add_system_scripts":              validateSystemScripts,
 	"20260316165946_add_script_soft_delete":          validateScriptSoftDelete,
-	"20260318105440_add_game_owner":                   validateGameOwner,
+	"20260318105440_add_game_owner":                    validateGameOwner,
+	"20260318155946_add_script_owner_check":             validateScriptOwnerCheck,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -339,6 +340,19 @@ func validateGameOwner(t *testing.T, ctx context.Context, _ *sql.DB, client *ent
 	}
 	if g.UserID == 0 {
 		t.Error("expected game user_id to be backfilled, got 0")
+	}
+}
+
+// validateScriptOwnerCheck verifies the CHECK constraint prevents ownerless non-system scripts.
+func validateScriptOwnerCheck(t *testing.T, ctx context.Context, db *sql.DB, _ *ent.Client) {
+	t.Helper()
+
+	// Inserting a non-system script without user_id should fail.
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO scripts (name, edition, character_ids, is_system, created_at, updated_at)
+		 VALUES ('orphan', 'custom', '[]', false, NOW(), NOW())`)
+	if err == nil {
+		t.Error("expected CHECK constraint violation for ownerless non-system script")
 	}
 }
 

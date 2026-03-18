@@ -43,8 +43,20 @@ func (h *ClockKeeperServiceHandler) ListScripts(ctx context.Context, req *connec
 }
 
 func (h *ClockKeeperServiceHandler) GetScript(ctx context.Context, req *connect.Request[clockkeeperv1.GetScriptRequest]) (*connect.Response[clockkeeperv1.GetScriptResponse], error) {
+	u, err := h.currentUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	s, err := h.db.Script.Query().
-		Where(entscript.ID(int(req.Msg.Id)), entscript.DeletedAtIsNil()).
+		Where(
+			entscript.ID(int(req.Msg.Id)),
+			entscript.DeletedAtIsNil(),
+			entscript.Or(
+				entscript.IsSystem(true),
+				entscript.UserIDEQ(u.ID),
+			),
+		).
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -146,7 +158,7 @@ func (h *ClockKeeperServiceHandler) UpdateScript(ctx context.Context, req *conne
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("system scripts cannot be modified"))
 	}
 	if existing.UserID == nil || *existing.UserID != u.ID {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("you do not own this script"))
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("script not found"))
 	}
 
 	update := h.db.Script.UpdateOneID(existing.ID)
@@ -186,7 +198,7 @@ func (h *ClockKeeperServiceHandler) DeleteScript(ctx context.Context, req *conne
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("system scripts cannot be deleted"))
 	}
 	if existing.UserID == nil || *existing.UserID != u.ID {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("you do not own this script"))
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("script not found"))
 	}
 
 	now := time.Now()
@@ -218,7 +230,9 @@ func (h *ClockKeeperServiceHandler) ImportScript(ctx context.Context, req *conne
 		// Try as string first (character ID).
 		var id string
 		if err := json.Unmarshal(item, &id); err == nil {
-			charIDs = append(charIDs, id)
+			if _, ok := h.registry.Character(id); ok {
+				charIDs = append(charIDs, id)
+			}
 			continue
 		}
 
@@ -237,7 +251,9 @@ func (h *ClockKeeperServiceHandler) ImportScript(ctx context.Context, req *conne
 					}
 					continue
 				}
-				charIDs = append(charIDs, metaID)
+				if _, ok := h.registry.Character(metaID); ok {
+					charIDs = append(charIDs, metaID)
+				}
 			}
 		}
 	}

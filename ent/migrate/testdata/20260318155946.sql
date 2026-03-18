@@ -1,0 +1,1 @@
+-- No seed data needed; CHECK constraint is applied to existing data.

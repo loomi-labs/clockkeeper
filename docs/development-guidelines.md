@@ -5,7 +5,8 @@
 - Every endpoint that modifies a resource MUST verify ownership
 - Ownership check: `resource.owner_id == current_user.id`
 - System-owned resources (`is_system=true`) are read-only for users
-- Return `CodePermissionDenied` for unauthorized access, not `CodeNotFound` (avoids enumeration)
+- Return `CodeNotFound` for unauthorized ownership checks (prevents resource enumeration via 403 vs 404 distinction)
+- Reserve `CodePermissionDenied` for system-level denials (e.g., modifying system scripts)
 
 ## Type Safety
 

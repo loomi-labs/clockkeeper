@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { client } from '~/lib/api';
 	import { getErrorMessage } from '~/lib/errors';
@@ -74,10 +74,15 @@
 		);
 	});
 
-	onMount(async () => {
+	async function loadGame(gameId: bigint) {
+		loading = true;
+		error = '';
+		game = undefined;
+		script = undefined;
+		allTravellers = [];
+		travellerSearch = '';
 		try {
-			const id = BigInt(page.params.id);
-			const resp = await client.getGame({ id });
+			const resp = await client.getGame({ id: gameId });
 			game = resp.game;
 			if (game) {
 				const scriptResp = await client.getScript({ id: game.scriptId });
@@ -88,6 +93,11 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	$effect(() => {
+		const id = page.params.id;
+		untrack(() => loadGame(BigInt(id)));
 	});
 
 	async function randomize() {

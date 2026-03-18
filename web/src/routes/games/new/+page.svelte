@@ -34,9 +34,14 @@
 	// Fetch distribution from API when player count changes.
 	$effect(() => {
 		const pc = playerCount;
-		client.getDistribution({ playerCount: pc }).then((resp) => {
-			currentDist = resp.distribution;
-		});
+		client
+			.getDistribution({ playerCount: pc })
+			.then((resp) => {
+				currentDist = resp.distribution;
+			})
+			.catch(() => {
+				currentDist = undefined;
+			});
 	});
 
 	onMount(async () => {
@@ -51,7 +56,11 @@
 			// Pre-select from query param.
 			const scriptParam = page.url.searchParams.get('script');
 			if (scriptParam) {
-				selectedScriptId = BigInt(scriptParam);
+				try {
+					selectedScriptId = BigInt(scriptParam);
+				} catch {
+					// Ignore invalid script parameter
+				}
 			}
 		} catch (err) {
 			error = getErrorMessage(err, 'Failed to load');

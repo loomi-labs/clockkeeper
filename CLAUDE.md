@@ -11,7 +11,7 @@ Digital companion app for in-person Blood on the Clocktower games. Storyteller-f
 
 ## Tech Stack
 
-- **Backend**: Go, ConnectRPC + Protocol Buffers, Ent ORM, PostgreSQL 18
+- **Backend**: Go 1.26.1, ConnectRPC + Protocol Buffers, Ent ORM, PostgreSQL 18
 - **Frontend**: Svelte 5 + SvelteKit, Tailwind 4, pnpm
 - **Build**: Docker multi-stage, frontend embedded in Go binary via `//go:embed`
 - **Code gen**: buf (proto → Go + TypeScript)

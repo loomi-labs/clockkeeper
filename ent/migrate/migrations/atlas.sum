@@ -1,4 +1,4 @@
-h1:ADIjiXm+DZbpyaCIn+Z7U2eL/mqW/nQ2f5EMrLF9uPk=
+h1:tMVLLsDabg5eGAHkMnM2FvL6seIoEI9E4v1QYssygd4=
 20260315162621_initial.sql h1:UgW1c0FpXZMO/eGMw/Lq/M/duJEsK+OR2AHwiOzU7DI=
 20260315175834_add_scripts_and_games.sql h1:bvc00M1DNb9CpnkkWKihQE8UBk77yFw7GBmS0WTIAtw=
 20260315191827_add_traveller_count.sql h1:VYJyhlSU8uSA2JAc/Q2Lv5fA0ZaqJp6CnMzT2H3e6F4=
@@ -6,3 +6,4 @@ h1:ADIjiXm+DZbpyaCIn+Z7U2eL/mqW/nQ2f5EMrLF9uPk=
 20260316163815_add_system_scripts.sql h1:HhKMIejafdct4i8SEsi591AfV/weZdq67ku92Fa8Urg=
 20260316165946_add_script_soft_delete.sql h1:V62iBsq8BoEFPoHPyuWatLFP3il+mnR7nUTgxbnFapE=
 20260318105440_add_game_owner.sql h1:zNQ86wnGci1MUQg16cpDst4nKXSee7aH6gykZKxlSDM=
+20260318155946_add_script_owner_check.sql h1:ApGdHvmtxln8378jRoZjicHMLtyxH59bMcgBLMTfLSU=

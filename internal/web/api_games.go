@@ -134,6 +134,13 @@ func (h *ClockKeeperServiceHandler) UpdateGameRoles(ctx context.Context, req *co
 		return nil, err
 	}
 
+	// Validate all role IDs exist in the registry.
+	for _, id := range req.Msg.SelectedRoleIds {
+		if _, ok := h.registry.Character(id); !ok {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown character: %s", id))
+		}
+	}
+
 	g, err = g.Update().SetSelectedRoles(req.Msg.SelectedRoleIds).Save(ctx)
 	if err != nil {
 		slog.Error("save updated roles failed", "err", err)
@@ -240,7 +247,7 @@ func (h *ClockKeeperServiceHandler) getOwnedGame(ctx context.Context, gameID int
 	}
 
 	if g.UserID != u.ID {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("you do not own this game"))
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("game not found"))
 	}
 
 	return g, nil
