@@ -114,15 +114,42 @@ func ApplySetupModifiers(base Distribution, characters []*Character) (Distributi
 	return d, manual
 }
 
+// pickRandom shuffles pool in place and returns the first n characters.
+func pickRandom(pool []*Character, n int) ([]*Character, error) {
+	if len(pool) < n {
+		return nil, fmt.Errorf("not enough characters: need %d, have %d", n, len(pool))
+	}
+	rand.Shuffle(len(pool), func(i, j int) {
+		pool[i], pool[j] = pool[j], pool[i]
+	})
+	return pool[:n], nil
+}
+
+// automaticDelta returns the automatic setup modifier delta for a character.
+// Returns 0 if the character has no automatic modifier.
+func automaticDelta(c *Character) int {
+	if !c.Setup {
+		return 0
+	}
+	delta, known := setupModifiers[c.ID]
+	if !known || delta == 0 {
+		return 0
+	}
+	return delta
+}
+
 // RandomizeRoles selects random characters from the given character pool to fill
 // the distribution for the given player count. Returns the selected character IDs.
+//
+// Uses a two-round selection:
+//   - Round 1a: pick demons + minions (fixed counts), apply their setup modifiers
+//   - Round 1b: pick outsiders + townsfolk (adjusted counts), check for new modifiers
+//   - Re-adjust and swap if Round 1b introduced new setup modifiers
 func RandomizeRoles(characters []*Character, playerCount int) ([]string, error) {
 	base, err := DistributionForPlayerCount(playerCount)
 	if err != nil {
 		return nil, err
 	}
-
-	dist, _ := ApplySetupModifiers(base, characters)
 
 	// Group available characters by team.
 	byTeam := map[Team][]*Character{
@@ -137,28 +164,98 @@ func RandomizeRoles(characters []*Character, playerCount int) ([]string, error) 
 		}
 	}
 
-	// Pick random characters for each team slot.
-	var selected []string
-	picks := []struct {
-		team  Team
-		count int
-	}{
-		{TeamDemon, dist.Demons},
-		{TeamMinion, dist.Minions},
-		{TeamOutsider, dist.Outsiders},
-		{TeamTownsfolk, dist.Townsfolk},
+	// Round 1a: pick demons and minions (counts are fixed).
+	demons, err := pickRandom(byTeam[TeamDemon], base.Demons)
+	if err != nil {
+		return nil, fmt.Errorf("not enough demon characters: %w", err)
+	}
+	minions, err := pickRandom(byTeam[TeamMinion], base.Minions)
+	if err != nil {
+		return nil, fmt.Errorf("not enough minion characters: %w", err)
 	}
 
-	for _, p := range picks {
-		pool := byTeam[p.team]
-		if len(pool) < p.count {
-			return nil, fmt.Errorf("not enough %s characters: need %d, have %d", p.team, p.count, len(pool))
+	// Adjust distribution based on selected demons + minions.
+	evil := append(demons, minions...)
+	dist, _ := ApplySetupModifiers(base, evil)
+
+	// Clamp outsiders to available pool size.
+	outsiderPool := byTeam[TeamOutsider]
+	if dist.Outsiders > len(outsiderPool) {
+		diff := dist.Outsiders - len(outsiderPool)
+		dist.Outsiders = len(outsiderPool)
+		dist.Townsfolk += diff
+	}
+
+	// Round 1b: pick outsiders and townsfolk with adjusted counts.
+	outsiders, err := pickRandom(outsiderPool, dist.Outsiders)
+	if err != nil {
+		return nil, fmt.Errorf("not enough outsider characters: %w", err)
+	}
+	townsfolkPool := byTeam[TeamTownsfolk]
+	townsfolk, err := pickRandom(townsfolkPool, dist.Townsfolk)
+	if err != nil {
+		return nil, fmt.Errorf("not enough townsfolk characters: %w", err)
+	}
+
+	// Re-adjust: check if any selected outsiders/townsfolk have automatic modifiers.
+	goodDelta := 0
+	for _, c := range outsiders {
+		goodDelta += automaticDelta(c)
+	}
+	for _, c := range townsfolk {
+		goodDelta += automaticDelta(c)
+	}
+
+	if goodDelta != 0 {
+		// Need more outsiders (positive delta) or fewer (negative delta).
+		if goodDelta > 0 {
+			// Swap non-setup townsfolk for outsiders from remaining pool.
+			remainingOutsiders := outsiderPool[dist.Outsiders:]
+			for goodDelta > 0 && len(remainingOutsiders) > 0 {
+				// Find a non-setup townsfolk to remove.
+				swapped := false
+				for i := len(townsfolk) - 1; i >= 0; i-- {
+					if automaticDelta(townsfolk[i]) == 0 {
+						townsfolk = append(townsfolk[:i], townsfolk[i+1:]...)
+						outsiders = append(outsiders, remainingOutsiders[0])
+						remainingOutsiders = remainingOutsiders[1:]
+						swapped = true
+						break
+					}
+				}
+				if !swapped {
+					break
+				}
+				goodDelta--
+			}
+		} else {
+			// Swap outsiders for townsfolk from remaining pool.
+			remainingTownsfolk := townsfolkPool[dist.Townsfolk:]
+			for goodDelta < 0 && len(remainingTownsfolk) > 0 && len(outsiders) > 0 {
+				// Find a non-setup outsider to remove.
+				swapped := false
+				for i := len(outsiders) - 1; i >= 0; i-- {
+					if automaticDelta(outsiders[i]) == 0 {
+						outsiders = append(outsiders[:i], outsiders[i+1:]...)
+						townsfolk = append(townsfolk, remainingTownsfolk[0])
+						remainingTownsfolk = remainingTownsfolk[1:]
+						swapped = true
+						break
+					}
+				}
+				if !swapped {
+					break
+				}
+				goodDelta++
+			}
 		}
-		rand.Shuffle(len(pool), func(i, j int) {
-			pool[i], pool[j] = pool[j], pool[i]
-		})
-		for i := range p.count {
-			selected = append(selected, pool[i].ID)
+	}
+
+	// Collect all selected IDs.
+	var selected []string
+	for _, groups := range [][]*Character{demons, minions, outsiders, townsfolk} {
+		for _, c := range groups {
+			selected = append(selected, c.ID)
 		}
 	}
 
