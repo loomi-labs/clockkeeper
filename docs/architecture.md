@@ -4,7 +4,7 @@
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Go 1.25 |
+| Backend | Go 1.26.1 |
 | Frontend | Svelte 5 + SvelteKit + Tailwind 4 |
 | API | ConnectRPC + Protocol Buffers |
 | ORM | Ent + Atlas migrations |

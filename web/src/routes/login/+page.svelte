@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { client } from '~/lib/api';
 	import { setToken } from '~/lib/auth';
+	import { getErrorMessage } from '~/lib/errors';
 
 	let username = $state('');
 	let password = $state('');
@@ -17,8 +18,8 @@
 			const resp = await client.login({ username, password });
 			setToken(resp.token);
 			goto('/');
-		} catch (err: any) {
-			error = err.message || 'Login failed';
+		} catch (err) {
+			error = getErrorMessage(err, 'Login failed');
 		} finally {
 			loading = false;
 		}

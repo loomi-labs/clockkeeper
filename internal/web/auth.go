@@ -10,6 +10,18 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type contextKey string
+
+const usernameKey contextKey = "username"
+
+// UsernameFromContext returns the authenticated username from the context.
+func UsernameFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(usernameKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
 // AuthInterceptor validates JWT tokens on ConnectRPC requests.
 type AuthInterceptor struct {
 	secretKey []byte
@@ -30,9 +42,11 @@ func (a *AuthInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		if skipAuth[req.Spec().Procedure] {
 			return next(ctx, req)
 		}
-		if err := a.validate(req.Header().Get("Authorization")); err != nil {
+		username, err := a.validate(req.Header().Get("Authorization"))
+		if err != nil {
 			return nil, connect.NewError(connect.CodeUnauthenticated, err)
 		}
+		ctx = context.WithValue(ctx, usernameKey, username)
 		return next(ctx, req)
 	}
 }
@@ -46,16 +60,18 @@ func (a *AuthInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc
 		if skipAuth[conn.Spec().Procedure] {
 			return next(ctx, conn)
 		}
-		if err := a.validate(conn.RequestHeader().Get("Authorization")); err != nil {
+		username, err := a.validate(conn.RequestHeader().Get("Authorization"))
+		if err != nil {
 			return connect.NewError(connect.CodeUnauthenticated, err)
 		}
+		ctx = context.WithValue(ctx, usernameKey, username)
 		return next(ctx, conn)
 	}
 }
 
-func (a *AuthInterceptor) validate(authHeader string) error {
+func (a *AuthInterceptor) validate(authHeader string) (string, error) {
 	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		return errors.New("missing or invalid authorization header")
+		return "", errors.New("missing or invalid authorization header")
 	}
 	tokenStr := authHeader[7:]
 
@@ -66,9 +82,18 @@ func (a *AuthInterceptor) validate(authHeader string) error {
 		return a.secretKey, nil
 	})
 	if err != nil || !token.Valid {
-		return errors.New("invalid token")
+		return "", errors.New("invalid token")
 	}
-	return nil
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", errors.New("invalid token claims")
+	}
+	sub, _ := claims.GetSubject()
+	if sub == "" {
+		return "", errors.New("missing subject in token")
+	}
+	return sub, nil
 }
 
 // IssueToken creates a signed JWT with 30-day expiry.

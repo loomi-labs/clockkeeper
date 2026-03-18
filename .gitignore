@@ -1,3 +1,6 @@
+# IDE
+.idea/
+
 # Binary
 clockkeeper
 tmp/
@@ -20,3 +23,6 @@ web/src/lib/gen/
 
 # Test artifacts
 web/test-results/
+
+# Temporary docs
+docs/tmp/
