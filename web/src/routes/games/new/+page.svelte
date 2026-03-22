@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { client } from '~/lib/api';
+	import { invalidateSidebar } from '~/lib/sidebar-data.svelte';
 	import { getErrorMessage } from '~/lib/errors';
 	import { editionStyle } from '~/lib/editions';
 	import type { Script, Edition, RoleDistribution } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
@@ -90,6 +91,7 @@
 				travellerCount
 			});
 			if (resp.game) {
+				invalidateSidebar();
 				goto(`/games/${resp.game.id}`);
 			}
 		} catch (err) {
@@ -112,7 +114,7 @@
 	{:else}
 		<!-- Step 1: Pick script -->
 		<section class="space-y-3">
-			<h2 class="text-lg font-semibold text-medium">1. Choose a Script</h2>
+			<h2 class="text-lg font-semibold text-medium">1. Choose an Edition</h2>
 
 			<!-- Edition templates -->
 			{#if editions.length > 0}
@@ -127,7 +129,7 @@
 								: `${style.border} ${style.bg}`}"
 						>
 							<img
-								src="/editions/{edition.id}.png"
+								src="/editions/{edition.id}.webp"
 								alt={edition.name}
 								class="h-16 object-contain"
 							/>

@@ -6,8 +6,14 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// Death is the predicate function for death builders.
+type Death func(*sql.Selector)
+
 // Game is the predicate function for game builders.
 type Game func(*sql.Selector)
+
+// Phase is the predicate function for phase builders.
+type Phase func(*sql.Selector)
 
 // Script is the predicate function for script builders.
 type Script func(*sql.Selector)

@@ -9,6 +9,18 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent"
 )
 
+// The DeathFunc type is an adapter to allow the use of ordinary
+// function as Death mutator.
+type DeathFunc func(context.Context, *ent.DeathMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DeathFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DeathMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DeathMutation", m)
+}
+
 // The GameFunc type is an adapter to allow the use of ordinary
 // function as Game mutator.
 type GameFunc func(context.Context, *ent.GameMutation) (ent.Value, error)
@@ -19,6 +31,18 @@ func (f GameFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GameMutation", m)
+}
+
+// The PhaseFunc type is an adapter to allow the use of ordinary
+// function as Phase mutator.
+type PhaseFunc func(context.Context, *ent.PhaseMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PhaseFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PhaseMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PhaseMutation", m)
 }
 
 // The ScriptFunc type is an adapter to allow the use of ordinary

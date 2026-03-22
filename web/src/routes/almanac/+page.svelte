@@ -25,7 +25,7 @@
 		{ id: Team.OUTSIDER, label: 'Outsiders', active: 'bg-cyan-600 text-white' },
 		{ id: Team.MINION, label: 'Minions', active: 'bg-orange-600 text-white' },
 		{ id: Team.DEMON, label: 'Demons', active: 'bg-red-600 text-white' },
-		{ id: Team.TRAVELLER, label: 'Travellers', active: 'bg-purple-600 text-white' },
+		{ id: Team.TRAVELLER, label: 'Travellers', active: 'bg-gradient-to-r from-blue-600 to-red-600 text-white' },
 		{ id: Team.FABLED, label: 'Fabled', active: 'bg-yellow-600 text-white' },
 		{ id: Team.LORIC, label: 'Lorics', active: 'bg-green-600 text-white' }
 	];

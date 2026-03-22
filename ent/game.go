@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
@@ -24,6 +25,8 @@ type Game struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// Name holds the value of the "name" field.
+	Name string `json:"name,omitempty"`
 	// UserID holds the value of the "user_id" field.
 	UserID int `json:"user_id,omitempty"`
 	// ScriptID holds the value of the "script_id" field.
@@ -38,6 +41,8 @@ type Game struct {
 	SelectedTravellers []string `json:"selected_travellers,omitempty"`
 	// ExtraCharacters holds the value of the "extra_characters" field.
 	ExtraCharacters []string `json:"extra_characters,omitempty"`
+	// TravellerAlignments holds the value of the "traveller_alignments" field.
+	TravellerAlignments map[string]schema.TravellerAlignment `json:"traveller_alignments,omitempty"`
 	// State holds the value of the "state" field.
 	State game.State `json:"state,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -52,9 +57,11 @@ type GameEdges struct {
 	Owner *User `json:"owner,omitempty"`
 	// Script holds the value of the script edge.
 	Script *Script `json:"script,omitempty"`
+	// Phases holds the value of the phases edge.
+	Phases []*Phase `json:"phases,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // OwnerOrErr returns the Owner value or an error if the edge
@@ -79,16 +86,25 @@ func (e GameEdges) ScriptOrErr() (*Script, error) {
 	return nil, &NotLoadedError{edge: "script"}
 }
 
+// PhasesOrErr returns the Phases value or an error if the edge
+// was not loaded in eager-loading.
+func (e GameEdges) PhasesOrErr() ([]*Phase, error) {
+	if e.loadedTypes[2] {
+		return e.Phases, nil
+	}
+	return nil, &NotLoadedError{edge: "phases"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Game) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case game.FieldSelectedRoles, game.FieldSelectedTravellers, game.FieldExtraCharacters:
+		case game.FieldSelectedRoles, game.FieldSelectedTravellers, game.FieldExtraCharacters, game.FieldTravellerAlignments:
 			values[i] = new([]byte)
 		case game.FieldID, game.FieldUserID, game.FieldScriptID, game.FieldPlayerCount, game.FieldTravellerCount:
 			values[i] = new(sql.NullInt64)
-		case game.FieldState:
+		case game.FieldName, game.FieldState:
 			values[i] = new(sql.NullString)
 		case game.FieldCreatedAt, game.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -124,6 +140,12 @@ func (_m *Game) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
+			}
+		case game.FieldName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field name", values[i])
+			} else if value.Valid {
+				_m.Name = value.String
 			}
 		case game.FieldUserID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -173,6 +195,14 @@ func (_m *Game) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field extra_characters: %w", err)
 				}
 			}
+		case game.FieldTravellerAlignments:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field traveller_alignments", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.TravellerAlignments); err != nil {
+					return fmt.Errorf("unmarshal field traveller_alignments: %w", err)
+				}
+			}
 		case game.FieldState:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field state", values[i])
@@ -200,6 +230,11 @@ func (_m *Game) QueryOwner() *UserQuery {
 // QueryScript queries the "script" edge of the Game entity.
 func (_m *Game) QueryScript() *ScriptQuery {
 	return NewGameClient(_m.config).QueryScript(_m)
+}
+
+// QueryPhases queries the "phases" edge of the Game entity.
+func (_m *Game) QueryPhases() *PhaseQuery {
+	return NewGameClient(_m.config).QueryPhases(_m)
 }
 
 // Update returns a builder for updating this Game.
@@ -231,6 +266,9 @@ func (_m *Game) String() string {
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
+	builder.WriteString("name=")
+	builder.WriteString(_m.Name)
+	builder.WriteString(", ")
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
 	builder.WriteString(", ")
@@ -251,6 +289,9 @@ func (_m *Game) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("extra_characters=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ExtraCharacters))
+	builder.WriteString(", ")
+	builder.WriteString("traveller_alignments=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TravellerAlignments))
 	builder.WriteString(", ")
 	builder.WriteString("state=")
 	builder.WriteString(fmt.Sprintf("%v", _m.State))

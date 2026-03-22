@@ -28,23 +28,6 @@
 		return editions.map((e) => e.id).filter((e) => editionSet.has(e));
 	}
 
-	function scriptCardStyle(eds: string[]): { classes: string; inlineStyle: string } {
-		if (eds.length === 0) {
-			return { classes: 'border-border bg-surface', inlineStyle: '' };
-		}
-		if (eds.length === 1) {
-			const s = editionStyle(eds[0]);
-			return { classes: `${s.border} ${s.bg}`, inlineStyle: '' };
-		}
-		// Multi-edition gradient
-		const colors = eds.map((e) => editionStyle(e).bgRaw);
-		const stops = colors.map((c, i) => `${c} ${(i / (colors.length - 1)) * 100}%`).join(', ');
-		return {
-			classes: `${editionStyle(eds[0]).border}`,
-			inlineStyle: `background: linear-gradient(to right, ${stops})`
-		};
-	}
-
 	onMount(async () => {
 		try {
 			const [scriptsResp, editionsResp] = await Promise.all([
@@ -115,7 +98,7 @@
 
 <div class="space-y-8">
 	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold">Scripts</h1>
+		<h1 class="font-[Goudy_Stout] text-2xl text-primary">Scripts</h1>
 		<div class="flex gap-2">
 			<button
 				onclick={() => (showImport = !showImport)}
@@ -164,7 +147,7 @@
 		<!-- Base editions (system scripts) -->
 		{#if systemScripts.length > 0}
 			<section>
-				<h2 class="mb-3 text-lg font-semibold text-medium">Base Editions</h2>
+				<h2 class="mb-3 font-[Goudy_Stout] text-base text-primary">Base Editions</h2>
 				<div class="grid gap-3 sm:grid-cols-3">
 					{#each systemScripts as sysScript (sysScript.id)}
 						{@const style = editionStyle(sysScript.edition)}
@@ -173,7 +156,7 @@
 							class="flex flex-col items-center rounded-lg border {style.border} {style.bg} p-5 transition-all hover:scale-[1.02] hover:brightness-110"
 						>
 							<img
-								src="/editions/{sysScript.edition}.png"
+								src="/editions/{sysScript.edition}.webp"
 								alt={sysScript.name}
 								class="h-16 object-contain"
 							/>
@@ -186,17 +169,15 @@
 
 		<!-- User scripts -->
 		<section>
-			<h2 class="mb-3 text-lg font-semibold text-medium">Your Scripts</h2>
+			<h2 class="mb-3 font-[Goudy_Stout] text-base text-primary">Your Scripts</h2>
 			{#if userScripts.length === 0}
 				<p class="text-muted">No saved scripts yet. Create one from an edition or start from scratch.</p>
 			{:else}
 				<div class="space-y-2">
 					{#each userScripts as script (script.id)}
 						{@const eds = getScriptEditions(script)}
-						{@const cardStyle = scriptCardStyle(eds)}
 						<div
-							class="card-slate flex items-center justify-between rounded-lg border {cardStyle.classes} px-4 py-3 transition-colors"
-							style={cardStyle.inlineStyle}
+							class="card-slate flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 transition-colors"
 						>
 							<a href="/scripts/{script.id}" class="min-w-0 flex-1">
 								<span class="font-medium text-primary">{script.name}</span>
@@ -207,7 +188,7 @@
 									<div class="flex items-center gap-1">
 										{#each eds as ed}
 											<img
-												src="/editions/{ed}.png"
+												src="/editions/{ed}.webp"
 												alt={ed}
 												class="h-7 object-contain opacity-80"
 											/>

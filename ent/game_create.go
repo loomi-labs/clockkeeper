@@ -11,6 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
@@ -46,6 +48,20 @@ func (_c *GameCreate) SetUpdatedAt(v time.Time) *GameCreate {
 func (_c *GameCreate) SetNillableUpdatedAt(v *time.Time) *GameCreate {
 	if v != nil {
 		_c.SetUpdatedAt(*v)
+	}
+	return _c
+}
+
+// SetName sets the "name" field.
+func (_c *GameCreate) SetName(v string) *GameCreate {
+	_c.mutation.SetName(v)
+	return _c
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_c *GameCreate) SetNillableName(v *string) *GameCreate {
+	if v != nil {
+		_c.SetName(*v)
 	}
 	return _c
 }
@@ -100,6 +116,12 @@ func (_c *GameCreate) SetExtraCharacters(v []string) *GameCreate {
 	return _c
 }
 
+// SetTravellerAlignments sets the "traveller_alignments" field.
+func (_c *GameCreate) SetTravellerAlignments(v map[string]schema.TravellerAlignment) *GameCreate {
+	_c.mutation.SetTravellerAlignments(v)
+	return _c
+}
+
 // SetState sets the "state" field.
 func (_c *GameCreate) SetState(v game.State) *GameCreate {
 	_c.mutation.SetState(v)
@@ -128,6 +150,21 @@ func (_c *GameCreate) SetOwner(v *User) *GameCreate {
 // SetScript sets the "script" edge to the Script entity.
 func (_c *GameCreate) SetScript(v *Script) *GameCreate {
 	return _c.SetScriptID(v.ID)
+}
+
+// AddPhaseIDs adds the "phases" edge to the Phase entity by IDs.
+func (_c *GameCreate) AddPhaseIDs(ids ...int) *GameCreate {
+	_c.mutation.AddPhaseIDs(ids...)
+	return _c
+}
+
+// AddPhases adds the "phases" edges to the Phase entity.
+func (_c *GameCreate) AddPhases(v ...*Phase) *GameCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddPhaseIDs(ids...)
 }
 
 // Mutation returns the GameMutation object of the builder.
@@ -173,6 +210,10 @@ func (_c *GameCreate) defaults() {
 		v := game.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.Name(); !ok {
+		v := game.DefaultName
+		_c.mutation.SetName(v)
+	}
 	if _, ok := _c.mutation.TravellerCount(); !ok {
 		v := game.DefaultTravellerCount
 		_c.mutation.SetTravellerCount(v)
@@ -180,6 +221,10 @@ func (_c *GameCreate) defaults() {
 	if _, ok := _c.mutation.ExtraCharacters(); !ok {
 		v := game.DefaultExtraCharacters
 		_c.mutation.SetExtraCharacters(v)
+	}
+	if _, ok := _c.mutation.TravellerAlignments(); !ok {
+		v := game.DefaultTravellerAlignments
+		_c.mutation.SetTravellerAlignments(v)
 	}
 	if _, ok := _c.mutation.State(); !ok {
 		v := game.DefaultState
@@ -194,6 +239,9 @@ func (_c *GameCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Game.updated_at"`)}
+	}
+	if _, ok := _c.mutation.Name(); !ok {
+		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Game.name"`)}
 	}
 	if _, ok := _c.mutation.UserID(); !ok {
 		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "Game.user_id"`)}
@@ -271,6 +319,10 @@ func (_c *GameCreate) createSpec() (*Game, *sqlgraph.CreateSpec) {
 		_spec.SetField(game.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
+	if value, ok := _c.mutation.Name(); ok {
+		_spec.SetField(game.FieldName, field.TypeString, value)
+		_node.Name = value
+	}
 	if value, ok := _c.mutation.PlayerCount(); ok {
 		_spec.SetField(game.FieldPlayerCount, field.TypeInt, value)
 		_node.PlayerCount = value
@@ -290,6 +342,10 @@ func (_c *GameCreate) createSpec() (*Game, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ExtraCharacters(); ok {
 		_spec.SetField(game.FieldExtraCharacters, field.TypeJSON, value)
 		_node.ExtraCharacters = value
+	}
+	if value, ok := _c.mutation.TravellerAlignments(); ok {
+		_spec.SetField(game.FieldTravellerAlignments, field.TypeJSON, value)
+		_node.TravellerAlignments = value
 	}
 	if value, ok := _c.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
@@ -327,6 +383,22 @@ func (_c *GameCreate) createSpec() (*Game, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.ScriptID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.PhasesTable,
+			Columns: []string{game.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

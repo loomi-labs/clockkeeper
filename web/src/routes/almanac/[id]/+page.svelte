@@ -5,6 +5,7 @@
 	import { Team } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import type { Character } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import ReminderToken from '~/lib/components/ReminderToken.svelte';
+	import { formatReminder } from '~/lib/format';
 
 	let character = $state<Character | null>(null);
 	let loading = $state(true);
@@ -32,7 +33,7 @@
 		[Team.OUTSIDER]: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300',
 		[Team.MINION]: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300',
 		[Team.DEMON]: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300',
-		[Team.TRAVELLER]: 'bg-gradient-to-r from-blue-100 to-red-100 text-purple-700 dark:from-blue-500/20 dark:to-red-500/20 dark:text-purple-300',
+		[Team.TRAVELLER]: 'bg-gradient-to-r from-blue-100 to-red-100 text-blue-700 dark:from-blue-500/20 dark:to-red-500/20 dark:text-blue-300',
 		[Team.FABLED]: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
 		[Team.LORIC]: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300',
 	};
@@ -126,7 +127,7 @@
 			<!-- Ability -->
 			<div>
 				<h2 class="text-xs font-semibold uppercase tracking-wide text-secondary">Ability</h2>
-				<p class="mt-1 text-primary">{c.ability}</p>
+				<p class="mt-1 text-primary">{@html formatReminder(c.ability)}</p>
 			</div>
 
 			<!-- Night Info -->
@@ -143,7 +144,7 @@
 										<span class="rounded bg-element px-1.5 py-0.5 text-xs text-muted">#{c.firstNight}</span>
 									{/if}
 								</div>
-								<p class="mt-1 text-sm text-primary">{c.firstNightReminder}</p>
+								<p class="mt-1 text-sm text-primary">{@html formatReminder(c.firstNightReminder)}</p>
 							</div>
 						{/if}
 						{#if c.otherNightReminder}
@@ -155,7 +156,7 @@
 										<span class="rounded bg-element px-1.5 py-0.5 text-xs text-muted">#{c.otherNight}</span>
 									{/if}
 								</div>
-								<p class="mt-1 text-sm text-primary">{c.otherNightReminder}</p>
+								<p class="mt-1 text-sm text-primary">{@html formatReminder(c.otherNightReminder)}</p>
 							</div>
 						{/if}
 					</div>

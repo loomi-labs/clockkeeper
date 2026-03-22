@@ -1,9 +1,8 @@
-import { writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 
 const TOKEN_KEY = 'clockkeeper_token';
 
-export const isAuthenticated = writable(false);
+export const auth = $state({ isAuthenticated: false });
 
 export function getToken(): string | null {
 	return localStorage.getItem(TOKEN_KEY);
@@ -11,16 +10,16 @@ export function getToken(): string | null {
 
 export function setToken(token: string) {
 	localStorage.setItem(TOKEN_KEY, token);
-	isAuthenticated.set(true);
+	auth.isAuthenticated = true;
 }
 
 export function clearToken() {
 	localStorage.removeItem(TOKEN_KEY);
-	isAuthenticated.set(false);
+	auth.isAuthenticated = false;
 }
 
 export function initAuth() {
-	isAuthenticated.set(!!getToken());
+	auth.isAuthenticated = !!getToken();
 }
 
 export function logout() {

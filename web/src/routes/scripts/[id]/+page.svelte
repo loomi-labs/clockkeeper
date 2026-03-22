@@ -11,14 +11,23 @@
 
 	let script = $state<Script | undefined>();
 	let name = $state('');
+	let editingName = $state(false);
 	let loading = $state(true);
 	let error = $state('');
 	let showAddCharacter = $state(false);
+	let pickerTeam = $state<Team | undefined>();
 	let allCharacters = $state.raw<Character[]>([]);
 	let lastSavedName = '';
 	let lastSavedIds: string[] = [];
 
-	const teamOrder = [Team.TOWNSFOLK, Team.OUTSIDER, Team.MINION, Team.DEMON, Team.TRAVELLER, Team.FABLED, Team.LORIC];
+	const teamOrder = [Team.TOWNSFOLK, Team.OUTSIDER, Team.MINION, Team.DEMON] as const;
+	const optionalTeamOrder = [Team.TRAVELLER, Team.FABLED, Team.LORIC] as const;
+
+	const optionalTeamLabels: Record<number, string> = {
+		[Team.TRAVELLER]: 'Travellers',
+		[Team.FABLED]: 'Fabled',
+		[Team.LORIC]: 'Lorics'
+	};
 
 	const charactersByTeam = $derived.by(() => {
 		if (!script?.characters) return {};
@@ -84,20 +93,38 @@
 
 	$effect(() => {
 		const id = page.params.id;
-		untrack(() => loadScript(BigInt(id)));
+		untrack(() => {
+			if (!id) return;
+			loadScript(BigInt(id));
+		});
 	});
 
-	async function openAddCharacter() {
-		showAddCharacter = true;
+	async function openAddCharacter(forTeam?: Team) {
 		if (allCharacters.length === 0) {
 			try {
 				const resp = await client.listCharacters({});
 				allCharacters = resp.characters;
 			} catch (err) {
 				error = getErrorMessage(err, 'Failed to load characters');
+				return;
 			}
 		}
+		pickerTeam = forTeam;
+		showAddCharacter = true;
 	}
+
+	const optionalCharsByTeam = $derived.by(() => {
+		const grouped: Record<number, Character[]> = {};
+		for (const t of optionalTeamOrder) {
+			const chars = charactersByTeam[t];
+			if (chars && chars.length > 0) grouped[t] = chars;
+		}
+		return grouped;
+	});
+
+	const emptyOptionals = $derived(
+		optionalTeamOrder.filter((t) => !optionalCharsByTeam[t])
+	);
 
 	function removeCharacter(charId: string) {
 		if (!script) return;
@@ -154,23 +181,30 @@
 					</svg>
 				</a>
 				{#if script.isSystem}
-					<h2 class="min-w-0 flex-1 text-lg font-medium text-primary">{script.name}</h2>
-				{:else}
+					<h2 class="min-w-0 flex-1 font-[Goudy_Stout] text-lg text-primary">{script.name}</h2>
+				{:else if editingName}
 					<input
+						type="text"
 						bind:value={name}
-						class="min-w-0 flex-1 rounded-lg border border-border bg-surface-alt px-3 py-2 text-lg font-medium text-primary focus:border-indigo-400 focus:outline-none"
+						onblur={() => (editingName = false)}
+						onkeydown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') editingName = false; }}
+						class="min-w-0 flex-1 border-b-2 border-indigo-500 bg-transparent font-[Goudy_Stout] text-lg text-primary outline-none"
+						autofocus
 					/>
+				{:else}
+					<button
+						onclick={() => (editingName = true)}
+						class="group flex min-w-0 flex-1 items-center gap-1.5 text-left font-[Goudy_Stout] text-lg text-primary transition-colors hover:text-indigo-500"
+						title="Click to edit name"
+					>
+						<span class="truncate">{name || 'Untitled Script'}</span>
+						<svg class="h-4 w-4 shrink-0 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+						</svg>
+					</button>
 				{/if}
 			</div>
 			<div class="flex items-center gap-2">
-				{#if !script.isSystem}
-					<button
-						onclick={openAddCharacter}
-						class="btn-primary rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
-					>
-						Add Characters
-					</button>
-				{/if}
 				<a
 					href="/games/new?script={script.id}"
 					class="btn-secondary rounded-lg border border-border px-3 py-2 text-sm text-medium transition-colors hover:bg-hover"
@@ -179,7 +213,7 @@
 				</a>
 				{#if script.isSystem}
 					<button
-						onclick={() => createFromEdition(script.edition)}
+						onclick={() => createFromEdition(script!.edition)}
 						class="btn-secondary rounded-lg border border-border px-3 py-2 text-sm text-medium transition-colors hover:bg-hover"
 					>
 						Duplicate
@@ -205,16 +239,51 @@
 		<!-- Character list grouped by team -->
 		<div class="space-y-6">
 			{#each teamOrder as team}
-				{@const chars = charactersByTeam[team]}
-				{#if chars && chars.length > 0}
-					<TeamSection {team} characters={chars} removable={!script.isSystem} onremove={removeCharacter} />
+				{@const chars = charactersByTeam[team] ?? []}
+				{#if chars.length > 0 || !script.isSystem}
+					<TeamSection
+						{team}
+						characters={chars}
+						removable={!script.isSystem}
+						onremove={removeCharacter}
+						onadd={script.isSystem ? undefined : () => openAddCharacter(team)}
+					/>
 				{/if}
 			{/each}
 		</div>
 
+		<!-- Optional teams with characters -->
+		{#each optionalTeamOrder as team}
+			{@const chars = optionalCharsByTeam[team]}
+			{#if chars}
+				<TeamSection
+					{team}
+					characters={chars}
+					removable={!script.isSystem}
+					onremove={removeCharacter}
+					onadd={script.isSystem ? undefined : () => openAddCharacter(team)}
+				/>
+			{/if}
+		{/each}
+
+		<!-- Compact row for empty optional teams -->
+		{#if !script.isSystem && emptyOptionals.length > 0}
+			<div class="grid gap-2" style="grid-template-columns: repeat({emptyOptionals.length}, 1fr)">
+				{#each emptyOptionals as team}
+					<TeamSection
+						{team}
+						characters={[]}
+						compact
+						onadd={() => openAddCharacter(team)}
+						addLabel={optionalTeamLabels[team]}
+					/>
+				{/each}
+			</div>
+		{/if}
+
 		{#if script.characterIds.length === 0}
 			<div class="card-slate rounded-lg border border-dashed border-border-strong p-8 text-center">
-				<p class="text-secondary">No characters yet. Click "Add Characters" to get started.</p>
+				<p class="text-secondary">No characters yet. Use the add buttons above to get started.</p>
 			</div>
 		{/if}
 	</div>
@@ -224,6 +293,7 @@
 			title="Add Characters"
 			characters={allCharacters}
 			selectedIds={scriptIdSet}
+			team={pickerTeam}
 			onselect={addCharacter}
 			ondeselect={removeCharacter}
 			onclose={() => (showAddCharacter = false)}

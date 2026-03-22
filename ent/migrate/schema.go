@@ -8,16 +8,48 @@ import (
 )
 
 var (
+	// DeathsColumns holds the columns for the "deaths" table.
+	DeathsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "role_id", Type: field.TypeString},
+		{Name: "ghost_vote", Type: field.TypeBool, Default: true},
+		{Name: "phase_id", Type: field.TypeInt},
+	}
+	// DeathsTable holds the schema information for the "deaths" table.
+	DeathsTable = &schema.Table{
+		Name:       "deaths",
+		Columns:    DeathsColumns,
+		PrimaryKey: []*schema.Column{DeathsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "deaths_phases_deaths",
+				Columns:    []*schema.Column{DeathsColumns[5]},
+				RefColumns: []*schema.Column{PhasesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "death_role_id_phase_id",
+				Unique:  true,
+				Columns: []*schema.Column{DeathsColumns[3], DeathsColumns[5]},
+			},
+		},
+	}
 	// GamesColumns holds the columns for the "games" table.
 	GamesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString, Default: ""},
 		{Name: "player_count", Type: field.TypeInt},
 		{Name: "traveller_count", Type: field.TypeInt, Default: 0},
 		{Name: "selected_roles", Type: field.TypeJSON},
 		{Name: "selected_travellers", Type: field.TypeJSON},
 		{Name: "extra_characters", Type: field.TypeJSON, Nullable: true},
+		{Name: "traveller_alignments", Type: field.TypeJSON, Nullable: true},
 		{Name: "state", Type: field.TypeEnum, Enums: []string{"setup", "in_progress", "completed"}, Default: "setup"},
 		{Name: "script_id", Type: field.TypeInt},
 		{Name: "user_id", Type: field.TypeInt},
@@ -30,14 +62,39 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "games_scripts_games",
-				Columns:    []*schema.Column{GamesColumns[9]},
+				Columns:    []*schema.Column{GamesColumns[11]},
 				RefColumns: []*schema.Column{ScriptsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "games_users_games",
-				Columns:    []*schema.Column{GamesColumns[10]},
+				Columns:    []*schema.Column{GamesColumns[12]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// PhasesColumns holds the columns for the "phases" table.
+	PhasesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "round_number", Type: field.TypeInt},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"night", "day"}},
+		{Name: "is_active", Type: field.TypeBool, Default: true},
+		{Name: "completed_actions", Type: field.TypeJSON, Nullable: true},
+		{Name: "game_id", Type: field.TypeInt},
+	}
+	// PhasesTable holds the schema information for the "phases" table.
+	PhasesTable = &schema.Table{
+		Name:       "phases",
+		Columns:    PhasesColumns,
+		PrimaryKey: []*schema.Column{PhasesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "phases_games_phases",
+				Columns:    []*schema.Column{PhasesColumns[7]},
+				RefColumns: []*schema.Column{GamesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
@@ -84,14 +141,18 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		DeathsTable,
 		GamesTable,
+		PhasesTable,
 		ScriptsTable,
 		UsersTable,
 	}
 )
 
 func init() {
+	DeathsTable.ForeignKeys[0].RefTable = PhasesTable
 	GamesTable.ForeignKeys[0].RefTable = ScriptsTable
 	GamesTable.ForeignKeys[1].RefTable = UsersTable
+	PhasesTable.ForeignKeys[0].RefTable = GamesTable
 	ScriptsTable.ForeignKeys[0].RefTable = UsersTable
 }

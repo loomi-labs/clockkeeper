@@ -3,6 +3,8 @@ package web
 import (
 	"github.com/loomi-labs/clockkeeper/ent"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 	"github.com/loomi-labs/clockkeeper/internal/botc"
 )
@@ -31,6 +33,34 @@ var gameStateToProto = map[game.State]clockkeeperv1.GameState{
 	game.StateSetup:      clockkeeperv1.GameState_GAME_STATE_SETUP,
 	game.StateInProgress: clockkeeperv1.GameState_GAME_STATE_IN_PROGRESS,
 	game.StateCompleted:  clockkeeperv1.GameState_GAME_STATE_COMPLETED,
+}
+
+var phaseTypeToProto = map[phase.Type]clockkeeperv1.PhaseType{
+	phase.TypeNight: clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT,
+	phase.TypeDay:   clockkeeperv1.PhaseType_PHASE_TYPE_DAY,
+}
+
+func entDeathToProto(d *ent.Death) *clockkeeperv1.Death {
+	return &clockkeeperv1.Death{
+		Id:        int64(d.ID),
+		RoleId:    d.RoleID,
+		PhaseId:   int64(d.PhaseID),
+		GhostVote: d.GhostVote,
+	}
+}
+
+func entPhaseToProto(p *ent.Phase) *clockkeeperv1.Phase {
+	proto := &clockkeeperv1.Phase{
+		Id:               int64(p.ID),
+		RoundNumber:      int32(p.RoundNumber),
+		Type:             phaseTypeToProto[p.Type],
+		IsActive:         p.IsActive,
+		CompletedActions: p.CompletedActions,
+	}
+	for _, d := range p.Edges.Deaths {
+		proto.Deaths = append(proto.Deaths, entDeathToProto(d))
+	}
+	return proto
 }
 
 func characterToProto(c *botc.Character) *clockkeeperv1.Character {
@@ -93,6 +123,32 @@ func entScriptToProto(s *ent.Script, registry *botc.Registry) *clockkeeperv1.Scr
 	return proto
 }
 
+func entGameToSummary(g *ent.Game) *clockkeeperv1.GameSummary {
+	summary := &clockkeeperv1.GameSummary{
+		Id:             int64(g.ID),
+		Name:           g.Name,
+		PlayerCount:    int32(g.PlayerCount),
+		TravellerCount: int32(g.TravellerCount),
+		State:          gameStateToProto[g.State],
+	}
+
+	// Script name from eager-loaded edge.
+	if s := g.Edges.Script; s != nil {
+		summary.ScriptName = s.Name
+	}
+
+	// Phase and death info from eager-loaded phases.
+	for _, p := range g.Edges.Phases {
+		if p.IsActive {
+			summary.CurrentRound = int32(p.RoundNumber)
+			summary.CurrentPhaseType = phaseTypeToProto[p.Type]
+		}
+		summary.DeathCount += int32(len(p.Edges.Deaths))
+	}
+
+	return summary
+}
+
 func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 	chars := registry.Characters(g.SelectedRoles)
 	travellerChars := registry.Characters(g.SelectedTravellers)
@@ -132,8 +188,9 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 		}
 	}
 
-	return &clockkeeperv1.Game{
+	proto := &clockkeeperv1.Game{
 		Id:                          int64(g.ID),
+		Name:                        g.Name,
 		ScriptId:                    int64(g.ScriptID),
 		PlayerCount:                 int32(g.PlayerCount),
 		TravellerCount:              int32(g.TravellerCount),
@@ -147,4 +204,36 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 		ExtraCharacterDetails:       charactersToProto(extraChars),
 		ReminderTokens:              tokens,
 	}
+
+	// Populate traveller alignments.
+	if len(g.TravellerAlignments) > 0 {
+		proto.TravellerAlignments = make(map[string]clockkeeperv1.TravellerAlignment)
+		for id, align := range g.TravellerAlignments {
+			switch align {
+			case schema.AlignmentGood:
+				proto.TravellerAlignments[id] = clockkeeperv1.TravellerAlignment_TRAVELLER_ALIGNMENT_GOOD
+			case schema.AlignmentEvil:
+				proto.TravellerAlignments[id] = clockkeeperv1.TravellerAlignment_TRAVELLER_ALIGNMENT_EVIL
+			}
+		}
+	}
+
+	// Populate play_state from eager-loaded phases+deaths.
+	if phases := g.Edges.Phases; len(phases) > 0 {
+		playState := &clockkeeperv1.GamePlayState{}
+		for _, p := range phases {
+			pp := entPhaseToProto(p)
+			playState.Phases = append(playState.Phases, pp)
+			if p.IsActive {
+				playState.CurrentPhase = pp
+				playState.CurrentRound = int32(p.RoundNumber)
+			}
+			for _, d := range p.Edges.Deaths {
+				playState.AllDeaths = append(playState.AllDeaths, entDeathToProto(d))
+			}
+		}
+		proto.PlayState = playState
+	}
+
+	return proto
 }

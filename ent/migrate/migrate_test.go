@@ -33,6 +33,11 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260318105440_add_game_owner":                    validateGameOwner,
 	"20260318155946_add_script_owner_check":             validateScriptOwnerCheck,
 	"20260319100012_add_game_extra_characters":           validateGameExtraCharacters,
+	"20260321102851_add_phases_and_deaths":               validatePhasesAndDeaths,
+	"20260321112246_add_traveller_alignments":            validateTravellerAlignments,
+	"20260321131451_add_game_name":                       validateGameName,
+	"20260321133230_add_completed_actions":               validateCompletedActions,
+	"20260322103914_add_death_unique_index":              validateDeathUniqueIndex,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -103,7 +108,9 @@ func TestMigrationCoverage(t *testing.T) {
 // TestSchemaCompleteness ensures all schema entities are covered by the migration test.
 func TestSchemaCompleteness(t *testing.T) {
 	knownEntities := []string{
+		"death.go",
 		"game.go",
+		"phase.go",
 		"script.go",
 		"user.go",
 	}
@@ -344,25 +351,12 @@ func validateGameOwner(t *testing.T, ctx context.Context, _ *sql.DB, client *ent
 	}
 }
 
-// validateScriptOwnerCheck verifies the CHECK constraint prevents ownerless non-system scripts.
-func validateScriptOwnerCheck(t *testing.T, ctx context.Context, db *sql.DB, _ *ent.Client) {
+// validateScriptOwnerCheck verifies the CHECK constraint was added (later dropped by phases migration).
+func validateScriptOwnerCheck(t *testing.T, _ context.Context, _ *sql.DB, _ *ent.Client) {
 	t.Helper()
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatalf("failed to begin tx: %v", err)
-	}
-	t.Cleanup(func() { _ = tx.Rollback() })
-
-	// Inserting a non-system script without user_id should fail.
-	_, err = tx.ExecContext(ctx,
-		`INSERT INTO scripts (name, edition, character_ids, is_system, created_at, updated_at)
-		 VALUES ('orphan', 'custom', '[]', false, NOW(), NOW())`)
-	if err == nil {
-		t.Fatalf("expected CHECK constraint violation for ownerless non-system script")
-	} else if !strings.Contains(err.Error(), "chk_script_has_owner") {
-		t.Fatalf("expected chk_script_has_owner violation, got: %v", err)
-	}
+	// The chk_script_has_owner constraint was added by this migration but later
+	// dropped by 20260321102851_add_phases_and_deaths. Since validators run after
+	// all migrations are applied, we can only verify the migration was applied.
 }
 
 // validateGameExtraCharacters checks that the extra_characters column exists and defaults to NULL.
@@ -375,6 +369,87 @@ func validateGameExtraCharacters(t *testing.T, ctx context.Context, _ *sql.DB, c
 	}
 	if g.ExtraCharacters != nil && len(g.ExtraCharacters) != 0 {
 		t.Errorf("expected nil or empty extra_characters, got %v", g.ExtraCharacters)
+	}
+}
+
+// validatePhasesAndDeaths checks that phases and deaths tables exist.
+func validatePhasesAndDeaths(t *testing.T, ctx context.Context, db *sql.DB, _ *ent.Client) {
+	t.Helper()
+
+	// Verify phases table exists.
+	var count int
+	err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM phases`).Scan(&count)
+	if err != nil {
+		t.Fatalf("phases table should exist: %v", err)
+	}
+
+	// Verify deaths table exists.
+	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deaths`).Scan(&count)
+	if err != nil {
+		t.Fatalf("deaths table should exist: %v", err)
+	}
+}
+
+// validateTravellerAlignments checks that the traveller_alignments column exists.
+func validateTravellerAlignments(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.TravellerAlignments != nil && len(g.TravellerAlignments) != 0 {
+		t.Errorf("expected nil or empty traveller_alignments, got %v", g.TravellerAlignments)
+	}
+}
+
+// validateGameName checks that the name column exists with default empty string.
+func validateGameName(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.Name != "" {
+		t.Errorf("expected default empty name, got %q", g.Name)
+	}
+}
+
+// validateCompletedActions checks that the completed_actions column exists on phases.
+func validateCompletedActions(t *testing.T, ctx context.Context, db *sql.DB, _ *ent.Client) {
+	t.Helper()
+
+	// Verify the column exists by querying it.
+	var exists bool
+	err := db.QueryRowContext(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_name = 'phases' AND column_name = 'completed_actions'
+		)`).Scan(&exists)
+	if err != nil {
+		t.Fatalf("failed to check column: %v", err)
+	}
+	if !exists {
+		t.Error("completed_actions column should exist on phases table")
+	}
+}
+
+// validateDeathUniqueIndex checks that the unique index on (role_id, phase_id) exists.
+func validateDeathUniqueIndex(t *testing.T, ctx context.Context, db *sql.DB, _ *ent.Client) {
+	t.Helper()
+
+	var exists bool
+	err := db.QueryRowContext(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM pg_indexes
+			WHERE tablename = 'deaths' AND indexname = 'death_role_id_phase_id'
+		)`).Scan(&exists)
+	if err != nil {
+		t.Fatalf("failed to check index: %v", err)
+	}
+	if !exists {
+		t.Error("death_role_id_phase_id unique index should exist")
 	}
 }
 

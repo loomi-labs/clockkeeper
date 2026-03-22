@@ -262,10 +262,17 @@
 		linear-gradient(to right, #1e40af 50%, #991b1b 50%) border-box;
 }
 
+.text-gradient-traveller {
+	background: linear-gradient(to right, #60a5fa 0%, #f87171 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
 /* Print styles */
 @media print {
 	/* Hide non-printable elements */
-	nav, .no-print, .setup-sidebar { display: none !important; }
+	nav, .no-print, .setup-sidebar, .nav-sidebar { display: none !important; }
 
 	/* Show print-only content */
 	.print-only { display: block !important; }

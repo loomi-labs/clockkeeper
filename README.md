@@ -42,7 +42,6 @@ See [docs/architecture.md](docs/architecture.md) for full details.
 
 - [Project Overview](docs/project-overview.md) — Vision, scope, MVP definition
 - [Architecture](docs/architecture.md) — Tech stack, system design, testing
-- [User Stories](docs/user-stories.md) — Feature stories by area
 
 ## Disclaimer
 
