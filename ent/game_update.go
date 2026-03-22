@@ -13,7 +13,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
@@ -34,6 +36,20 @@ func (_u *GameUpdate) Where(ps ...predicate.Game) *GameUpdate {
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *GameUpdate) SetUpdatedAt(v time.Time) *GameUpdate {
 	_u.mutation.SetUpdatedAt(v)
+	return _u
+}
+
+// SetName sets the "name" field.
+func (_u *GameUpdate) SetName(v string) *GameUpdate {
+	_u.mutation.SetName(v)
+	return _u
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_u *GameUpdate) SetNillableName(v *string) *GameUpdate {
+	if v != nil {
+		_u.SetName(*v)
+	}
 	return _u
 }
 
@@ -149,6 +165,18 @@ func (_u *GameUpdate) ClearExtraCharacters() *GameUpdate {
 	return _u
 }
 
+// SetTravellerAlignments sets the "traveller_alignments" field.
+func (_u *GameUpdate) SetTravellerAlignments(v map[string]schema.TravellerAlignment) *GameUpdate {
+	_u.mutation.SetTravellerAlignments(v)
+	return _u
+}
+
+// ClearTravellerAlignments clears the value of the "traveller_alignments" field.
+func (_u *GameUpdate) ClearTravellerAlignments() *GameUpdate {
+	_u.mutation.ClearTravellerAlignments()
+	return _u
+}
+
 // SetState sets the "state" field.
 func (_u *GameUpdate) SetState(v game.State) *GameUpdate {
 	_u.mutation.SetState(v)
@@ -179,6 +207,21 @@ func (_u *GameUpdate) SetScript(v *Script) *GameUpdate {
 	return _u.SetScriptID(v.ID)
 }
 
+// AddPhaseIDs adds the "phases" edge to the Phase entity by IDs.
+func (_u *GameUpdate) AddPhaseIDs(ids ...int) *GameUpdate {
+	_u.mutation.AddPhaseIDs(ids...)
+	return _u
+}
+
+// AddPhases adds the "phases" edges to the Phase entity.
+func (_u *GameUpdate) AddPhases(v ...*Phase) *GameUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddPhaseIDs(ids...)
+}
+
 // Mutation returns the GameMutation object of the builder.
 func (_u *GameUpdate) Mutation() *GameMutation {
 	return _u.mutation
@@ -194,6 +237,27 @@ func (_u *GameUpdate) ClearOwner() *GameUpdate {
 func (_u *GameUpdate) ClearScript() *GameUpdate {
 	_u.mutation.ClearScript()
 	return _u
+}
+
+// ClearPhases clears all "phases" edges to the Phase entity.
+func (_u *GameUpdate) ClearPhases() *GameUpdate {
+	_u.mutation.ClearPhases()
+	return _u
+}
+
+// RemovePhaseIDs removes the "phases" edge to Phase entities by IDs.
+func (_u *GameUpdate) RemovePhaseIDs(ids ...int) *GameUpdate {
+	_u.mutation.RemovePhaseIDs(ids...)
+	return _u
+}
+
+// RemovePhases removes "phases" edges to Phase entities.
+func (_u *GameUpdate) RemovePhases(v ...*Phase) *GameUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemovePhaseIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -273,6 +337,9 @@ func (_u *GameUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(game.FieldUpdatedAt, field.TypeTime, value)
 	}
+	if value, ok := _u.mutation.Name(); ok {
+		_spec.SetField(game.FieldName, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.PlayerCount(); ok {
 		_spec.SetField(game.FieldPlayerCount, field.TypeInt, value)
 	}
@@ -311,6 +378,12 @@ func (_u *GameUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ExtraCharactersCleared() {
 		_spec.ClearField(game.FieldExtraCharacters, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.TravellerAlignments(); ok {
+		_spec.SetField(game.FieldTravellerAlignments, field.TypeJSON, value)
+	}
+	if _u.mutation.TravellerAlignmentsCleared() {
+		_spec.ClearField(game.FieldTravellerAlignments, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
@@ -373,6 +446,51 @@ func (_u *GameUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.PhasesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.PhasesTable,
+			Columns: []string{game.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedPhasesIDs(); len(nodes) > 0 && !_u.mutation.PhasesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.PhasesTable,
+			Columns: []string{game.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.PhasesTable,
+			Columns: []string{game.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{game.Label}
@@ -396,6 +514,20 @@ type GameUpdateOne struct {
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *GameUpdateOne) SetUpdatedAt(v time.Time) *GameUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
+	return _u
+}
+
+// SetName sets the "name" field.
+func (_u *GameUpdateOne) SetName(v string) *GameUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_u *GameUpdateOne) SetNillableName(v *string) *GameUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
+	}
 	return _u
 }
 
@@ -511,6 +643,18 @@ func (_u *GameUpdateOne) ClearExtraCharacters() *GameUpdateOne {
 	return _u
 }
 
+// SetTravellerAlignments sets the "traveller_alignments" field.
+func (_u *GameUpdateOne) SetTravellerAlignments(v map[string]schema.TravellerAlignment) *GameUpdateOne {
+	_u.mutation.SetTravellerAlignments(v)
+	return _u
+}
+
+// ClearTravellerAlignments clears the value of the "traveller_alignments" field.
+func (_u *GameUpdateOne) ClearTravellerAlignments() *GameUpdateOne {
+	_u.mutation.ClearTravellerAlignments()
+	return _u
+}
+
 // SetState sets the "state" field.
 func (_u *GameUpdateOne) SetState(v game.State) *GameUpdateOne {
 	_u.mutation.SetState(v)
@@ -541,6 +685,21 @@ func (_u *GameUpdateOne) SetScript(v *Script) *GameUpdateOne {
 	return _u.SetScriptID(v.ID)
 }
 
+// AddPhaseIDs adds the "phases" edge to the Phase entity by IDs.
+func (_u *GameUpdateOne) AddPhaseIDs(ids ...int) *GameUpdateOne {
+	_u.mutation.AddPhaseIDs(ids...)
+	return _u
+}
+
+// AddPhases adds the "phases" edges to the Phase entity.
+func (_u *GameUpdateOne) AddPhases(v ...*Phase) *GameUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddPhaseIDs(ids...)
+}
+
 // Mutation returns the GameMutation object of the builder.
 func (_u *GameUpdateOne) Mutation() *GameMutation {
 	return _u.mutation
@@ -556,6 +715,27 @@ func (_u *GameUpdateOne) ClearOwner() *GameUpdateOne {
 func (_u *GameUpdateOne) ClearScript() *GameUpdateOne {
 	_u.mutation.ClearScript()
 	return _u
+}
+
+// ClearPhases clears all "phases" edges to the Phase entity.
+func (_u *GameUpdateOne) ClearPhases() *GameUpdateOne {
+	_u.mutation.ClearPhases()
+	return _u
+}
+
+// RemovePhaseIDs removes the "phases" edge to Phase entities by IDs.
+func (_u *GameUpdateOne) RemovePhaseIDs(ids ...int) *GameUpdateOne {
+	_u.mutation.RemovePhaseIDs(ids...)
+	return _u
+}
+
+// RemovePhases removes "phases" edges to Phase entities.
+func (_u *GameUpdateOne) RemovePhases(v ...*Phase) *GameUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemovePhaseIDs(ids...)
 }
 
 // Where appends a list predicates to the GameUpdate builder.
@@ -665,6 +845,9 @@ func (_u *GameUpdateOne) sqlSave(ctx context.Context) (_node *Game, err error) {
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(game.FieldUpdatedAt, field.TypeTime, value)
 	}
+	if value, ok := _u.mutation.Name(); ok {
+		_spec.SetField(game.FieldName, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.PlayerCount(); ok {
 		_spec.SetField(game.FieldPlayerCount, field.TypeInt, value)
 	}
@@ -703,6 +886,12 @@ func (_u *GameUpdateOne) sqlSave(ctx context.Context) (_node *Game, err error) {
 	}
 	if _u.mutation.ExtraCharactersCleared() {
 		_spec.ClearField(game.FieldExtraCharacters, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.TravellerAlignments(); ok {
+		_spec.SetField(game.FieldTravellerAlignments, field.TypeJSON, value)
+	}
+	if _u.mutation.TravellerAlignmentsCleared() {
+		_spec.ClearField(game.FieldTravellerAlignments, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
@@ -758,6 +947,51 @@ func (_u *GameUpdateOne) sqlSave(ctx context.Context) (_node *Game, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(script.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PhasesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.PhasesTable,
+			Columns: []string{game.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedPhasesIDs(); len(nodes) > 0 && !_u.mutation.PhasesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.PhasesTable,
+			Columns: []string{game.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.PhasesTable,
+			Columns: []string{game.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

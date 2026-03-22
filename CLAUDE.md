@@ -6,8 +6,8 @@ Digital companion app for in-person Blood on the Clocktower games. Storyteller-f
 
 - @docs/project-overview.md — Vision, scope, MVP definition
 - @docs/architecture.md — Tech stack, system design, testing strategy
-- `@docs/user-stories.md` — User stories by feature area
-- @docs/development-guidelines.md — Coding guidelines 
+- @docs/development-guidelines.md — Coding guidelines
+- @docs/commands.md — Full task command reference
 
 ## Tech Stack
 
@@ -34,16 +34,16 @@ docs/             # Project documentation
 
 ## Commands
 
+See @docs/commands.md for the full reference. Most common:
+
 | Task | Command |
 |------|---------|
 | Run dev server | `task dev` |
 | Run all tests | `task test` |
-| Run unit tests | `task test:unit` |
-| Run E2E tests | `task test:e2e` |
-| Generate proto | `task gen` |
-| Generate Ent | `task gen:ent` |
+| Type-check frontend | `task check` |
+| Generate all code | `task gen` |
 | Build binary | `task build` |
-| Docker up | `docker-compose up` |
+| Apply DB migrations | `task db:migrate` |
 
 ## Scripts
 

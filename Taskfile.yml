@@ -74,6 +74,12 @@ tasks:
     cmds:
       - buf generate
 
+  check:
+    desc: Run svelte-check for type errors
+    dir: web
+    cmds:
+      - npx svelte-check --tsconfig ./tsconfig.json
+
   frontend:build:
     desc: Build the Svelte frontend
     dir: web

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Character } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import { Team } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
+	import { teamCardColorsSelected, teamNameColors, teamCheckColors, teamDataAttr, iconSuffix } from '~/lib/team-styles';
 
 	let {
 		title,
@@ -41,7 +42,7 @@
 		{ id: Team.OUTSIDER, label: 'Outsiders', active: 'bg-cyan-600 text-white' },
 		{ id: Team.MINION, label: 'Minions', active: 'bg-orange-600 text-white' },
 		{ id: Team.DEMON, label: 'Demons', active: 'bg-red-600 text-white' },
-		{ id: Team.TRAVELLER, label: 'Travellers', active: 'bg-purple-600 text-white' },
+		{ id: Team.TRAVELLER, label: 'Travellers', active: 'bg-gradient-to-r from-blue-600 to-red-600 text-white' },
 		{ id: Team.FABLED, label: 'Fabled', active: 'bg-yellow-600 text-white' },
 		{ id: Team.LORIC, label: 'Lorics', active: 'bg-green-600 text-white' }
 	];
@@ -56,61 +57,6 @@
 		[Team.LORIC]: 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40'
 	};
 
-	const teamCardColorsSelected: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'border-blue-500 bg-blue-100 dark:bg-blue-500/20',
-		[Team.OUTSIDER]: 'border-cyan-500 bg-cyan-100 dark:bg-cyan-500/20',
-		[Team.MINION]: 'border-orange-500 bg-orange-100 dark:bg-orange-500/20',
-		[Team.DEMON]: 'border-red-500 bg-red-100 dark:bg-red-500/20',
-		[Team.TRAVELLER]: 'card-traveller',
-		[Team.FABLED]: 'border-yellow-500 bg-yellow-100 dark:bg-yellow-500/20',
-		[Team.LORIC]: 'border-green-500 bg-green-100 dark:bg-green-500/20'
-	};
-
-	const teamNameColors: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'text-blue-700 dark:text-blue-300',
-		[Team.OUTSIDER]: 'text-cyan-700 dark:text-cyan-300',
-		[Team.MINION]: 'text-orange-700 dark:text-orange-300',
-		[Team.DEMON]: 'text-red-700 dark:text-red-300',
-		[Team.TRAVELLER]: 'text-purple-700 dark:text-purple-300',
-		[Team.FABLED]: 'text-yellow-700 dark:text-yellow-300',
-		[Team.LORIC]: 'text-green-700 dark:text-green-300'
-	};
-
-	const teamCheckColors: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'text-blue-600 dark:text-blue-400',
-		[Team.OUTSIDER]: 'text-cyan-600 dark:text-cyan-400',
-		[Team.MINION]: 'text-orange-600 dark:text-orange-400',
-		[Team.DEMON]: 'text-red-600 dark:text-red-400',
-		[Team.TRAVELLER]: 'text-purple-600 dark:text-purple-400',
-		[Team.FABLED]: 'text-yellow-600 dark:text-yellow-400',
-		[Team.LORIC]: 'text-green-600 dark:text-green-400'
-	};
-
-	const teamNames: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'Townsfolk',
-		[Team.OUTSIDER]: 'Outsider',
-		[Team.MINION]: 'Minion',
-		[Team.DEMON]: 'Demon',
-		[Team.TRAVELLER]: 'Traveller',
-		[Team.FABLED]: 'Fabled',
-		[Team.LORIC]: 'Loric'
-	};
-
-	const teamDataAttr: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'townsfolk',
-		[Team.OUTSIDER]: 'outsider',
-		[Team.MINION]: 'minion',
-		[Team.DEMON]: 'demon',
-		[Team.TRAVELLER]: 'traveller',
-		[Team.FABLED]: 'fabled',
-		[Team.LORIC]: 'loric'
-	};
-
-	function iconSuffix(t: Team): string {
-		if (t === Team.TOWNSFOLK || t === Team.OUTSIDER) return '_g';
-		if (t === Team.MINION || t === Team.DEMON) return '_e';
-		return '';
-	}
 
 	const excludeTeamSet = $derived(new Set(excludeTeams ?? []));
 
@@ -241,10 +187,7 @@
 								onerror={(e: Event) => (e.target as HTMLImageElement).style.display = 'none'}
 							/>
 							<div class="min-w-0 flex-1">
-								<div class="flex items-center gap-1.5">
-									<span class="text-sm font-medium {added ? (teamNameColors[char.team] ?? 'text-primary') : 'text-primary'}">{char.name}</span>
-									<span class="text-xs text-secondary">{teamNames[char.team] ?? ''}</span>
-								</div>
+								<span class="text-sm font-medium {added ? (teamNameColors[char.team] ?? 'text-primary') : 'text-primary'}">{char.name}</span>
 							</div>
 							{#if added}
 								<svg class="h-4 w-4 shrink-0 {teamCheckColors[char.team] ?? 'text-secondary'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">

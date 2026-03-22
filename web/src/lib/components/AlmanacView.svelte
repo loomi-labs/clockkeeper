@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Character } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
 	import { Team } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
+	import { formatReminder } from '~/lib/format';
+	import { teamLabels, teamHeaderColors, teamCardColors, teamDataAttr, iconSuffix } from '~/lib/team-styles';
 
 	let {
 		characters
@@ -9,62 +11,6 @@
 	} = $props();
 
 	const teamOrder = [Team.TOWNSFOLK, Team.OUTSIDER, Team.MINION, Team.DEMON, Team.TRAVELLER, Team.FABLED, Team.LORIC] as const;
-
-	const teamLabels: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'Townsfolk',
-		[Team.OUTSIDER]: 'Outsiders',
-		[Team.MINION]: 'Minions',
-		[Team.DEMON]: 'Demons',
-		[Team.TRAVELLER]: 'Travellers',
-		[Team.FABLED]: 'Fabled',
-		[Team.LORIC]: 'Lorics',
-	};
-
-	const teamHeaderColors: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'text-blue-600 dark:text-blue-400',
-		[Team.OUTSIDER]: 'text-cyan-600 dark:text-cyan-400',
-		[Team.MINION]: 'text-orange-600 dark:text-orange-400',
-		[Team.DEMON]: 'text-red-600 dark:text-red-400',
-		[Team.TRAVELLER]: 'bg-gradient-to-r from-blue-600 to-red-600 bg-clip-text text-transparent dark:from-blue-400 dark:to-red-400',
-		[Team.FABLED]: 'text-yellow-500 dark:text-yellow-400',
-		[Team.LORIC]: 'text-green-600 dark:text-green-400',
-	};
-
-	const teamCardColors: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
-		[Team.OUTSIDER]: 'border-cyan-200 bg-cyan-50 dark:border-cyan-800 dark:bg-cyan-950/40',
-		[Team.MINION]: 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40',
-		[Team.DEMON]: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
-		[Team.TRAVELLER]: 'card-traveller',
-		[Team.FABLED]: 'border-yellow-300 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-950/40',
-		[Team.LORIC]: 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40',
-	};
-
-	const teamBadgeColors: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
-		[Team.OUTSIDER]: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300',
-		[Team.MINION]: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300',
-		[Team.DEMON]: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300',
-		[Team.TRAVELLER]: 'bg-gradient-to-r from-blue-100 to-red-100 text-purple-700 dark:from-blue-500/20 dark:to-red-500/20 dark:text-purple-300',
-		[Team.FABLED]: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300',
-		[Team.LORIC]: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300',
-	};
-
-	const teamDataAttr: Record<number, string> = {
-		[Team.TOWNSFOLK]: 'townsfolk',
-		[Team.OUTSIDER]: 'outsider',
-		[Team.MINION]: 'minion',
-		[Team.DEMON]: 'demon',
-		[Team.TRAVELLER]: 'traveller',
-		[Team.FABLED]: 'fabled',
-		[Team.LORIC]: 'loric',
-	};
-
-	function iconSuffix(team: number): string {
-		if (team === Team.TOWNSFOLK || team === Team.OUTSIDER) return '_g';
-		if (team === Team.MINION || team === Team.DEMON) return '_e';
-		return '';
-	}
 
 	const groupedByTeam = $derived.by(() => {
 		const grouped: Record<number, Character[]> = {};
@@ -97,14 +43,11 @@
 								<div class="min-w-0 flex-1">
 									<div class="flex items-center gap-2">
 										<span class="font-medium text-primary">{char.name}</span>
-										<span class="rounded px-1.5 py-0.5 text-xs {teamBadgeColors[char.team] ?? 'bg-element text-secondary'}">
-											{teamLabels[char.team]?.replace(/s$/, '') ?? ''}
-										</span>
 										{#if char.setup}
 											<span class="rounded bg-yellow-100 px-1.5 py-0.5 text-xs text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300">setup</span>
 										{/if}
 									</div>
-									<p class="mt-1 text-sm text-secondary">{char.ability}</p>
+									<p class="mt-1 text-sm text-secondary">{@html formatReminder(char.ability)}</p>
 
 									<!-- Night info -->
 									{#if char.firstNightReminder || char.otherNightReminder}
@@ -112,13 +55,13 @@
 											{#if char.firstNightReminder}
 												<div class="flex items-start gap-1.5 text-xs">
 													<svg class="mt-0.5 h-3 w-3 shrink-0 text-indigo-400" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
-													<span class="text-muted"><span class="font-medium text-secondary">First night:</span> {char.firstNightReminder}</span>
+													<span class="text-muted"><span class="font-medium text-secondary">First night:</span> {@html formatReminder(char.firstNightReminder)}</span>
 												</div>
 											{/if}
 											{#if char.otherNightReminder}
 												<div class="flex items-start gap-1.5 text-xs">
 													<svg class="mt-0.5 h-3 w-3 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd" /></svg>
-													<span class="text-muted"><span class="font-medium text-secondary">Other nights:</span> {char.otherNightReminder}</span>
+													<span class="text-muted"><span class="font-medium text-secondary">Other nights:</span> {@html formatReminder(char.otherNightReminder)}</span>
 												</div>
 											{/if}
 										</div>

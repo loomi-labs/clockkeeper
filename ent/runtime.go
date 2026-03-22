@@ -5,7 +5,9 @@ package ent
 import (
 	"time"
 
+	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -15,6 +17,29 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	deathMixin := schema.Death{}.Mixin()
+	deathMixinFields0 := deathMixin[0].Fields()
+	_ = deathMixinFields0
+	deathFields := schema.Death{}.Fields()
+	_ = deathFields
+	// deathDescCreatedAt is the schema descriptor for created_at field.
+	deathDescCreatedAt := deathMixinFields0[0].Descriptor()
+	// death.DefaultCreatedAt holds the default value on creation for the created_at field.
+	death.DefaultCreatedAt = deathDescCreatedAt.Default.(func() time.Time)
+	// deathDescUpdatedAt is the schema descriptor for updated_at field.
+	deathDescUpdatedAt := deathMixinFields0[1].Descriptor()
+	// death.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	death.DefaultUpdatedAt = deathDescUpdatedAt.Default.(func() time.Time)
+	// death.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	death.UpdateDefaultUpdatedAt = deathDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// deathDescRoleID is the schema descriptor for role_id field.
+	deathDescRoleID := deathFields[1].Descriptor()
+	// death.RoleIDValidator is a validator for the "role_id" field. It is called by the builders before save.
+	death.RoleIDValidator = deathDescRoleID.Validators[0].(func(string) error)
+	// deathDescGhostVote is the schema descriptor for ghost_vote field.
+	deathDescGhostVote := deathFields[2].Descriptor()
+	// death.DefaultGhostVote holds the default value on creation for the ghost_vote field.
+	death.DefaultGhostVote = deathDescGhostVote.Default.(bool)
 	gameMixin := schema.Game{}.Mixin()
 	gameMixinFields0 := gameMixin[0].Fields()
 	_ = gameMixinFields0
@@ -30,8 +55,12 @@ func init() {
 	game.DefaultUpdatedAt = gameDescUpdatedAt.Default.(func() time.Time)
 	// game.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	game.UpdateDefaultUpdatedAt = gameDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// gameDescName is the schema descriptor for name field.
+	gameDescName := gameFields[0].Descriptor()
+	// game.DefaultName holds the default value on creation for the name field.
+	game.DefaultName = gameDescName.Default.(string)
 	// gameDescPlayerCount is the schema descriptor for player_count field.
-	gameDescPlayerCount := gameFields[2].Descriptor()
+	gameDescPlayerCount := gameFields[3].Descriptor()
 	// game.PlayerCountValidator is a validator for the "player_count" field. It is called by the builders before save.
 	game.PlayerCountValidator = func() func(int) error {
 		validators := gameDescPlayerCount.Validators
@@ -49,7 +78,7 @@ func init() {
 		}
 	}()
 	// gameDescTravellerCount is the schema descriptor for traveller_count field.
-	gameDescTravellerCount := gameFields[3].Descriptor()
+	gameDescTravellerCount := gameFields[4].Descriptor()
 	// game.DefaultTravellerCount holds the default value on creation for the traveller_count field.
 	game.DefaultTravellerCount = gameDescTravellerCount.Default.(int)
 	// game.TravellerCountValidator is a validator for the "traveller_count" field. It is called by the builders before save.
@@ -69,9 +98,40 @@ func init() {
 		}
 	}()
 	// gameDescExtraCharacters is the schema descriptor for extra_characters field.
-	gameDescExtraCharacters := gameFields[6].Descriptor()
+	gameDescExtraCharacters := gameFields[7].Descriptor()
 	// game.DefaultExtraCharacters holds the default value on creation for the extra_characters field.
 	game.DefaultExtraCharacters = gameDescExtraCharacters.Default.([]string)
+	// gameDescTravellerAlignments is the schema descriptor for traveller_alignments field.
+	gameDescTravellerAlignments := gameFields[8].Descriptor()
+	// game.DefaultTravellerAlignments holds the default value on creation for the traveller_alignments field.
+	game.DefaultTravellerAlignments = gameDescTravellerAlignments.Default.(map[string]schema.TravellerAlignment)
+	phaseMixin := schema.Phase{}.Mixin()
+	phaseMixinFields0 := phaseMixin[0].Fields()
+	_ = phaseMixinFields0
+	phaseFields := schema.Phase{}.Fields()
+	_ = phaseFields
+	// phaseDescCreatedAt is the schema descriptor for created_at field.
+	phaseDescCreatedAt := phaseMixinFields0[0].Descriptor()
+	// phase.DefaultCreatedAt holds the default value on creation for the created_at field.
+	phase.DefaultCreatedAt = phaseDescCreatedAt.Default.(func() time.Time)
+	// phaseDescUpdatedAt is the schema descriptor for updated_at field.
+	phaseDescUpdatedAt := phaseMixinFields0[1].Descriptor()
+	// phase.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	phase.DefaultUpdatedAt = phaseDescUpdatedAt.Default.(func() time.Time)
+	// phase.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	phase.UpdateDefaultUpdatedAt = phaseDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// phaseDescRoundNumber is the schema descriptor for round_number field.
+	phaseDescRoundNumber := phaseFields[1].Descriptor()
+	// phase.RoundNumberValidator is a validator for the "round_number" field. It is called by the builders before save.
+	phase.RoundNumberValidator = phaseDescRoundNumber.Validators[0].(func(int) error)
+	// phaseDescIsActive is the schema descriptor for is_active field.
+	phaseDescIsActive := phaseFields[3].Descriptor()
+	// phase.DefaultIsActive holds the default value on creation for the is_active field.
+	phase.DefaultIsActive = phaseDescIsActive.Default.(bool)
+	// phaseDescCompletedActions is the schema descriptor for completed_actions field.
+	phaseDescCompletedActions := phaseFields[4].Descriptor()
+	// phase.DefaultCompletedActions holds the default value on creation for the completed_actions field.
+	phase.DefaultCompletedActions = phaseDescCompletedActions.Default.([]string)
 	scriptMixin := schema.Script{}.Mixin()
 	scriptMixinFields0 := scriptMixin[0].Fields()
 	_ = scriptMixinFields0

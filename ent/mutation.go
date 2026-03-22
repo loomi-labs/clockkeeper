@@ -11,8 +11,11 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
@@ -26,10 +29,611 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeDeath  = "Death"
 	TypeGame   = "Game"
+	TypePhase  = "Phase"
 	TypeScript = "Script"
 	TypeUser   = "User"
 )
+
+// DeathMutation represents an operation that mutates the Death nodes in the graph.
+type DeathMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	created_at    *time.Time
+	updated_at    *time.Time
+	role_id       *string
+	ghost_vote    *bool
+	clearedFields map[string]struct{}
+	phase         *int
+	clearedphase  bool
+	done          bool
+	oldValue      func(context.Context) (*Death, error)
+	predicates    []predicate.Death
+}
+
+var _ ent.Mutation = (*DeathMutation)(nil)
+
+// deathOption allows management of the mutation configuration using functional options.
+type deathOption func(*DeathMutation)
+
+// newDeathMutation creates new mutation for the Death entity.
+func newDeathMutation(c config, op Op, opts ...deathOption) *DeathMutation {
+	m := &DeathMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDeath,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDeathID sets the ID field of the mutation.
+func withDeathID(id int) deathOption {
+	return func(m *DeathMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Death
+		)
+		m.oldValue = func(ctx context.Context) (*Death, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Death.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDeath sets the old Death of the mutation.
+func withDeath(node *Death) deathOption {
+	return func(m *DeathMutation) {
+		m.oldValue = func(context.Context) (*Death, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DeathMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DeathMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DeathMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DeathMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Death.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DeathMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DeathMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Death entity.
+// If the Death object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DeathMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DeathMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *DeathMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *DeathMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the Death entity.
+// If the Death object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DeathMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *DeathMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetPhaseID sets the "phase_id" field.
+func (m *DeathMutation) SetPhaseID(i int) {
+	m.phase = &i
+}
+
+// PhaseID returns the value of the "phase_id" field in the mutation.
+func (m *DeathMutation) PhaseID() (r int, exists bool) {
+	v := m.phase
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPhaseID returns the old "phase_id" field's value of the Death entity.
+// If the Death object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DeathMutation) OldPhaseID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPhaseID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPhaseID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPhaseID: %w", err)
+	}
+	return oldValue.PhaseID, nil
+}
+
+// ResetPhaseID resets all changes to the "phase_id" field.
+func (m *DeathMutation) ResetPhaseID() {
+	m.phase = nil
+}
+
+// SetRoleID sets the "role_id" field.
+func (m *DeathMutation) SetRoleID(s string) {
+	m.role_id = &s
+}
+
+// RoleID returns the value of the "role_id" field in the mutation.
+func (m *DeathMutation) RoleID() (r string, exists bool) {
+	v := m.role_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRoleID returns the old "role_id" field's value of the Death entity.
+// If the Death object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DeathMutation) OldRoleID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRoleID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRoleID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRoleID: %w", err)
+	}
+	return oldValue.RoleID, nil
+}
+
+// ResetRoleID resets all changes to the "role_id" field.
+func (m *DeathMutation) ResetRoleID() {
+	m.role_id = nil
+}
+
+// SetGhostVote sets the "ghost_vote" field.
+func (m *DeathMutation) SetGhostVote(b bool) {
+	m.ghost_vote = &b
+}
+
+// GhostVote returns the value of the "ghost_vote" field in the mutation.
+func (m *DeathMutation) GhostVote() (r bool, exists bool) {
+	v := m.ghost_vote
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGhostVote returns the old "ghost_vote" field's value of the Death entity.
+// If the Death object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DeathMutation) OldGhostVote(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGhostVote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGhostVote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGhostVote: %w", err)
+	}
+	return oldValue.GhostVote, nil
+}
+
+// ResetGhostVote resets all changes to the "ghost_vote" field.
+func (m *DeathMutation) ResetGhostVote() {
+	m.ghost_vote = nil
+}
+
+// ClearPhase clears the "phase" edge to the Phase entity.
+func (m *DeathMutation) ClearPhase() {
+	m.clearedphase = true
+	m.clearedFields[death.FieldPhaseID] = struct{}{}
+}
+
+// PhaseCleared reports if the "phase" edge to the Phase entity was cleared.
+func (m *DeathMutation) PhaseCleared() bool {
+	return m.clearedphase
+}
+
+// PhaseIDs returns the "phase" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// PhaseID instead. It exists only for internal usage by the builders.
+func (m *DeathMutation) PhaseIDs() (ids []int) {
+	if id := m.phase; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetPhase resets all changes to the "phase" edge.
+func (m *DeathMutation) ResetPhase() {
+	m.phase = nil
+	m.clearedphase = false
+}
+
+// Where appends a list predicates to the DeathMutation builder.
+func (m *DeathMutation) Where(ps ...predicate.Death) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DeathMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DeathMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Death, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DeathMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DeathMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Death).
+func (m *DeathMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DeathMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.created_at != nil {
+		fields = append(fields, death.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, death.FieldUpdatedAt)
+	}
+	if m.phase != nil {
+		fields = append(fields, death.FieldPhaseID)
+	}
+	if m.role_id != nil {
+		fields = append(fields, death.FieldRoleID)
+	}
+	if m.ghost_vote != nil {
+		fields = append(fields, death.FieldGhostVote)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DeathMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case death.FieldCreatedAt:
+		return m.CreatedAt()
+	case death.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case death.FieldPhaseID:
+		return m.PhaseID()
+	case death.FieldRoleID:
+		return m.RoleID()
+	case death.FieldGhostVote:
+		return m.GhostVote()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DeathMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case death.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case death.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case death.FieldPhaseID:
+		return m.OldPhaseID(ctx)
+	case death.FieldRoleID:
+		return m.OldRoleID(ctx)
+	case death.FieldGhostVote:
+		return m.OldGhostVote(ctx)
+	}
+	return nil, fmt.Errorf("unknown Death field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DeathMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case death.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case death.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case death.FieldPhaseID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPhaseID(v)
+		return nil
+	case death.FieldRoleID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRoleID(v)
+		return nil
+	case death.FieldGhostVote:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGhostVote(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Death field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DeathMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DeathMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DeathMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Death numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DeathMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DeathMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DeathMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown Death nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DeathMutation) ResetField(name string) error {
+	switch name {
+	case death.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case death.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case death.FieldPhaseID:
+		m.ResetPhaseID()
+		return nil
+	case death.FieldRoleID:
+		m.ResetRoleID()
+		return nil
+	case death.FieldGhostVote:
+		m.ResetGhostVote()
+		return nil
+	}
+	return fmt.Errorf("unknown Death field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DeathMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.phase != nil {
+		edges = append(edges, death.EdgePhase)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DeathMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case death.EdgePhase:
+		if id := m.phase; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DeathMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DeathMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DeathMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedphase {
+		edges = append(edges, death.EdgePhase)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DeathMutation) EdgeCleared(name string) bool {
+	switch name {
+	case death.EdgePhase:
+		return m.clearedphase
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DeathMutation) ClearEdge(name string) error {
+	switch name {
+	case death.EdgePhase:
+		m.ClearPhase()
+		return nil
+	}
+	return fmt.Errorf("unknown Death unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DeathMutation) ResetEdge(name string) error {
+	switch name {
+	case death.EdgePhase:
+		m.ResetPhase()
+		return nil
+	}
+	return fmt.Errorf("unknown Death edge %s", name)
+}
 
 // GameMutation represents an operation that mutates the Game nodes in the graph.
 type GameMutation struct {
@@ -39,6 +643,7 @@ type GameMutation struct {
 	id                        *int
 	created_at                *time.Time
 	updated_at                *time.Time
+	name                      *string
 	player_count              *int
 	addplayer_count           *int
 	traveller_count           *int
@@ -49,12 +654,16 @@ type GameMutation struct {
 	appendselected_travellers []string
 	extra_characters          *[]string
 	appendextra_characters    []string
+	traveller_alignments      *map[string]schema.TravellerAlignment
 	state                     *game.State
 	clearedFields             map[string]struct{}
 	owner                     *int
 	clearedowner              bool
 	script                    *int
 	clearedscript             bool
+	phases                    map[int]struct{}
+	removedphases             map[int]struct{}
+	clearedphases             bool
 	done                      bool
 	oldValue                  func(context.Context) (*Game, error)
 	predicates                []predicate.Game
@@ -228,6 +837,42 @@ func (m *GameMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error
 // ResetUpdatedAt resets all changes to the "updated_at" field.
 func (m *GameMutation) ResetUpdatedAt() {
 	m.updated_at = nil
+}
+
+// SetName sets the "name" field.
+func (m *GameMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *GameMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *GameMutation) ResetName() {
+	m.name = nil
 }
 
 // SetUserID sets the "user_id" field.
@@ -581,6 +1226,55 @@ func (m *GameMutation) ResetExtraCharacters() {
 	delete(m.clearedFields, game.FieldExtraCharacters)
 }
 
+// SetTravellerAlignments sets the "traveller_alignments" field.
+func (m *GameMutation) SetTravellerAlignments(ma map[string]schema.TravellerAlignment) {
+	m.traveller_alignments = &ma
+}
+
+// TravellerAlignments returns the value of the "traveller_alignments" field in the mutation.
+func (m *GameMutation) TravellerAlignments() (r map[string]schema.TravellerAlignment, exists bool) {
+	v := m.traveller_alignments
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTravellerAlignments returns the old "traveller_alignments" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldTravellerAlignments(ctx context.Context) (v map[string]schema.TravellerAlignment, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTravellerAlignments is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTravellerAlignments requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTravellerAlignments: %w", err)
+	}
+	return oldValue.TravellerAlignments, nil
+}
+
+// ClearTravellerAlignments clears the value of the "traveller_alignments" field.
+func (m *GameMutation) ClearTravellerAlignments() {
+	m.traveller_alignments = nil
+	m.clearedFields[game.FieldTravellerAlignments] = struct{}{}
+}
+
+// TravellerAlignmentsCleared returns if the "traveller_alignments" field was cleared in this mutation.
+func (m *GameMutation) TravellerAlignmentsCleared() bool {
+	_, ok := m.clearedFields[game.FieldTravellerAlignments]
+	return ok
+}
+
+// ResetTravellerAlignments resets all changes to the "traveller_alignments" field.
+func (m *GameMutation) ResetTravellerAlignments() {
+	m.traveller_alignments = nil
+	delete(m.clearedFields, game.FieldTravellerAlignments)
+}
+
 // SetState sets the "state" field.
 func (m *GameMutation) SetState(ga game.State) {
 	m.state = &ga
@@ -684,6 +1378,60 @@ func (m *GameMutation) ResetScript() {
 	m.clearedscript = false
 }
 
+// AddPhaseIDs adds the "phases" edge to the Phase entity by ids.
+func (m *GameMutation) AddPhaseIDs(ids ...int) {
+	if m.phases == nil {
+		m.phases = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.phases[ids[i]] = struct{}{}
+	}
+}
+
+// ClearPhases clears the "phases" edge to the Phase entity.
+func (m *GameMutation) ClearPhases() {
+	m.clearedphases = true
+}
+
+// PhasesCleared reports if the "phases" edge to the Phase entity was cleared.
+func (m *GameMutation) PhasesCleared() bool {
+	return m.clearedphases
+}
+
+// RemovePhaseIDs removes the "phases" edge to the Phase entity by IDs.
+func (m *GameMutation) RemovePhaseIDs(ids ...int) {
+	if m.removedphases == nil {
+		m.removedphases = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.phases, ids[i])
+		m.removedphases[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedPhases returns the removed IDs of the "phases" edge to the Phase entity.
+func (m *GameMutation) RemovedPhasesIDs() (ids []int) {
+	for id := range m.removedphases {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// PhasesIDs returns the "phases" edge IDs in the mutation.
+func (m *GameMutation) PhasesIDs() (ids []int) {
+	for id := range m.phases {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetPhases resets all changes to the "phases" edge.
+func (m *GameMutation) ResetPhases() {
+	m.phases = nil
+	m.clearedphases = false
+	m.removedphases = nil
+}
+
 // Where appends a list predicates to the GameMutation builder.
 func (m *GameMutation) Where(ps ...predicate.Game) {
 	m.predicates = append(m.predicates, ps...)
@@ -718,12 +1466,15 @@ func (m *GameMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GameMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, game.FieldCreatedAt)
 	}
 	if m.updated_at != nil {
 		fields = append(fields, game.FieldUpdatedAt)
+	}
+	if m.name != nil {
+		fields = append(fields, game.FieldName)
 	}
 	if m.owner != nil {
 		fields = append(fields, game.FieldUserID)
@@ -746,6 +1497,9 @@ func (m *GameMutation) Fields() []string {
 	if m.extra_characters != nil {
 		fields = append(fields, game.FieldExtraCharacters)
 	}
+	if m.traveller_alignments != nil {
+		fields = append(fields, game.FieldTravellerAlignments)
+	}
 	if m.state != nil {
 		fields = append(fields, game.FieldState)
 	}
@@ -761,6 +1515,8 @@ func (m *GameMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case game.FieldUpdatedAt:
 		return m.UpdatedAt()
+	case game.FieldName:
+		return m.Name()
 	case game.FieldUserID:
 		return m.UserID()
 	case game.FieldScriptID:
@@ -775,6 +1531,8 @@ func (m *GameMutation) Field(name string) (ent.Value, bool) {
 		return m.SelectedTravellers()
 	case game.FieldExtraCharacters:
 		return m.ExtraCharacters()
+	case game.FieldTravellerAlignments:
+		return m.TravellerAlignments()
 	case game.FieldState:
 		return m.State()
 	}
@@ -790,6 +1548,8 @@ func (m *GameMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldCreatedAt(ctx)
 	case game.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
+	case game.FieldName:
+		return m.OldName(ctx)
 	case game.FieldUserID:
 		return m.OldUserID(ctx)
 	case game.FieldScriptID:
@@ -804,6 +1564,8 @@ func (m *GameMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldSelectedTravellers(ctx)
 	case game.FieldExtraCharacters:
 		return m.OldExtraCharacters(ctx)
+	case game.FieldTravellerAlignments:
+		return m.OldTravellerAlignments(ctx)
 	case game.FieldState:
 		return m.OldState(ctx)
 	}
@@ -828,6 +1590,13 @@ func (m *GameMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUpdatedAt(v)
+		return nil
+	case game.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
 		return nil
 	case game.FieldUserID:
 		v, ok := value.(int)
@@ -877,6 +1646,13 @@ func (m *GameMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetExtraCharacters(v)
+		return nil
+	case game.FieldTravellerAlignments:
+		v, ok := value.(map[string]schema.TravellerAlignment)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTravellerAlignments(v)
 		return nil
 	case game.FieldState:
 		v, ok := value.(game.State)
@@ -945,6 +1721,9 @@ func (m *GameMutation) ClearedFields() []string {
 	if m.FieldCleared(game.FieldExtraCharacters) {
 		fields = append(fields, game.FieldExtraCharacters)
 	}
+	if m.FieldCleared(game.FieldTravellerAlignments) {
+		fields = append(fields, game.FieldTravellerAlignments)
+	}
 	return fields
 }
 
@@ -962,6 +1741,9 @@ func (m *GameMutation) ClearField(name string) error {
 	case game.FieldExtraCharacters:
 		m.ClearExtraCharacters()
 		return nil
+	case game.FieldTravellerAlignments:
+		m.ClearTravellerAlignments()
+		return nil
 	}
 	return fmt.Errorf("unknown Game nullable field %s", name)
 }
@@ -975,6 +1757,9 @@ func (m *GameMutation) ResetField(name string) error {
 		return nil
 	case game.FieldUpdatedAt:
 		m.ResetUpdatedAt()
+		return nil
+	case game.FieldName:
+		m.ResetName()
 		return nil
 	case game.FieldUserID:
 		m.ResetUserID()
@@ -997,6 +1782,9 @@ func (m *GameMutation) ResetField(name string) error {
 	case game.FieldExtraCharacters:
 		m.ResetExtraCharacters()
 		return nil
+	case game.FieldTravellerAlignments:
+		m.ResetTravellerAlignments()
+		return nil
 	case game.FieldState:
 		m.ResetState()
 		return nil
@@ -1006,12 +1794,15 @@ func (m *GameMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *GameMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.owner != nil {
 		edges = append(edges, game.EdgeOwner)
 	}
 	if m.script != nil {
 		edges = append(edges, game.EdgeScript)
+	}
+	if m.phases != nil {
+		edges = append(edges, game.EdgePhases)
 	}
 	return edges
 }
@@ -1028,30 +1819,50 @@ func (m *GameMutation) AddedIDs(name string) []ent.Value {
 		if id := m.script; id != nil {
 			return []ent.Value{*id}
 		}
+	case game.EdgePhases:
+		ids := make([]ent.Value, 0, len(m.phases))
+		for id := range m.phases {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *GameMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
+	if m.removedphases != nil {
+		edges = append(edges, game.EdgePhases)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *GameMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case game.EdgePhases:
+		ids := make([]ent.Value, 0, len(m.removedphases))
+		for id := range m.removedphases {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *GameMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedowner {
 		edges = append(edges, game.EdgeOwner)
 	}
 	if m.clearedscript {
 		edges = append(edges, game.EdgeScript)
+	}
+	if m.clearedphases {
+		edges = append(edges, game.EdgePhases)
 	}
 	return edges
 }
@@ -1064,6 +1875,8 @@ func (m *GameMutation) EdgeCleared(name string) bool {
 		return m.clearedowner
 	case game.EdgeScript:
 		return m.clearedscript
+	case game.EdgePhases:
+		return m.clearedphases
 	}
 	return false
 }
@@ -1092,8 +1905,875 @@ func (m *GameMutation) ResetEdge(name string) error {
 	case game.EdgeScript:
 		m.ResetScript()
 		return nil
+	case game.EdgePhases:
+		m.ResetPhases()
+		return nil
 	}
 	return fmt.Errorf("unknown Game edge %s", name)
+}
+
+// PhaseMutation represents an operation that mutates the Phase nodes in the graph.
+type PhaseMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *int
+	created_at              *time.Time
+	updated_at              *time.Time
+	round_number            *int
+	addround_number         *int
+	_type                   *phase.Type
+	is_active               *bool
+	completed_actions       *[]string
+	appendcompleted_actions []string
+	clearedFields           map[string]struct{}
+	game                    *int
+	clearedgame             bool
+	deaths                  map[int]struct{}
+	removeddeaths           map[int]struct{}
+	cleareddeaths           bool
+	done                    bool
+	oldValue                func(context.Context) (*Phase, error)
+	predicates              []predicate.Phase
+}
+
+var _ ent.Mutation = (*PhaseMutation)(nil)
+
+// phaseOption allows management of the mutation configuration using functional options.
+type phaseOption func(*PhaseMutation)
+
+// newPhaseMutation creates new mutation for the Phase entity.
+func newPhaseMutation(c config, op Op, opts ...phaseOption) *PhaseMutation {
+	m := &PhaseMutation{
+		config:        c,
+		op:            op,
+		typ:           TypePhase,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withPhaseID sets the ID field of the mutation.
+func withPhaseID(id int) phaseOption {
+	return func(m *PhaseMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Phase
+		)
+		m.oldValue = func(ctx context.Context) (*Phase, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Phase.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withPhase sets the old Phase of the mutation.
+func withPhase(node *Phase) phaseOption {
+	return func(m *PhaseMutation) {
+		m.oldValue = func(context.Context) (*Phase, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m PhaseMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m PhaseMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *PhaseMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *PhaseMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Phase.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *PhaseMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *PhaseMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Phase entity.
+// If the Phase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PhaseMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *PhaseMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *PhaseMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *PhaseMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the Phase entity.
+// If the Phase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PhaseMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *PhaseMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetGameID sets the "game_id" field.
+func (m *PhaseMutation) SetGameID(i int) {
+	m.game = &i
+}
+
+// GameID returns the value of the "game_id" field in the mutation.
+func (m *PhaseMutation) GameID() (r int, exists bool) {
+	v := m.game
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGameID returns the old "game_id" field's value of the Phase entity.
+// If the Phase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PhaseMutation) OldGameID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGameID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGameID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGameID: %w", err)
+	}
+	return oldValue.GameID, nil
+}
+
+// ResetGameID resets all changes to the "game_id" field.
+func (m *PhaseMutation) ResetGameID() {
+	m.game = nil
+}
+
+// SetRoundNumber sets the "round_number" field.
+func (m *PhaseMutation) SetRoundNumber(i int) {
+	m.round_number = &i
+	m.addround_number = nil
+}
+
+// RoundNumber returns the value of the "round_number" field in the mutation.
+func (m *PhaseMutation) RoundNumber() (r int, exists bool) {
+	v := m.round_number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRoundNumber returns the old "round_number" field's value of the Phase entity.
+// If the Phase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PhaseMutation) OldRoundNumber(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRoundNumber is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRoundNumber requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRoundNumber: %w", err)
+	}
+	return oldValue.RoundNumber, nil
+}
+
+// AddRoundNumber adds i to the "round_number" field.
+func (m *PhaseMutation) AddRoundNumber(i int) {
+	if m.addround_number != nil {
+		*m.addround_number += i
+	} else {
+		m.addround_number = &i
+	}
+}
+
+// AddedRoundNumber returns the value that was added to the "round_number" field in this mutation.
+func (m *PhaseMutation) AddedRoundNumber() (r int, exists bool) {
+	v := m.addround_number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRoundNumber resets all changes to the "round_number" field.
+func (m *PhaseMutation) ResetRoundNumber() {
+	m.round_number = nil
+	m.addround_number = nil
+}
+
+// SetType sets the "type" field.
+func (m *PhaseMutation) SetType(ph phase.Type) {
+	m._type = &ph
+}
+
+// GetType returns the value of the "type" field in the mutation.
+func (m *PhaseMutation) GetType() (r phase.Type, exists bool) {
+	v := m._type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldType returns the old "type" field's value of the Phase entity.
+// If the Phase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PhaseMutation) OldType(ctx context.Context) (v phase.Type, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldType: %w", err)
+	}
+	return oldValue.Type, nil
+}
+
+// ResetType resets all changes to the "type" field.
+func (m *PhaseMutation) ResetType() {
+	m._type = nil
+}
+
+// SetIsActive sets the "is_active" field.
+func (m *PhaseMutation) SetIsActive(b bool) {
+	m.is_active = &b
+}
+
+// IsActive returns the value of the "is_active" field in the mutation.
+func (m *PhaseMutation) IsActive() (r bool, exists bool) {
+	v := m.is_active
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsActive returns the old "is_active" field's value of the Phase entity.
+// If the Phase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PhaseMutation) OldIsActive(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsActive is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsActive requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsActive: %w", err)
+	}
+	return oldValue.IsActive, nil
+}
+
+// ResetIsActive resets all changes to the "is_active" field.
+func (m *PhaseMutation) ResetIsActive() {
+	m.is_active = nil
+}
+
+// SetCompletedActions sets the "completed_actions" field.
+func (m *PhaseMutation) SetCompletedActions(s []string) {
+	m.completed_actions = &s
+	m.appendcompleted_actions = nil
+}
+
+// CompletedActions returns the value of the "completed_actions" field in the mutation.
+func (m *PhaseMutation) CompletedActions() (r []string, exists bool) {
+	v := m.completed_actions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedActions returns the old "completed_actions" field's value of the Phase entity.
+// If the Phase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PhaseMutation) OldCompletedActions(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedActions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedActions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedActions: %w", err)
+	}
+	return oldValue.CompletedActions, nil
+}
+
+// AppendCompletedActions adds s to the "completed_actions" field.
+func (m *PhaseMutation) AppendCompletedActions(s []string) {
+	m.appendcompleted_actions = append(m.appendcompleted_actions, s...)
+}
+
+// AppendedCompletedActions returns the list of values that were appended to the "completed_actions" field in this mutation.
+func (m *PhaseMutation) AppendedCompletedActions() ([]string, bool) {
+	if len(m.appendcompleted_actions) == 0 {
+		return nil, false
+	}
+	return m.appendcompleted_actions, true
+}
+
+// ClearCompletedActions clears the value of the "completed_actions" field.
+func (m *PhaseMutation) ClearCompletedActions() {
+	m.completed_actions = nil
+	m.appendcompleted_actions = nil
+	m.clearedFields[phase.FieldCompletedActions] = struct{}{}
+}
+
+// CompletedActionsCleared returns if the "completed_actions" field was cleared in this mutation.
+func (m *PhaseMutation) CompletedActionsCleared() bool {
+	_, ok := m.clearedFields[phase.FieldCompletedActions]
+	return ok
+}
+
+// ResetCompletedActions resets all changes to the "completed_actions" field.
+func (m *PhaseMutation) ResetCompletedActions() {
+	m.completed_actions = nil
+	m.appendcompleted_actions = nil
+	delete(m.clearedFields, phase.FieldCompletedActions)
+}
+
+// ClearGame clears the "game" edge to the Game entity.
+func (m *PhaseMutation) ClearGame() {
+	m.clearedgame = true
+	m.clearedFields[phase.FieldGameID] = struct{}{}
+}
+
+// GameCleared reports if the "game" edge to the Game entity was cleared.
+func (m *PhaseMutation) GameCleared() bool {
+	return m.clearedgame
+}
+
+// GameIDs returns the "game" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GameID instead. It exists only for internal usage by the builders.
+func (m *PhaseMutation) GameIDs() (ids []int) {
+	if id := m.game; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGame resets all changes to the "game" edge.
+func (m *PhaseMutation) ResetGame() {
+	m.game = nil
+	m.clearedgame = false
+}
+
+// AddDeathIDs adds the "deaths" edge to the Death entity by ids.
+func (m *PhaseMutation) AddDeathIDs(ids ...int) {
+	if m.deaths == nil {
+		m.deaths = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.deaths[ids[i]] = struct{}{}
+	}
+}
+
+// ClearDeaths clears the "deaths" edge to the Death entity.
+func (m *PhaseMutation) ClearDeaths() {
+	m.cleareddeaths = true
+}
+
+// DeathsCleared reports if the "deaths" edge to the Death entity was cleared.
+func (m *PhaseMutation) DeathsCleared() bool {
+	return m.cleareddeaths
+}
+
+// RemoveDeathIDs removes the "deaths" edge to the Death entity by IDs.
+func (m *PhaseMutation) RemoveDeathIDs(ids ...int) {
+	if m.removeddeaths == nil {
+		m.removeddeaths = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.deaths, ids[i])
+		m.removeddeaths[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedDeaths returns the removed IDs of the "deaths" edge to the Death entity.
+func (m *PhaseMutation) RemovedDeathsIDs() (ids []int) {
+	for id := range m.removeddeaths {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// DeathsIDs returns the "deaths" edge IDs in the mutation.
+func (m *PhaseMutation) DeathsIDs() (ids []int) {
+	for id := range m.deaths {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetDeaths resets all changes to the "deaths" edge.
+func (m *PhaseMutation) ResetDeaths() {
+	m.deaths = nil
+	m.cleareddeaths = false
+	m.removeddeaths = nil
+}
+
+// Where appends a list predicates to the PhaseMutation builder.
+func (m *PhaseMutation) Where(ps ...predicate.Phase) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the PhaseMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *PhaseMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Phase, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *PhaseMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *PhaseMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Phase).
+func (m *PhaseMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *PhaseMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.created_at != nil {
+		fields = append(fields, phase.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, phase.FieldUpdatedAt)
+	}
+	if m.game != nil {
+		fields = append(fields, phase.FieldGameID)
+	}
+	if m.round_number != nil {
+		fields = append(fields, phase.FieldRoundNumber)
+	}
+	if m._type != nil {
+		fields = append(fields, phase.FieldType)
+	}
+	if m.is_active != nil {
+		fields = append(fields, phase.FieldIsActive)
+	}
+	if m.completed_actions != nil {
+		fields = append(fields, phase.FieldCompletedActions)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *PhaseMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case phase.FieldCreatedAt:
+		return m.CreatedAt()
+	case phase.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case phase.FieldGameID:
+		return m.GameID()
+	case phase.FieldRoundNumber:
+		return m.RoundNumber()
+	case phase.FieldType:
+		return m.GetType()
+	case phase.FieldIsActive:
+		return m.IsActive()
+	case phase.FieldCompletedActions:
+		return m.CompletedActions()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *PhaseMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case phase.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case phase.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case phase.FieldGameID:
+		return m.OldGameID(ctx)
+	case phase.FieldRoundNumber:
+		return m.OldRoundNumber(ctx)
+	case phase.FieldType:
+		return m.OldType(ctx)
+	case phase.FieldIsActive:
+		return m.OldIsActive(ctx)
+	case phase.FieldCompletedActions:
+		return m.OldCompletedActions(ctx)
+	}
+	return nil, fmt.Errorf("unknown Phase field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PhaseMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case phase.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case phase.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case phase.FieldGameID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGameID(v)
+		return nil
+	case phase.FieldRoundNumber:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRoundNumber(v)
+		return nil
+	case phase.FieldType:
+		v, ok := value.(phase.Type)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetType(v)
+		return nil
+	case phase.FieldIsActive:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsActive(v)
+		return nil
+	case phase.FieldCompletedActions:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedActions(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Phase field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *PhaseMutation) AddedFields() []string {
+	var fields []string
+	if m.addround_number != nil {
+		fields = append(fields, phase.FieldRoundNumber)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *PhaseMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case phase.FieldRoundNumber:
+		return m.AddedRoundNumber()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PhaseMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case phase.FieldRoundNumber:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRoundNumber(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Phase numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *PhaseMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(phase.FieldCompletedActions) {
+		fields = append(fields, phase.FieldCompletedActions)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *PhaseMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *PhaseMutation) ClearField(name string) error {
+	switch name {
+	case phase.FieldCompletedActions:
+		m.ClearCompletedActions()
+		return nil
+	}
+	return fmt.Errorf("unknown Phase nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *PhaseMutation) ResetField(name string) error {
+	switch name {
+	case phase.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case phase.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case phase.FieldGameID:
+		m.ResetGameID()
+		return nil
+	case phase.FieldRoundNumber:
+		m.ResetRoundNumber()
+		return nil
+	case phase.FieldType:
+		m.ResetType()
+		return nil
+	case phase.FieldIsActive:
+		m.ResetIsActive()
+		return nil
+	case phase.FieldCompletedActions:
+		m.ResetCompletedActions()
+		return nil
+	}
+	return fmt.Errorf("unknown Phase field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *PhaseMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.game != nil {
+		edges = append(edges, phase.EdgeGame)
+	}
+	if m.deaths != nil {
+		edges = append(edges, phase.EdgeDeaths)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *PhaseMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case phase.EdgeGame:
+		if id := m.game; id != nil {
+			return []ent.Value{*id}
+		}
+	case phase.EdgeDeaths:
+		ids := make([]ent.Value, 0, len(m.deaths))
+		for id := range m.deaths {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *PhaseMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.removeddeaths != nil {
+		edges = append(edges, phase.EdgeDeaths)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *PhaseMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case phase.EdgeDeaths:
+		ids := make([]ent.Value, 0, len(m.removeddeaths))
+		for id := range m.removeddeaths {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *PhaseMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedgame {
+		edges = append(edges, phase.EdgeGame)
+	}
+	if m.cleareddeaths {
+		edges = append(edges, phase.EdgeDeaths)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *PhaseMutation) EdgeCleared(name string) bool {
+	switch name {
+	case phase.EdgeGame:
+		return m.clearedgame
+	case phase.EdgeDeaths:
+		return m.cleareddeaths
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *PhaseMutation) ClearEdge(name string) error {
+	switch name {
+	case phase.EdgeGame:
+		m.ClearGame()
+		return nil
+	}
+	return fmt.Errorf("unknown Phase unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *PhaseMutation) ResetEdge(name string) error {
+	switch name {
+	case phase.EdgeGame:
+		m.ResetGame()
+		return nil
+	case phase.EdgeDeaths:
+		m.ResetDeaths()
+		return nil
+	}
+	return fmt.Errorf("unknown Phase edge %s", name)
 }
 
 // ScriptMutation represents an operation that mutates the Script nodes in the graph.

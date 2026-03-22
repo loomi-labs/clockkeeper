@@ -1,7 +1,7 @@
 import { createConnectTransport } from '@connectrpc/connect-web';
 import { ConnectError, Code, createClient, type Interceptor } from '@connectrpc/connect';
 import { ClockKeeperService } from './gen/clockkeeper/v1/clockkeeper_pb';
-import { getToken, logout } from './auth';
+import { getToken, logout } from './auth.svelte';
 
 const authInterceptor: Interceptor = (next) => async (req) => {
 	const token = getToken();

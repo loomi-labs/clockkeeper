@@ -15,7 +15,9 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
@@ -25,8 +27,12 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// Death is the client for interacting with the Death builders.
+	Death *DeathClient
 	// Game is the client for interacting with the Game builders.
 	Game *GameClient
+	// Phase is the client for interacting with the Phase builders.
+	Phase *PhaseClient
 	// Script is the client for interacting with the Script builders.
 	Script *ScriptClient
 	// User is the client for interacting with the User builders.
@@ -42,7 +48,9 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.Death = NewDeathClient(c.config)
 	c.Game = NewGameClient(c.config)
+	c.Phase = NewPhaseClient(c.config)
 	c.Script = NewScriptClient(c.config)
 	c.User = NewUserClient(c.config)
 }
@@ -137,7 +145,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:    ctx,
 		config: cfg,
+		Death:  NewDeathClient(cfg),
 		Game:   NewGameClient(cfg),
+		Phase:  NewPhaseClient(cfg),
 		Script: NewScriptClient(cfg),
 		User:   NewUserClient(cfg),
 	}, nil
@@ -159,7 +169,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:    ctx,
 		config: cfg,
+		Death:  NewDeathClient(cfg),
 		Game:   NewGameClient(cfg),
+		Phase:  NewPhaseClient(cfg),
 		Script: NewScriptClient(cfg),
 		User:   NewUserClient(cfg),
 	}, nil
@@ -168,7 +180,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		Game.
+//		Death.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -190,7 +202,9 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
+	c.Death.Use(hooks...)
 	c.Game.Use(hooks...)
+	c.Phase.Use(hooks...)
 	c.Script.Use(hooks...)
 	c.User.Use(hooks...)
 }
@@ -198,7 +212,9 @@ func (c *Client) Use(hooks ...Hook) {
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
+	c.Death.Intercept(interceptors...)
 	c.Game.Intercept(interceptors...)
+	c.Phase.Intercept(interceptors...)
 	c.Script.Intercept(interceptors...)
 	c.User.Intercept(interceptors...)
 }
@@ -206,14 +222,167 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *DeathMutation:
+		return c.Death.mutate(ctx, m)
 	case *GameMutation:
 		return c.Game.mutate(ctx, m)
+	case *PhaseMutation:
+		return c.Phase.mutate(ctx, m)
 	case *ScriptMutation:
 		return c.Script.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// DeathClient is a client for the Death schema.
+type DeathClient struct {
+	config
+}
+
+// NewDeathClient returns a client for the Death from the given config.
+func NewDeathClient(c config) *DeathClient {
+	return &DeathClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `death.Hooks(f(g(h())))`.
+func (c *DeathClient) Use(hooks ...Hook) {
+	c.hooks.Death = append(c.hooks.Death, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `death.Intercept(f(g(h())))`.
+func (c *DeathClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Death = append(c.inters.Death, interceptors...)
+}
+
+// Create returns a builder for creating a Death entity.
+func (c *DeathClient) Create() *DeathCreate {
+	mutation := newDeathMutation(c.config, OpCreate)
+	return &DeathCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Death entities.
+func (c *DeathClient) CreateBulk(builders ...*DeathCreate) *DeathCreateBulk {
+	return &DeathCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DeathClient) MapCreateBulk(slice any, setFunc func(*DeathCreate, int)) *DeathCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DeathCreateBulk{err: fmt.Errorf("calling to DeathClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DeathCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DeathCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Death.
+func (c *DeathClient) Update() *DeathUpdate {
+	mutation := newDeathMutation(c.config, OpUpdate)
+	return &DeathUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DeathClient) UpdateOne(_m *Death) *DeathUpdateOne {
+	mutation := newDeathMutation(c.config, OpUpdateOne, withDeath(_m))
+	return &DeathUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DeathClient) UpdateOneID(id int) *DeathUpdateOne {
+	mutation := newDeathMutation(c.config, OpUpdateOne, withDeathID(id))
+	return &DeathUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Death.
+func (c *DeathClient) Delete() *DeathDelete {
+	mutation := newDeathMutation(c.config, OpDelete)
+	return &DeathDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DeathClient) DeleteOne(_m *Death) *DeathDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DeathClient) DeleteOneID(id int) *DeathDeleteOne {
+	builder := c.Delete().Where(death.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DeathDeleteOne{builder}
+}
+
+// Query returns a query builder for Death.
+func (c *DeathClient) Query() *DeathQuery {
+	return &DeathQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDeath},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Death entity by its id.
+func (c *DeathClient) Get(ctx context.Context, id int) (*Death, error) {
+	return c.Query().Where(death.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DeathClient) GetX(ctx context.Context, id int) *Death {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPhase queries the phase edge of a Death.
+func (c *DeathClient) QueryPhase(_m *Death) *PhaseQuery {
+	query := (&PhaseClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(death.Table, death.FieldID, id),
+			sqlgraph.To(phase.Table, phase.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, death.PhaseTable, death.PhaseColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *DeathClient) Hooks() []Hook {
+	return c.hooks.Death
+}
+
+// Interceptors returns the client interceptors.
+func (c *DeathClient) Interceptors() []Interceptor {
+	return c.inters.Death
+}
+
+func (c *DeathClient) mutate(ctx context.Context, m *DeathMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DeathCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DeathUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DeathUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DeathDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Death mutation op: %q", m.Op())
 	}
 }
 
@@ -357,6 +526,22 @@ func (c *GameClient) QueryScript(_m *Game) *ScriptQuery {
 	return query
 }
 
+// QueryPhases queries the phases edge of a Game.
+func (c *GameClient) QueryPhases(_m *Game) *PhaseQuery {
+	query := (&PhaseClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(game.Table, game.FieldID, id),
+			sqlgraph.To(phase.Table, phase.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, game.PhasesTable, game.PhasesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *GameClient) Hooks() []Hook {
 	return c.hooks.Game
@@ -379,6 +564,171 @@ func (c *GameClient) mutate(ctx context.Context, m *GameMutation) (Value, error)
 		return (&GameDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Game mutation op: %q", m.Op())
+	}
+}
+
+// PhaseClient is a client for the Phase schema.
+type PhaseClient struct {
+	config
+}
+
+// NewPhaseClient returns a client for the Phase from the given config.
+func NewPhaseClient(c config) *PhaseClient {
+	return &PhaseClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `phase.Hooks(f(g(h())))`.
+func (c *PhaseClient) Use(hooks ...Hook) {
+	c.hooks.Phase = append(c.hooks.Phase, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `phase.Intercept(f(g(h())))`.
+func (c *PhaseClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Phase = append(c.inters.Phase, interceptors...)
+}
+
+// Create returns a builder for creating a Phase entity.
+func (c *PhaseClient) Create() *PhaseCreate {
+	mutation := newPhaseMutation(c.config, OpCreate)
+	return &PhaseCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Phase entities.
+func (c *PhaseClient) CreateBulk(builders ...*PhaseCreate) *PhaseCreateBulk {
+	return &PhaseCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PhaseClient) MapCreateBulk(slice any, setFunc func(*PhaseCreate, int)) *PhaseCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PhaseCreateBulk{err: fmt.Errorf("calling to PhaseClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PhaseCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PhaseCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Phase.
+func (c *PhaseClient) Update() *PhaseUpdate {
+	mutation := newPhaseMutation(c.config, OpUpdate)
+	return &PhaseUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PhaseClient) UpdateOne(_m *Phase) *PhaseUpdateOne {
+	mutation := newPhaseMutation(c.config, OpUpdateOne, withPhase(_m))
+	return &PhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PhaseClient) UpdateOneID(id int) *PhaseUpdateOne {
+	mutation := newPhaseMutation(c.config, OpUpdateOne, withPhaseID(id))
+	return &PhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Phase.
+func (c *PhaseClient) Delete() *PhaseDelete {
+	mutation := newPhaseMutation(c.config, OpDelete)
+	return &PhaseDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PhaseClient) DeleteOne(_m *Phase) *PhaseDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PhaseClient) DeleteOneID(id int) *PhaseDeleteOne {
+	builder := c.Delete().Where(phase.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PhaseDeleteOne{builder}
+}
+
+// Query returns a query builder for Phase.
+func (c *PhaseClient) Query() *PhaseQuery {
+	return &PhaseQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePhase},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Phase entity by its id.
+func (c *PhaseClient) Get(ctx context.Context, id int) (*Phase, error) {
+	return c.Query().Where(phase.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PhaseClient) GetX(ctx context.Context, id int) *Phase {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGame queries the game edge of a Phase.
+func (c *PhaseClient) QueryGame(_m *Phase) *GameQuery {
+	query := (&GameClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(phase.Table, phase.FieldID, id),
+			sqlgraph.To(game.Table, game.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, phase.GameTable, phase.GameColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryDeaths queries the deaths edge of a Phase.
+func (c *PhaseClient) QueryDeaths(_m *Phase) *DeathQuery {
+	query := (&DeathClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(phase.Table, phase.FieldID, id),
+			sqlgraph.To(death.Table, death.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, phase.DeathsTable, phase.DeathsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *PhaseClient) Hooks() []Hook {
+	return c.hooks.Phase
+}
+
+// Interceptors returns the client interceptors.
+func (c *PhaseClient) Interceptors() []Interceptor {
+	return c.inters.Phase
+}
+
+func (c *PhaseClient) mutate(ctx context.Context, m *PhaseMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PhaseCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PhaseUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PhaseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Phase mutation op: %q", m.Op())
 	}
 }
 
@@ -715,9 +1065,9 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Game, Script, User []ent.Hook
+		Death, Game, Phase, Script, User []ent.Hook
 	}
 	inters struct {
-		Game, Script, User []ent.Interceptor
+		Death, Game, Phase, Script, User []ent.Interceptor
 	}
 )

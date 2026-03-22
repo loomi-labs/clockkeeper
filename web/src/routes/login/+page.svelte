@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { client } from '~/lib/api';
-	import { setToken } from '~/lib/auth';
+	import { setToken } from '~/lib/auth.svelte';
 	import ThemeSwitcher from '~/lib/components/ThemeSwitcher.svelte';
 	import { getErrorMessage } from '~/lib/errors';
 	import { initTheme } from '~/lib/theme';

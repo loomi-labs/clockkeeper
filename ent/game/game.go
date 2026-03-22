@@ -8,6 +8,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 )
 
 const (
@@ -19,6 +20,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// FieldName holds the string denoting the name field in the database.
+	FieldName = "name"
 	// FieldUserID holds the string denoting the user_id field in the database.
 	FieldUserID = "user_id"
 	// FieldScriptID holds the string denoting the script_id field in the database.
@@ -33,12 +36,16 @@ const (
 	FieldSelectedTravellers = "selected_travellers"
 	// FieldExtraCharacters holds the string denoting the extra_characters field in the database.
 	FieldExtraCharacters = "extra_characters"
+	// FieldTravellerAlignments holds the string denoting the traveller_alignments field in the database.
+	FieldTravellerAlignments = "traveller_alignments"
 	// FieldState holds the string denoting the state field in the database.
 	FieldState = "state"
 	// EdgeOwner holds the string denoting the owner edge name in mutations.
 	EdgeOwner = "owner"
 	// EdgeScript holds the string denoting the script edge name in mutations.
 	EdgeScript = "script"
+	// EdgePhases holds the string denoting the phases edge name in mutations.
+	EdgePhases = "phases"
 	// Table holds the table name of the game in the database.
 	Table = "games"
 	// OwnerTable is the table that holds the owner relation/edge.
@@ -55,6 +62,13 @@ const (
 	ScriptInverseTable = "scripts"
 	// ScriptColumn is the table column denoting the script relation/edge.
 	ScriptColumn = "script_id"
+	// PhasesTable is the table that holds the phases relation/edge.
+	PhasesTable = "phases"
+	// PhasesInverseTable is the table name for the Phase entity.
+	// It exists in this package in order to avoid circular dependency with the "phase" package.
+	PhasesInverseTable = "phases"
+	// PhasesColumn is the table column denoting the phases relation/edge.
+	PhasesColumn = "game_id"
 )
 
 // Columns holds all SQL columns for game fields.
@@ -62,6 +76,7 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
+	FieldName,
 	FieldUserID,
 	FieldScriptID,
 	FieldPlayerCount,
@@ -69,6 +84,7 @@ var Columns = []string{
 	FieldSelectedRoles,
 	FieldSelectedTravellers,
 	FieldExtraCharacters,
+	FieldTravellerAlignments,
 	FieldState,
 }
 
@@ -89,6 +105,8 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultName holds the default value on creation for the "name" field.
+	DefaultName string
 	// PlayerCountValidator is a validator for the "player_count" field. It is called by the builders before save.
 	PlayerCountValidator func(int) error
 	// DefaultTravellerCount holds the default value on creation for the "traveller_count" field.
@@ -97,6 +115,8 @@ var (
 	TravellerCountValidator func(int) error
 	// DefaultExtraCharacters holds the default value on creation for the "extra_characters" field.
 	DefaultExtraCharacters []string
+	// DefaultTravellerAlignments holds the default value on creation for the "traveller_alignments" field.
+	DefaultTravellerAlignments map[string]schema.TravellerAlignment
 )
 
 // State defines the type for the "state" enum field.
@@ -144,6 +164,11 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
+// ByName orders the results by the name field.
+func ByName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
 // ByUserID orders the results by the user_id field.
 func ByUserID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUserID, opts...).ToFunc()
@@ -182,6 +207,20 @@ func ByScriptField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newScriptStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByPhasesCount orders the results by phases count.
+func ByPhasesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newPhasesStep(), opts...)
+	}
+}
+
+// ByPhases orders the results by phases terms.
+func ByPhases(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPhasesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newOwnerStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -194,5 +233,12 @@ func newScriptStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ScriptInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, ScriptTable, ScriptColumn),
+	)
+}
+func newPhasesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PhasesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, PhasesTable, PhasesColumn),
 	)
 }

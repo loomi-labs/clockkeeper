@@ -1,4 +1,4 @@
-h1:E72nzDZKD7np1Kd3rzFKbwlmH0650YEJh7CEqTe+jPA=
+h1:esVWV87Kh0V96Jks3AK6FPRZXavXeqQOssVLHxSx2xA=
 20260315162621_initial.sql h1:UgW1c0FpXZMO/eGMw/Lq/M/duJEsK+OR2AHwiOzU7DI=
 20260315175834_add_scripts_and_games.sql h1:bvc00M1DNb9CpnkkWKihQE8UBk77yFw7GBmS0WTIAtw=
 20260315191827_add_traveller_count.sql h1:VYJyhlSU8uSA2JAc/Q2Lv5fA0ZaqJp6CnMzT2H3e6F4=
@@ -8,3 +8,8 @@ h1:E72nzDZKD7np1Kd3rzFKbwlmH0650YEJh7CEqTe+jPA=
 20260318105440_add_game_owner.sql h1:zNQ86wnGci1MUQg16cpDst4nKXSee7aH6gykZKxlSDM=
 20260318155946_add_script_owner_check.sql h1:ApGdHvmtxln8378jRoZjicHMLtyxH59bMcgBLMTfLSU=
 20260319100012_add_game_extra_characters.sql h1:X9ELb3rl8EhP0VoN7dg7Aa9ejSQhPj3IXMFzEOdFF7U=
+20260321102851_add_phases_and_deaths.sql h1:DoMc2BTlrWqt4N16ch3oQB5+oODJN4n8JmvTdWCjCug=
+20260321112246_add_traveller_alignments.sql h1:KjXh3KRBvKsMqRnuE5h8d1Vea8FHUokuB908es/bjOg=
+20260321131451_add_game_name.sql h1:BvNiCP2ASMeO9TpkuzvkNJ5CX7RFit8+SmbPsWkHdso=
+20260321133230_add_completed_actions.sql h1:3v6P7/n3LgTEJeau6aGRil7zTkGgRKvX2/qrLENqwdg=
+20260322103914_add_death_unique_index.sql h1:dY8ZeikV+HOZVtId8Au/QtihdfJaCLvqqi4Wgt+Hvtc=

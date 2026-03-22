@@ -6,13 +6,46 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 	"github.com/loomi-labs/clockkeeper/internal/botc"
 )
+
+func (h *ClockKeeperServiceHandler) ListGames(ctx context.Context, req *connect.Request[clockkeeperv1.ListGamesRequest]) (*connect.Response[clockkeeperv1.ListGamesResponse], error) {
+	u, err := h.currentUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	games, err := h.db.Game.Query().
+		Where(game.UserID(u.ID)).
+		WithScript().
+		WithPhases(func(q *ent.PhaseQuery) {
+			q.WithDeaths()
+		}).
+		Order(ent.Desc(game.FieldUpdatedAt)).
+		All(ctx)
+	if err != nil {
+		slog.Error("list games failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	summaries := make([]*clockkeeperv1.GameSummary, len(games))
+	for i, g := range games {
+		summaries[i] = entGameToSummary(g)
+	}
+
+	return connect.NewResponse(&clockkeeperv1.ListGamesResponse{
+		Games: summaries,
+	}), nil
+}
 
 func (h *ClockKeeperServiceHandler) CreateGame(ctx context.Context, req *connect.Request[clockkeeperv1.CreateGameRequest]) (*connect.Response[clockkeeperv1.CreateGameResponse], error) {
 	u, err := h.currentUser(ctx)
@@ -34,8 +67,9 @@ func (h *ClockKeeperServiceHandler) CreateGame(ctx context.Context, req *connect
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("total player count (players + travellers) must not exceed 25"))
 	}
 
-	// Verify script exists.
-	if _, err := h.db.Script.Get(ctx, int(req.Msg.ScriptId)); err != nil {
+	// Verify script exists and get name for default game name.
+	script, err := h.db.Script.Get(ctx, int(req.Msg.ScriptId))
+	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, connect.NewError(connect.CodeNotFound, errors.New("script not found"))
 		}
@@ -43,7 +77,10 @@ func (h *ClockKeeperServiceHandler) CreateGame(ctx context.Context, req *connect
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	defaultName := fmt.Sprintf("%s - %s", script.Name, time.Now().Format("Jan 2"))
+
 	g, err := h.db.Game.Create().
+		SetName(defaultName).
 		SetUserID(u.ID).
 		SetScriptID(int(req.Msg.ScriptId)).
 		SetPlayerCount(int(req.Msg.PlayerCount)).
@@ -175,10 +212,23 @@ func (h *ClockKeeperServiceHandler) UpdateGameTravellers(ctx context.Context, re
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("total players (%d) exceeds maximum of 25", total))
 	}
 
+	// Clean up stale alignment entries.
+	newTravellerSet := make(map[string]bool)
+	for _, id := range req.Msg.SelectedTravellerIds {
+		newTravellerSet[id] = true
+	}
+	cleanedAlignments := make(map[string]schema.TravellerAlignment)
+	for k, v := range g.TravellerAlignments {
+		if newTravellerSet[k] {
+			cleanedAlignments[k] = v
+		}
+	}
+
 	// Auto-sync traveller_count to match the list.
 	g, err = g.Update().
 		SetSelectedTravellers(req.Msg.SelectedTravellerIds).
 		SetTravellerCount(len(req.Msg.SelectedTravellerIds)).
+		SetTravellerAlignments(cleanedAlignments).
 		Save(ctx)
 	if err != nil {
 		slog.Error("save updated travellers failed", "err", err)
@@ -212,6 +262,83 @@ func (h *ClockKeeperServiceHandler) UpdateGameExtraCharacters(ctx context.Contex
 	}
 
 	return connect.NewResponse(&clockkeeperv1.UpdateGameExtraCharactersResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
+}
+
+func (h *ClockKeeperServiceHandler) UpdateTravellerAlignment(ctx context.Context, req *connect.Request[clockkeeperv1.UpdateTravellerAlignmentRequest]) (*connect.Response[clockkeeperv1.UpdateTravellerAlignmentResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate role_id is in selected_travellers.
+	found := false
+	for _, id := range g.SelectedTravellers {
+		if id == req.Msg.RoleId {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("character %s is not a selected traveller", req.Msg.RoleId))
+	}
+
+	// Update alignment map.
+	alignments := make(map[string]schema.TravellerAlignment, len(g.TravellerAlignments))
+	for k, v := range g.TravellerAlignments {
+		alignments[k] = v
+	}
+
+	switch req.Msg.Alignment {
+	case clockkeeperv1.TravellerAlignment_TRAVELLER_ALIGNMENT_GOOD:
+		alignments[req.Msg.RoleId] = schema.AlignmentGood
+	case clockkeeperv1.TravellerAlignment_TRAVELLER_ALIGNMENT_EVIL:
+		alignments[req.Msg.RoleId] = schema.AlignmentEvil
+	default:
+		delete(alignments, req.Msg.RoleId) // UNSPECIFIED = remove = unset
+	}
+
+	g, err = g.Update().SetTravellerAlignments(alignments).Save(ctx)
+	if err != nil {
+		slog.Error("update traveller alignment failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Re-fetch with eager-loaded phases.
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&clockkeeperv1.UpdateTravellerAlignmentResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
+}
+
+func (h *ClockKeeperServiceHandler) UpdateGameName(ctx context.Context, req *connect.Request[clockkeeperv1.UpdateGameNameRequest]) (*connect.Response[clockkeeperv1.UpdateGameNameResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	name := req.Msg.Name
+	if name == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name must not be empty"))
+	}
+
+	g, err = g.Update().SetName(name).Save(ctx)
+	if err != nil {
+		slog.Error("update game name failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&clockkeeperv1.UpdateGameNameResponse{
 		Game: entGameToProto(g, h.registry),
 	}), nil
 }
@@ -259,14 +386,63 @@ func (h *ClockKeeperServiceHandler) GetDistribution(ctx context.Context, req *co
 	}), nil
 }
 
-// getOwnedGame fetches a game by ID and verifies the current user owns it.
+func (h *ClockKeeperServiceHandler) DeleteGame(ctx context.Context, req *connect.Request[clockkeeperv1.DeleteGameRequest]) (*connect.Response[clockkeeperv1.DeleteGameResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.Id))
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := h.db.Tx(ctx)
+	if err != nil {
+		slog.Error("start transaction failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Delete deaths for all phases of this game.
+	for _, p := range g.Edges.Phases {
+		if _, err := tx.Death.Delete().Where(death.HasPhaseWith(phase.ID(p.ID))).Exec(ctx); err != nil {
+			_ = tx.Rollback()
+			slog.Error("delete deaths failed", "err", err)
+			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		}
+	}
+
+	// Delete all phases.
+	if _, err := tx.Phase.Delete().Where(phase.HasGameWith(game.ID(g.ID))).Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		slog.Error("delete phases failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Delete the game.
+	if err := tx.Game.DeleteOneID(g.ID).Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		slog.Error("delete game failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("commit failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	return connect.NewResponse(&clockkeeperv1.DeleteGameResponse{}), nil
+}
+
+// getOwnedGame fetches a game by ID with eager-loaded phases+deaths and verifies the current user owns it.
 func (h *ClockKeeperServiceHandler) getOwnedGame(ctx context.Context, gameID int) (*ent.Game, error) {
 	u, err := h.currentUser(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	g, err := h.db.Game.Get(ctx, gameID)
+	g, err := h.db.Game.Query().
+		Where(game.ID(gameID)).
+		WithPhases(func(q *ent.PhaseQuery) {
+			q.WithDeaths().
+				Order(ent.Asc(phase.FieldID))
+		}).
+		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, connect.NewError(connect.CodeNotFound, errors.New("game not found"))

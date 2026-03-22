@@ -25,14 +25,31 @@ service ClockKeeperService {
   rpc ImportScript(ImportScriptRequest) returns (ImportScriptResponse) {}
 
   // Games
+  rpc ListGames(ListGamesRequest) returns (ListGamesResponse) {}
   rpc CreateGame(CreateGameRequest) returns (CreateGameResponse) {}
   rpc GetGame(GetGameRequest) returns (GetGameResponse) {}
   rpc RandomizeRoles(RandomizeRolesRequest) returns (RandomizeRolesResponse) {}
   rpc UpdateGameRoles(UpdateGameRolesRequest) returns (UpdateGameRolesResponse) {}
   rpc UpdateGameTravellers(UpdateGameTravellersRequest) returns (UpdateGameTravellersResponse) {}
   rpc UpdateGameExtraCharacters(UpdateGameExtraCharactersRequest) returns (UpdateGameExtraCharactersResponse) {}
+  rpc UpdateTravellerAlignment(UpdateTravellerAlignmentRequest) returns (UpdateTravellerAlignmentResponse) {}
+  rpc UpdateGameName(UpdateGameNameRequest) returns (UpdateGameNameResponse) {}
   rpc GetSetupChecklist(GetSetupChecklistRequest) returns (GetSetupChecklistResponse) {}
   rpc GetDistribution(GetDistributionRequest) returns (GetDistributionResponse) {}
+  rpc DeleteGame(DeleteGameRequest) returns (DeleteGameResponse) {}
+
+  // Game lifecycle
+  rpc StartGame(StartGameRequest) returns (StartGameResponse) {}
+  rpc AdvancePhase(AdvancePhaseRequest) returns (AdvancePhaseResponse) {}
+  rpc EndGame(EndGameRequest) returns (EndGameResponse) {}
+
+  // Death tracking
+  rpc RecordDeath(RecordDeathRequest) returns (RecordDeathResponse) {}
+  rpc RemoveDeath(RemoveDeathRequest) returns (RemoveDeathResponse) {}
+  rpc UseGhostVote(UseGhostVoteRequest) returns (UseGhostVoteResponse) {}
+
+  // Night actions
+  rpc ToggleNightAction(ToggleNightActionRequest) returns (ToggleNightActionResponse) {}
 }
 
 // --- Enums ---
@@ -53,6 +70,18 @@ enum Team {
   TEAM_TRAVELLER = 5;
   TEAM_FABLED = 6;
   TEAM_LORIC = 7;
+}
+
+enum TravellerAlignment {
+  TRAVELLER_ALIGNMENT_UNSPECIFIED = 0;
+  TRAVELLER_ALIGNMENT_GOOD = 1;
+  TRAVELLER_ALIGNMENT_EVIL = 2;
+}
+
+enum PhaseType {
+  PHASE_TYPE_UNSPECIFIED = 0;
+  PHASE_TYPE_NIGHT = 1;
+  PHASE_TYPE_DAY = 2;
 }
 
 // --- Auth ---
@@ -218,6 +247,9 @@ message Game {
   repeated Character selected_traveller_characters = 11;
   repeated string extra_character_ids = 12;
   repeated Character extra_character_details = 13;
+  GamePlayState play_state = 14;
+  map<string, TravellerAlignment> traveller_alignments = 15;
+  string name = 16;
 }
 
 message CreateGameRequest {
@@ -298,4 +330,149 @@ message GetDistributionRequest {
 
 message GetDistributionResponse {
   RoleDistribution distribution = 1;
+}
+
+// --- Phases & Deaths ---
+
+message Phase {
+  int64 id = 1;
+  int32 round_number = 2;
+  PhaseType type = 3;
+  bool is_active = 4;
+  repeated Death deaths = 5;
+  repeated string completed_actions = 6;
+}
+
+message Death {
+  int64 id = 1;
+  string role_id = 2;
+  int64 phase_id = 3;
+  bool ghost_vote = 4;
+}
+
+message GamePlayState {
+  int32 current_round = 1;
+  Phase current_phase = 2;
+  repeated Phase phases = 3;
+  repeated Death all_deaths = 4;
+}
+
+// --- Game Lifecycle ---
+
+message StartGameRequest {
+  int64 game_id = 1;
+}
+
+message StartGameResponse {
+  Game game = 1;
+}
+
+message AdvancePhaseRequest {
+  int64 game_id = 1;
+}
+
+message AdvancePhaseResponse {
+  Game game = 1;
+}
+
+message EndGameRequest {
+  int64 game_id = 1;
+}
+
+message EndGameResponse {
+  Game game = 1;
+}
+
+// --- Death Tracking ---
+
+message RecordDeathRequest {
+  int64 game_id = 1;
+  string role_id = 2;
+  optional int64 phase_id = 3;
+  bool propagate = 4;
+}
+
+message RecordDeathResponse {
+  Game game = 1;
+}
+
+message RemoveDeathRequest {
+  int64 game_id = 1;
+  int64 death_id = 2;
+  bool propagate = 3;
+}
+
+message RemoveDeathResponse {
+  Game game = 1;
+}
+
+message UseGhostVoteRequest {
+  int64 game_id = 1;
+  int64 death_id = 2;
+}
+
+message UseGhostVoteResponse {
+  Game game = 1;
+}
+
+// --- Game List ---
+
+message GameSummary {
+  int64 id = 1;
+  string script_name = 2;
+  int32 player_count = 3;
+  GameState state = 4;
+  int32 current_round = 5;
+  PhaseType current_phase_type = 6;
+  int32 death_count = 7;
+  int32 traveller_count = 8;
+  string name = 9;
+}
+
+message ListGamesRequest {}
+
+message ListGamesResponse {
+  repeated GameSummary games = 1;
+}
+
+message DeleteGameRequest {
+  int64 id = 1;
+}
+
+message DeleteGameResponse {}
+
+// --- Traveller Alignment ---
+
+message UpdateTravellerAlignmentRequest {
+  int64 game_id = 1;
+  string role_id = 2;
+  TravellerAlignment alignment = 3;
+}
+
+message UpdateTravellerAlignmentResponse {
+  Game game = 1;
+}
+
+// --- Game Name ---
+
+message UpdateGameNameRequest {
+  int64 game_id = 1;
+  string name = 2;
+}
+
+message UpdateGameNameResponse {
+  Game game = 1;
+}
+
+// --- Night Actions ---
+
+message ToggleNightActionRequest {
+  int64 game_id = 1;
+  string action_id = 2;
+  bool done = 3;
+  int64 phase_id = 4;
+}
+
+message ToggleNightActionResponse {
+  Game game = 1;
 }

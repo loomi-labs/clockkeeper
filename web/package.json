@@ -25,7 +25,8 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.0.0",
     "@connectrpc/connect": "^2.0.0",
-    "@connectrpc/connect-web": "^2.0.0"
+    "@connectrpc/connect-web": "^2.0.0",
+    "svelte-gestures": "^5.2.2"
   },
   "type": "module"
 }

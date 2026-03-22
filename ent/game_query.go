@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -12,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -26,6 +28,7 @@ type GameQuery struct {
 	predicates []predicate.Game
 	withOwner  *UserQuery
 	withScript *ScriptQuery
+	withPhases *PhaseQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -99,6 +102,28 @@ func (_q *GameQuery) QueryScript() *ScriptQuery {
 			sqlgraph.From(game.Table, game.FieldID, selector),
 			sqlgraph.To(script.Table, script.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, game.ScriptTable, game.ScriptColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryPhases chains the current query on the "phases" edge.
+func (_q *GameQuery) QueryPhases() *PhaseQuery {
+	query := (&PhaseClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(game.Table, game.FieldID, selector),
+			sqlgraph.To(phase.Table, phase.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, game.PhasesTable, game.PhasesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -300,6 +325,7 @@ func (_q *GameQuery) Clone() *GameQuery {
 		predicates: append([]predicate.Game{}, _q.predicates...),
 		withOwner:  _q.withOwner.Clone(),
 		withScript: _q.withScript.Clone(),
+		withPhases: _q.withPhases.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -325,6 +351,17 @@ func (_q *GameQuery) WithScript(opts ...func(*ScriptQuery)) *GameQuery {
 		opt(query)
 	}
 	_q.withScript = query
+	return _q
+}
+
+// WithPhases tells the query-builder to eager-load the nodes that are connected to
+// the "phases" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *GameQuery) WithPhases(opts ...func(*PhaseQuery)) *GameQuery {
+	query := (&PhaseClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withPhases = query
 	return _q
 }
 
@@ -406,9 +443,10 @@ func (_q *GameQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Game, e
 	var (
 		nodes       = []*Game{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			_q.withOwner != nil,
 			_q.withScript != nil,
+			_q.withPhases != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -438,6 +476,13 @@ func (_q *GameQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Game, e
 	if query := _q.withScript; query != nil {
 		if err := _q.loadScript(ctx, query, nodes, nil,
 			func(n *Game, e *Script) { n.Edges.Script = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withPhases; query != nil {
+		if err := _q.loadPhases(ctx, query, nodes,
+			func(n *Game) { n.Edges.Phases = []*Phase{} },
+			func(n *Game, e *Phase) { n.Edges.Phases = append(n.Edges.Phases, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -499,6 +544,36 @@ func (_q *GameQuery) loadScript(ctx context.Context, query *ScriptQuery, nodes [
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (_q *GameQuery) loadPhases(ctx context.Context, query *PhaseQuery, nodes []*Game, init func(*Game), assign func(*Game, *Phase)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Game)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(phase.FieldGameID)
+	}
+	query.Where(predicate.Phase(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(game.PhasesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GameID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "game_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }
