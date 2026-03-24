@@ -165,6 +165,24 @@ func (_u *GameUpdate) ClearExtraCharacters() *GameUpdate {
 	return _u
 }
 
+// SetSelectedBluffs sets the "selected_bluffs" field.
+func (_u *GameUpdate) SetSelectedBluffs(v []string) *GameUpdate {
+	_u.mutation.SetSelectedBluffs(v)
+	return _u
+}
+
+// AppendSelectedBluffs appends value to the "selected_bluffs" field.
+func (_u *GameUpdate) AppendSelectedBluffs(v []string) *GameUpdate {
+	_u.mutation.AppendSelectedBluffs(v)
+	return _u
+}
+
+// ClearSelectedBluffs clears the value of the "selected_bluffs" field.
+func (_u *GameUpdate) ClearSelectedBluffs() *GameUpdate {
+	_u.mutation.ClearSelectedBluffs()
+	return _u
+}
+
 // SetTravellerAlignments sets the "traveller_alignments" field.
 func (_u *GameUpdate) SetTravellerAlignments(v map[string]schema.TravellerAlignment) *GameUpdate {
 	_u.mutation.SetTravellerAlignments(v)
@@ -174,6 +192,72 @@ func (_u *GameUpdate) SetTravellerAlignments(v map[string]schema.TravellerAlignm
 // ClearTravellerAlignments clears the value of the "traveller_alignments" field.
 func (_u *GameUpdate) ClearTravellerAlignments() *GameUpdate {
 	_u.mutation.ClearTravellerAlignments()
+	return _u
+}
+
+// SetGrimoirePositions sets the "grimoire_positions" field.
+func (_u *GameUpdate) SetGrimoirePositions(v map[string]schema.GrimoirePosition) *GameUpdate {
+	_u.mutation.SetGrimoirePositions(v)
+	return _u
+}
+
+// ClearGrimoirePositions clears the value of the "grimoire_positions" field.
+func (_u *GameUpdate) ClearGrimoirePositions() *GameUpdate {
+	_u.mutation.ClearGrimoirePositions()
+	return _u
+}
+
+// SetGrimoirePlayerNames sets the "grimoire_player_names" field.
+func (_u *GameUpdate) SetGrimoirePlayerNames(v map[string]string) *GameUpdate {
+	_u.mutation.SetGrimoirePlayerNames(v)
+	return _u
+}
+
+// ClearGrimoirePlayerNames clears the value of the "grimoire_player_names" field.
+func (_u *GameUpdate) ClearGrimoirePlayerNames() *GameUpdate {
+	_u.mutation.ClearGrimoirePlayerNames()
+	return _u
+}
+
+// SetGrimoireGameNotes sets the "grimoire_game_notes" field.
+func (_u *GameUpdate) SetGrimoireGameNotes(v map[string]string) *GameUpdate {
+	_u.mutation.SetGrimoireGameNotes(v)
+	return _u
+}
+
+// ClearGrimoireGameNotes clears the value of the "grimoire_game_notes" field.
+func (_u *GameUpdate) ClearGrimoireGameNotes() *GameUpdate {
+	_u.mutation.ClearGrimoireGameNotes()
+	return _u
+}
+
+// SetGrimoireRoundNotes sets the "grimoire_round_notes" field.
+func (_u *GameUpdate) SetGrimoireRoundNotes(v map[string]string) *GameUpdate {
+	_u.mutation.SetGrimoireRoundNotes(v)
+	return _u
+}
+
+// ClearGrimoireRoundNotes clears the value of the "grimoire_round_notes" field.
+func (_u *GameUpdate) ClearGrimoireRoundNotes() *GameUpdate {
+	_u.mutation.ClearGrimoireRoundNotes()
+	return _u
+}
+
+// SetBagSubstitutions sets the "bag_substitutions" field.
+func (_u *GameUpdate) SetBagSubstitutions(v []schema.GameBagSubstitution) *GameUpdate {
+	_u.mutation.SetBagSubstitutions(v)
+	return _u
+}
+
+// AppendBagSubstitutions appends value to the "bag_substitutions" field.
+func (_u *GameUpdate) AppendBagSubstitutions(v []schema.GameBagSubstitution) *GameUpdate {
+	_u.mutation.AppendBagSubstitutions(v)
+	return _u
+}
+
+// ClearBagSubstitutions clears the value of the "bag_substitutions" field.
+func (_u *GameUpdate) ClearBagSubstitutions() *GameUpdate {
+	_u.mutation.ClearBagSubstitutions()
 	return _u
 }
 
@@ -379,11 +463,57 @@ func (_u *GameUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.ExtraCharactersCleared() {
 		_spec.ClearField(game.FieldExtraCharacters, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.SelectedBluffs(); ok {
+		_spec.SetField(game.FieldSelectedBluffs, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedSelectedBluffs(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, game.FieldSelectedBluffs, value)
+		})
+	}
+	if _u.mutation.SelectedBluffsCleared() {
+		_spec.ClearField(game.FieldSelectedBluffs, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.TravellerAlignments(); ok {
 		_spec.SetField(game.FieldTravellerAlignments, field.TypeJSON, value)
 	}
 	if _u.mutation.TravellerAlignmentsCleared() {
 		_spec.ClearField(game.FieldTravellerAlignments, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GrimoirePositions(); ok {
+		_spec.SetField(game.FieldGrimoirePositions, field.TypeJSON, value)
+	}
+	if _u.mutation.GrimoirePositionsCleared() {
+		_spec.ClearField(game.FieldGrimoirePositions, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GrimoirePlayerNames(); ok {
+		_spec.SetField(game.FieldGrimoirePlayerNames, field.TypeJSON, value)
+	}
+	if _u.mutation.GrimoirePlayerNamesCleared() {
+		_spec.ClearField(game.FieldGrimoirePlayerNames, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GrimoireGameNotes(); ok {
+		_spec.SetField(game.FieldGrimoireGameNotes, field.TypeJSON, value)
+	}
+	if _u.mutation.GrimoireGameNotesCleared() {
+		_spec.ClearField(game.FieldGrimoireGameNotes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GrimoireRoundNotes(); ok {
+		_spec.SetField(game.FieldGrimoireRoundNotes, field.TypeJSON, value)
+	}
+	if _u.mutation.GrimoireRoundNotesCleared() {
+		_spec.ClearField(game.FieldGrimoireRoundNotes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BagSubstitutions(); ok {
+		_spec.SetField(game.FieldBagSubstitutions, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBagSubstitutions(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, game.FieldBagSubstitutions, value)
+		})
+	}
+	if _u.mutation.BagSubstitutionsCleared() {
+		_spec.ClearField(game.FieldBagSubstitutions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
@@ -643,6 +773,24 @@ func (_u *GameUpdateOne) ClearExtraCharacters() *GameUpdateOne {
 	return _u
 }
 
+// SetSelectedBluffs sets the "selected_bluffs" field.
+func (_u *GameUpdateOne) SetSelectedBluffs(v []string) *GameUpdateOne {
+	_u.mutation.SetSelectedBluffs(v)
+	return _u
+}
+
+// AppendSelectedBluffs appends value to the "selected_bluffs" field.
+func (_u *GameUpdateOne) AppendSelectedBluffs(v []string) *GameUpdateOne {
+	_u.mutation.AppendSelectedBluffs(v)
+	return _u
+}
+
+// ClearSelectedBluffs clears the value of the "selected_bluffs" field.
+func (_u *GameUpdateOne) ClearSelectedBluffs() *GameUpdateOne {
+	_u.mutation.ClearSelectedBluffs()
+	return _u
+}
+
 // SetTravellerAlignments sets the "traveller_alignments" field.
 func (_u *GameUpdateOne) SetTravellerAlignments(v map[string]schema.TravellerAlignment) *GameUpdateOne {
 	_u.mutation.SetTravellerAlignments(v)
@@ -652,6 +800,72 @@ func (_u *GameUpdateOne) SetTravellerAlignments(v map[string]schema.TravellerAli
 // ClearTravellerAlignments clears the value of the "traveller_alignments" field.
 func (_u *GameUpdateOne) ClearTravellerAlignments() *GameUpdateOne {
 	_u.mutation.ClearTravellerAlignments()
+	return _u
+}
+
+// SetGrimoirePositions sets the "grimoire_positions" field.
+func (_u *GameUpdateOne) SetGrimoirePositions(v map[string]schema.GrimoirePosition) *GameUpdateOne {
+	_u.mutation.SetGrimoirePositions(v)
+	return _u
+}
+
+// ClearGrimoirePositions clears the value of the "grimoire_positions" field.
+func (_u *GameUpdateOne) ClearGrimoirePositions() *GameUpdateOne {
+	_u.mutation.ClearGrimoirePositions()
+	return _u
+}
+
+// SetGrimoirePlayerNames sets the "grimoire_player_names" field.
+func (_u *GameUpdateOne) SetGrimoirePlayerNames(v map[string]string) *GameUpdateOne {
+	_u.mutation.SetGrimoirePlayerNames(v)
+	return _u
+}
+
+// ClearGrimoirePlayerNames clears the value of the "grimoire_player_names" field.
+func (_u *GameUpdateOne) ClearGrimoirePlayerNames() *GameUpdateOne {
+	_u.mutation.ClearGrimoirePlayerNames()
+	return _u
+}
+
+// SetGrimoireGameNotes sets the "grimoire_game_notes" field.
+func (_u *GameUpdateOne) SetGrimoireGameNotes(v map[string]string) *GameUpdateOne {
+	_u.mutation.SetGrimoireGameNotes(v)
+	return _u
+}
+
+// ClearGrimoireGameNotes clears the value of the "grimoire_game_notes" field.
+func (_u *GameUpdateOne) ClearGrimoireGameNotes() *GameUpdateOne {
+	_u.mutation.ClearGrimoireGameNotes()
+	return _u
+}
+
+// SetGrimoireRoundNotes sets the "grimoire_round_notes" field.
+func (_u *GameUpdateOne) SetGrimoireRoundNotes(v map[string]string) *GameUpdateOne {
+	_u.mutation.SetGrimoireRoundNotes(v)
+	return _u
+}
+
+// ClearGrimoireRoundNotes clears the value of the "grimoire_round_notes" field.
+func (_u *GameUpdateOne) ClearGrimoireRoundNotes() *GameUpdateOne {
+	_u.mutation.ClearGrimoireRoundNotes()
+	return _u
+}
+
+// SetBagSubstitutions sets the "bag_substitutions" field.
+func (_u *GameUpdateOne) SetBagSubstitutions(v []schema.GameBagSubstitution) *GameUpdateOne {
+	_u.mutation.SetBagSubstitutions(v)
+	return _u
+}
+
+// AppendBagSubstitutions appends value to the "bag_substitutions" field.
+func (_u *GameUpdateOne) AppendBagSubstitutions(v []schema.GameBagSubstitution) *GameUpdateOne {
+	_u.mutation.AppendBagSubstitutions(v)
+	return _u
+}
+
+// ClearBagSubstitutions clears the value of the "bag_substitutions" field.
+func (_u *GameUpdateOne) ClearBagSubstitutions() *GameUpdateOne {
+	_u.mutation.ClearBagSubstitutions()
 	return _u
 }
 
@@ -887,11 +1101,57 @@ func (_u *GameUpdateOne) sqlSave(ctx context.Context) (_node *Game, err error) {
 	if _u.mutation.ExtraCharactersCleared() {
 		_spec.ClearField(game.FieldExtraCharacters, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.SelectedBluffs(); ok {
+		_spec.SetField(game.FieldSelectedBluffs, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedSelectedBluffs(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, game.FieldSelectedBluffs, value)
+		})
+	}
+	if _u.mutation.SelectedBluffsCleared() {
+		_spec.ClearField(game.FieldSelectedBluffs, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.TravellerAlignments(); ok {
 		_spec.SetField(game.FieldTravellerAlignments, field.TypeJSON, value)
 	}
 	if _u.mutation.TravellerAlignmentsCleared() {
 		_spec.ClearField(game.FieldTravellerAlignments, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GrimoirePositions(); ok {
+		_spec.SetField(game.FieldGrimoirePositions, field.TypeJSON, value)
+	}
+	if _u.mutation.GrimoirePositionsCleared() {
+		_spec.ClearField(game.FieldGrimoirePositions, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GrimoirePlayerNames(); ok {
+		_spec.SetField(game.FieldGrimoirePlayerNames, field.TypeJSON, value)
+	}
+	if _u.mutation.GrimoirePlayerNamesCleared() {
+		_spec.ClearField(game.FieldGrimoirePlayerNames, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GrimoireGameNotes(); ok {
+		_spec.SetField(game.FieldGrimoireGameNotes, field.TypeJSON, value)
+	}
+	if _u.mutation.GrimoireGameNotesCleared() {
+		_spec.ClearField(game.FieldGrimoireGameNotes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GrimoireRoundNotes(); ok {
+		_spec.SetField(game.FieldGrimoireRoundNotes, field.TypeJSON, value)
+	}
+	if _u.mutation.GrimoireRoundNotesCleared() {
+		_spec.ClearField(game.FieldGrimoireRoundNotes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BagSubstitutions(); ok {
+		_spec.SetField(game.FieldBagSubstitutions, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBagSubstitutions(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, game.FieldBagSubstitutions, value)
+		})
+	}
+	if _u.mutation.BagSubstitutionsCleared() {
+		_spec.ClearField(game.FieldBagSubstitutions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)

@@ -118,6 +118,18 @@ func (_u *PhaseUpdate) ClearCompletedActions() *PhaseUpdate {
 	return _u
 }
 
+// SetCharacterAlignments sets the "character_alignments" field.
+func (_u *PhaseUpdate) SetCharacterAlignments(v map[string]string) *PhaseUpdate {
+	_u.mutation.SetCharacterAlignments(v)
+	return _u
+}
+
+// ClearCharacterAlignments clears the value of the "character_alignments" field.
+func (_u *PhaseUpdate) ClearCharacterAlignments() *PhaseUpdate {
+	_u.mutation.ClearCharacterAlignments()
+	return _u
+}
+
 // SetGame sets the "game" edge to the Game entity.
 func (_u *PhaseUpdate) SetGame(v *Game) *PhaseUpdate {
 	return _u.SetGameID(v.ID)
@@ -261,6 +273,12 @@ func (_u *PhaseUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CompletedActionsCleared() {
 		_spec.ClearField(phase.FieldCompletedActions, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CharacterAlignments(); ok {
+		_spec.SetField(phase.FieldCharacterAlignments, field.TypeJSON, value)
+	}
+	if _u.mutation.CharacterAlignmentsCleared() {
+		_spec.ClearField(phase.FieldCharacterAlignments, field.TypeJSON)
 	}
 	if _u.mutation.GameCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -443,6 +461,18 @@ func (_u *PhaseUpdateOne) ClearCompletedActions() *PhaseUpdateOne {
 	return _u
 }
 
+// SetCharacterAlignments sets the "character_alignments" field.
+func (_u *PhaseUpdateOne) SetCharacterAlignments(v map[string]string) *PhaseUpdateOne {
+	_u.mutation.SetCharacterAlignments(v)
+	return _u
+}
+
+// ClearCharacterAlignments clears the value of the "character_alignments" field.
+func (_u *PhaseUpdateOne) ClearCharacterAlignments() *PhaseUpdateOne {
+	_u.mutation.ClearCharacterAlignments()
+	return _u
+}
+
 // SetGame sets the "game" edge to the Game entity.
 func (_u *PhaseUpdateOne) SetGame(v *Game) *PhaseUpdateOne {
 	return _u.SetGameID(v.ID)
@@ -616,6 +646,12 @@ func (_u *PhaseUpdateOne) sqlSave(ctx context.Context) (_node *Phase, err error)
 	}
 	if _u.mutation.CompletedActionsCleared() {
 		_spec.ClearField(phase.FieldCompletedActions, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CharacterAlignments(); ok {
+		_spec.SetField(phase.FieldCharacterAlignments, field.TypeJSON, value)
+	}
+	if _u.mutation.CharacterAlignmentsCleared() {
+		_spec.ClearField(phase.FieldCharacterAlignments, field.TypeJSON)
 	}
 	if _u.mutation.GameCleared() {
 		edge := &sqlgraph.EdgeSpec{

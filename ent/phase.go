@@ -33,6 +33,8 @@ type Phase struct {
 	IsActive bool `json:"is_active,omitempty"`
 	// CompletedActions holds the value of the "completed_actions" field.
 	CompletedActions []string `json:"completed_actions,omitempty"`
+	// CharacterAlignments holds the value of the "character_alignments" field.
+	CharacterAlignments map[string]string `json:"character_alignments,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PhaseQuery when eager-loading is set.
 	Edges        PhaseEdges `json:"edges"`
@@ -75,7 +77,7 @@ func (*Phase) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case phase.FieldCompletedActions:
+		case phase.FieldCompletedActions, phase.FieldCharacterAlignments:
 			values[i] = new([]byte)
 		case phase.FieldIsActive:
 			values[i] = new(sql.NullBool)
@@ -150,6 +152,14 @@ func (_m *Phase) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field completed_actions: %w", err)
 				}
 			}
+		case phase.FieldCharacterAlignments:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field character_alignments", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CharacterAlignments); err != nil {
+					return fmt.Errorf("unmarshal field character_alignments: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -216,6 +226,9 @@ func (_m *Phase) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("completed_actions=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CompletedActions))
+	builder.WriteString(", ")
+	builder.WriteString("character_alignments=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CharacterAlignments))
 	builder.WriteByte(')')
 	return builder.String()
 }

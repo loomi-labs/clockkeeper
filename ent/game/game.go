@@ -36,8 +36,20 @@ const (
 	FieldSelectedTravellers = "selected_travellers"
 	// FieldExtraCharacters holds the string denoting the extra_characters field in the database.
 	FieldExtraCharacters = "extra_characters"
+	// FieldSelectedBluffs holds the string denoting the selected_bluffs field in the database.
+	FieldSelectedBluffs = "selected_bluffs"
 	// FieldTravellerAlignments holds the string denoting the traveller_alignments field in the database.
 	FieldTravellerAlignments = "traveller_alignments"
+	// FieldGrimoirePositions holds the string denoting the grimoire_positions field in the database.
+	FieldGrimoirePositions = "grimoire_positions"
+	// FieldGrimoirePlayerNames holds the string denoting the grimoire_player_names field in the database.
+	FieldGrimoirePlayerNames = "grimoire_player_names"
+	// FieldGrimoireGameNotes holds the string denoting the grimoire_game_notes field in the database.
+	FieldGrimoireGameNotes = "grimoire_game_notes"
+	// FieldGrimoireRoundNotes holds the string denoting the grimoire_round_notes field in the database.
+	FieldGrimoireRoundNotes = "grimoire_round_notes"
+	// FieldBagSubstitutions holds the string denoting the bag_substitutions field in the database.
+	FieldBagSubstitutions = "bag_substitutions"
 	// FieldState holds the string denoting the state field in the database.
 	FieldState = "state"
 	// EdgeOwner holds the string denoting the owner edge name in mutations.
@@ -84,7 +96,13 @@ var Columns = []string{
 	FieldSelectedRoles,
 	FieldSelectedTravellers,
 	FieldExtraCharacters,
+	FieldSelectedBluffs,
 	FieldTravellerAlignments,
+	FieldGrimoirePositions,
+	FieldGrimoirePlayerNames,
+	FieldGrimoireGameNotes,
+	FieldGrimoireRoundNotes,
+	FieldBagSubstitutions,
 	FieldState,
 }
 
@@ -115,8 +133,20 @@ var (
 	TravellerCountValidator func(int) error
 	// DefaultExtraCharacters holds the default value on creation for the "extra_characters" field.
 	DefaultExtraCharacters []string
+	// DefaultSelectedBluffs holds the default value on creation for the "selected_bluffs" field.
+	DefaultSelectedBluffs []string
 	// DefaultTravellerAlignments holds the default value on creation for the "traveller_alignments" field.
 	DefaultTravellerAlignments map[string]schema.TravellerAlignment
+	// DefaultGrimoirePositions holds the default value on creation for the "grimoire_positions" field.
+	DefaultGrimoirePositions map[string]schema.GrimoirePosition
+	// DefaultGrimoirePlayerNames holds the default value on creation for the "grimoire_player_names" field.
+	DefaultGrimoirePlayerNames map[string]string
+	// DefaultGrimoireGameNotes holds the default value on creation for the "grimoire_game_notes" field.
+	DefaultGrimoireGameNotes map[string]string
+	// DefaultGrimoireRoundNotes holds the default value on creation for the "grimoire_round_notes" field.
+	DefaultGrimoireRoundNotes map[string]string
+	// DefaultBagSubstitutions holds the default value on creation for the "bag_substitutions" field.
+	DefaultBagSubstitutions []schema.GameBagSubstitution
 )
 
 // State defines the type for the "state" enum field.

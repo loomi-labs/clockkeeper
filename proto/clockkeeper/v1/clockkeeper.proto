@@ -34,9 +34,13 @@ service ClockKeeperService {
   rpc UpdateGameExtraCharacters(UpdateGameExtraCharactersRequest) returns (UpdateGameExtraCharactersResponse) {}
   rpc UpdateTravellerAlignment(UpdateTravellerAlignmentRequest) returns (UpdateTravellerAlignmentResponse) {}
   rpc UpdateGameName(UpdateGameNameRequest) returns (UpdateGameNameResponse) {}
+  rpc UpdateGrimoireState(UpdateGrimoireStateRequest) returns (UpdateGrimoireStateResponse) {}
+  rpc UpdateDemonBluffs(UpdateDemonBluffsRequest) returns (UpdateDemonBluffsResponse) {}
+  rpc UpdateBagSubstitutions(UpdateBagSubstitutionsRequest) returns (UpdateBagSubstitutionsResponse) {}
   rpc GetSetupChecklist(GetSetupChecklistRequest) returns (GetSetupChecklistResponse) {}
   rpc GetDistribution(GetDistributionRequest) returns (GetDistributionResponse) {}
   rpc DeleteGame(DeleteGameRequest) returns (DeleteGameResponse) {}
+  rpc DuplicateGame(DuplicateGameRequest) returns (DuplicateGameResponse) {}
 
   // Game lifecycle
   rpc StartGame(StartGameRequest) returns (StartGameResponse) {}
@@ -50,6 +54,9 @@ service ClockKeeperService {
 
   // Night actions
   rpc ToggleNightAction(ToggleNightActionRequest) returns (ToggleNightActionResponse) {}
+
+  // Character alignment
+  rpc UpdateCharacterAlignment(UpdateCharacterAlignmentRequest) returns (UpdateCharacterAlignmentResponse) {}
 }
 
 // --- Enums ---
@@ -233,6 +240,18 @@ message ReminderToken {
   string text = 3;
 }
 
+message Position {
+  float x = 1;
+  float y = 2;
+}
+
+message BagSubstitution {
+  string caused_by_id = 1;
+  string caused_by_name = 2;
+  string character_id = 3;
+  string character_name = 4;
+}
+
 message Game {
   int64 id = 1;
   int64 script_id = 2;
@@ -250,6 +269,13 @@ message Game {
   GamePlayState play_state = 14;
   map<string, TravellerAlignment> traveller_alignments = 15;
   string name = 16;
+  map<string, Position> grimoire_positions = 17;
+  map<string, string> grimoire_player_names = 18;
+  map<string, string> grimoire_game_notes = 19;
+  map<string, string> grimoire_round_notes = 20;
+  repeated string selected_bluff_ids = 21;
+  repeated Character selected_bluff_characters = 22;
+  repeated BagSubstitution bag_substitutions = 23;
 }
 
 message CreateGameRequest {
@@ -341,6 +367,7 @@ message Phase {
   bool is_active = 4;
   repeated Death deaths = 5;
   repeated string completed_actions = 6;
+  map<string, string> character_alignments = 7;
 }
 
 message Death {
@@ -441,6 +468,14 @@ message DeleteGameRequest {
 
 message DeleteGameResponse {}
 
+message DuplicateGameRequest {
+  int64 game_id = 1;
+}
+
+message DuplicateGameResponse {
+  Game game = 1;
+}
+
 // --- Traveller Alignment ---
 
 message UpdateTravellerAlignmentRequest {
@@ -464,6 +499,42 @@ message UpdateGameNameResponse {
   Game game = 1;
 }
 
+// --- Grimoire State ---
+
+message UpdateGrimoireStateRequest {
+  int64 game_id = 1;
+  map<string, Position> positions = 2;
+  map<string, string> player_names = 3;
+  map<string, string> game_notes = 4;
+  map<string, string> round_notes = 5;
+}
+
+message UpdateGrimoireStateResponse {
+  Game game = 1;
+}
+
+// --- Demon Bluffs ---
+
+message UpdateDemonBluffsRequest {
+  int64 game_id = 1;
+  repeated string bluff_ids = 2;
+}
+
+message UpdateDemonBluffsResponse {
+  Game game = 1;
+}
+
+// --- Bag Substitutions ---
+
+message UpdateBagSubstitutionsRequest {
+  int64 game_id = 1;
+  repeated BagSubstitution bag_substitutions = 2;
+}
+
+message UpdateBagSubstitutionsResponse {
+  Game game = 1;
+}
+
 // --- Night Actions ---
 
 message ToggleNightActionRequest {
@@ -474,5 +545,19 @@ message ToggleNightActionRequest {
 }
 
 message ToggleNightActionResponse {
+  Game game = 1;
+}
+
+// --- Character Alignment ---
+
+message UpdateCharacterAlignmentRequest {
+  int64 game_id = 1;
+  int64 phase_id = 2;
+  string role_id = 3;
+  string alignment = 4; // "good", "evil", or "" to clear
+  bool propagate = 5;
+}
+
+message UpdateCharacterAlignmentResponse {
   Game game = 1;
 }

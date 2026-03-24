@@ -80,6 +80,18 @@ tasks:
     cmds:
       - npx svelte-check --tsconfig ./tsconfig.json
 
+  format:
+    desc: Format frontend code with Prettier
+    dir: web
+    cmds:
+      - pnpm prettier --write .
+
+  format:check:
+    desc: Check frontend code formatting
+    dir: web
+    cmds:
+      - pnpm prettier --check .
+
   frontend:build:
     desc: Build the Svelte frontend
     dir: web

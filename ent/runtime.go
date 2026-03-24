@@ -101,10 +101,34 @@ func init() {
 	gameDescExtraCharacters := gameFields[7].Descriptor()
 	// game.DefaultExtraCharacters holds the default value on creation for the extra_characters field.
 	game.DefaultExtraCharacters = gameDescExtraCharacters.Default.([]string)
+	// gameDescSelectedBluffs is the schema descriptor for selected_bluffs field.
+	gameDescSelectedBluffs := gameFields[8].Descriptor()
+	// game.DefaultSelectedBluffs holds the default value on creation for the selected_bluffs field.
+	game.DefaultSelectedBluffs = gameDescSelectedBluffs.Default.([]string)
 	// gameDescTravellerAlignments is the schema descriptor for traveller_alignments field.
-	gameDescTravellerAlignments := gameFields[8].Descriptor()
+	gameDescTravellerAlignments := gameFields[9].Descriptor()
 	// game.DefaultTravellerAlignments holds the default value on creation for the traveller_alignments field.
 	game.DefaultTravellerAlignments = gameDescTravellerAlignments.Default.(map[string]schema.TravellerAlignment)
+	// gameDescGrimoirePositions is the schema descriptor for grimoire_positions field.
+	gameDescGrimoirePositions := gameFields[10].Descriptor()
+	// game.DefaultGrimoirePositions holds the default value on creation for the grimoire_positions field.
+	game.DefaultGrimoirePositions = gameDescGrimoirePositions.Default.(map[string]schema.GrimoirePosition)
+	// gameDescGrimoirePlayerNames is the schema descriptor for grimoire_player_names field.
+	gameDescGrimoirePlayerNames := gameFields[11].Descriptor()
+	// game.DefaultGrimoirePlayerNames holds the default value on creation for the grimoire_player_names field.
+	game.DefaultGrimoirePlayerNames = gameDescGrimoirePlayerNames.Default.(map[string]string)
+	// gameDescGrimoireGameNotes is the schema descriptor for grimoire_game_notes field.
+	gameDescGrimoireGameNotes := gameFields[12].Descriptor()
+	// game.DefaultGrimoireGameNotes holds the default value on creation for the grimoire_game_notes field.
+	game.DefaultGrimoireGameNotes = gameDescGrimoireGameNotes.Default.(map[string]string)
+	// gameDescGrimoireRoundNotes is the schema descriptor for grimoire_round_notes field.
+	gameDescGrimoireRoundNotes := gameFields[13].Descriptor()
+	// game.DefaultGrimoireRoundNotes holds the default value on creation for the grimoire_round_notes field.
+	game.DefaultGrimoireRoundNotes = gameDescGrimoireRoundNotes.Default.(map[string]string)
+	// gameDescBagSubstitutions is the schema descriptor for bag_substitutions field.
+	gameDescBagSubstitutions := gameFields[14].Descriptor()
+	// game.DefaultBagSubstitutions holds the default value on creation for the bag_substitutions field.
+	game.DefaultBagSubstitutions = gameDescBagSubstitutions.Default.([]schema.GameBagSubstitution)
 	phaseMixin := schema.Phase{}.Mixin()
 	phaseMixinFields0 := phaseMixin[0].Fields()
 	_ = phaseMixinFields0
@@ -132,6 +156,10 @@ func init() {
 	phaseDescCompletedActions := phaseFields[4].Descriptor()
 	// phase.DefaultCompletedActions holds the default value on creation for the completed_actions field.
 	phase.DefaultCompletedActions = phaseDescCompletedActions.Default.([]string)
+	// phaseDescCharacterAlignments is the schema descriptor for character_alignments field.
+	phaseDescCharacterAlignments := phaseFields[5].Descriptor()
+	// phase.DefaultCharacterAlignments holds the default value on creation for the character_alignments field.
+	phase.DefaultCharacterAlignments = phaseDescCharacterAlignments.Default.(map[string]string)
 	scriptMixin := schema.Script{}.Mixin()
 	scriptMixinFields0 := scriptMixin[0].Fields()
 	_ = scriptMixinFields0

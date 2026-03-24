@@ -43,3 +43,5 @@ All commands use [Task](https://taskfile.dev/) as the runner.
 |---------|-------------|
 | `task frontend:dev` | Start frontend dev server only |
 | `task frontend:build` | Build the Svelte frontend for production |
+| `task format` | Format frontend code with Prettier |
+| `task format:check` | Check frontend code formatting (no writes) |

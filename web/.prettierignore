@@ -1,0 +1,4 @@
+build/
+.svelte-kit/
+pnpm-lock.yaml
+test-results/

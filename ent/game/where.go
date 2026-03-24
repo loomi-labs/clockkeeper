@@ -365,6 +365,16 @@ func ExtraCharactersNotNil() predicate.Game {
 	return predicate.Game(sql.FieldNotNull(FieldExtraCharacters))
 }
 
+// SelectedBluffsIsNil applies the IsNil predicate on the "selected_bluffs" field.
+func SelectedBluffsIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldSelectedBluffs))
+}
+
+// SelectedBluffsNotNil applies the NotNil predicate on the "selected_bluffs" field.
+func SelectedBluffsNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldSelectedBluffs))
+}
+
 // TravellerAlignmentsIsNil applies the IsNil predicate on the "traveller_alignments" field.
 func TravellerAlignmentsIsNil() predicate.Game {
 	return predicate.Game(sql.FieldIsNull(FieldTravellerAlignments))
@@ -373,6 +383,56 @@ func TravellerAlignmentsIsNil() predicate.Game {
 // TravellerAlignmentsNotNil applies the NotNil predicate on the "traveller_alignments" field.
 func TravellerAlignmentsNotNil() predicate.Game {
 	return predicate.Game(sql.FieldNotNull(FieldTravellerAlignments))
+}
+
+// GrimoirePositionsIsNil applies the IsNil predicate on the "grimoire_positions" field.
+func GrimoirePositionsIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldGrimoirePositions))
+}
+
+// GrimoirePositionsNotNil applies the NotNil predicate on the "grimoire_positions" field.
+func GrimoirePositionsNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldGrimoirePositions))
+}
+
+// GrimoirePlayerNamesIsNil applies the IsNil predicate on the "grimoire_player_names" field.
+func GrimoirePlayerNamesIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldGrimoirePlayerNames))
+}
+
+// GrimoirePlayerNamesNotNil applies the NotNil predicate on the "grimoire_player_names" field.
+func GrimoirePlayerNamesNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldGrimoirePlayerNames))
+}
+
+// GrimoireGameNotesIsNil applies the IsNil predicate on the "grimoire_game_notes" field.
+func GrimoireGameNotesIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldGrimoireGameNotes))
+}
+
+// GrimoireGameNotesNotNil applies the NotNil predicate on the "grimoire_game_notes" field.
+func GrimoireGameNotesNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldGrimoireGameNotes))
+}
+
+// GrimoireRoundNotesIsNil applies the IsNil predicate on the "grimoire_round_notes" field.
+func GrimoireRoundNotesIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldGrimoireRoundNotes))
+}
+
+// GrimoireRoundNotesNotNil applies the NotNil predicate on the "grimoire_round_notes" field.
+func GrimoireRoundNotesNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldGrimoireRoundNotes))
+}
+
+// BagSubstitutionsIsNil applies the IsNil predicate on the "bag_substitutions" field.
+func BagSubstitutionsIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldBagSubstitutions))
+}
+
+// BagSubstitutionsNotNil applies the NotNil predicate on the "bag_substitutions" field.
+func BagSubstitutionsNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldBagSubstitutions))
 }
 
 // StateEQ applies the EQ predicate on the "state" field.

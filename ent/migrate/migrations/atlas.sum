@@ -1,4 +1,4 @@
-h1:esVWV87Kh0V96Jks3AK6FPRZXavXeqQOssVLHxSx2xA=
+h1:bVwvO9MC0AS8ee0TvzvZWz1mm/n9MLMVQj7Xe/fNCZw=
 20260315162621_initial.sql h1:UgW1c0FpXZMO/eGMw/Lq/M/duJEsK+OR2AHwiOzU7DI=
 20260315175834_add_scripts_and_games.sql h1:bvc00M1DNb9CpnkkWKihQE8UBk77yFw7GBmS0WTIAtw=
 20260315191827_add_traveller_count.sql h1:VYJyhlSU8uSA2JAc/Q2Lv5fA0ZaqJp6CnMzT2H3e6F4=
@@ -13,3 +13,8 @@ h1:esVWV87Kh0V96Jks3AK6FPRZXavXeqQOssVLHxSx2xA=
 20260321131451_add_game_name.sql h1:BvNiCP2ASMeO9TpkuzvkNJ5CX7RFit8+SmbPsWkHdso=
 20260321133230_add_completed_actions.sql h1:3v6P7/n3LgTEJeau6aGRil7zTkGgRKvX2/qrLENqwdg=
 20260322103914_add_death_unique_index.sql h1:dY8ZeikV+HOZVtId8Au/QtihdfJaCLvqqi4Wgt+Hvtc=
+20260323093114_add_grimoire_state.sql h1:7kZd7JS5fO2J5tH8//9ZOKuGmpafkaoMtmco1n+uKD4=
+20260323102548_add_grimoire_notes.sql h1:advNXOsX2azX+sHBjdu5GgeEAM6jsOMucXRcM3MAbm0=
+20260323131712_add_character_alignments.sql h1:RzLNhBKvusTAJf1EFEXkszG88xwoK5Q9gYykgqLePlA=
+20260323135528_add_demon_bluffs.sql h1:/yxfIeCvT9lqLLjTaD8t8aYCqi1op3rn92e8O2cG904=
+20260323161223_add_bag_substitutions.sql h1:ArtSgvdnYtVj3BkAdyLcrDhkFOBRHn/cBCxIM0TBVlk=

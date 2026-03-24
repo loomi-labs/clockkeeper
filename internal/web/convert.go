@@ -57,6 +57,9 @@ func entPhaseToProto(p *ent.Phase) *clockkeeperv1.Phase {
 		IsActive:         p.IsActive,
 		CompletedActions: p.CompletedActions,
 	}
+	if len(p.CharacterAlignments) > 0 {
+		proto.CharacterAlignments = p.CharacterAlignments
+	}
 	for _, d := range p.Edges.Deaths {
 		proto.Deaths = append(proto.Deaths, entDeathToProto(d))
 	}
@@ -101,6 +104,22 @@ func characterToProtoWithJinxes(c *botc.Character, registry *botc.Registry) *clo
 	return proto
 }
 
+func bagSubstitutionsToProto(subs []schema.GameBagSubstitution) []*clockkeeperv1.BagSubstitution {
+	if len(subs) == 0 {
+		return nil
+	}
+	result := make([]*clockkeeperv1.BagSubstitution, len(subs))
+	for i, s := range subs {
+		result[i] = &clockkeeperv1.BagSubstitution{
+			CausedById:    s.CausedByID,
+			CausedByName:  s.CausedByName,
+			CharacterId:   s.CharacterID,
+			CharacterName: s.CharacterName,
+		}
+	}
+	return result
+}
+
 func charactersToProto(chars []*botc.Character) []*clockkeeperv1.Character {
 	result := make([]*clockkeeperv1.Character, len(chars))
 	for i, c := range chars {
@@ -138,13 +157,18 @@ func entGameToSummary(g *ent.Game) *clockkeeperv1.GameSummary {
 	}
 
 	// Phase and death info from eager-loaded phases.
+	// Collect unique role IDs to avoid double-counting deaths that propagate across phases.
+	deadRoles := make(map[string]struct{})
 	for _, p := range g.Edges.Phases {
 		if p.IsActive {
 			summary.CurrentRound = int32(p.RoundNumber)
 			summary.CurrentPhaseType = phaseTypeToProto[p.Type]
 		}
-		summary.DeathCount += int32(len(p.Edges.Deaths))
+		for _, d := range p.Edges.Deaths {
+			deadRoles[d.RoleID] = struct{}{}
+		}
 	}
+	summary.DeathCount = int32(len(deadRoles))
 
 	return summary
 }
@@ -153,10 +177,11 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 	chars := registry.Characters(g.SelectedRoles)
 	travellerChars := registry.Characters(g.SelectedTravellers)
 	extraChars := registry.Characters(g.ExtraCharacters)
+	bluffChars := registry.Characters(g.SelectedBluffs)
 
 	var dist *clockkeeperv1.RoleDistribution
 	if d, err := botc.DistributionForPlayerCount(g.PlayerCount); err == nil {
-		adjusted, _ := botc.ApplySetupModifiers(d, chars)
+		adjusted := botc.ApplySetupModifiers(d, chars).Distribution
 		dist = &clockkeeperv1.RoleDistribution{
 			Townsfolk: int32(adjusted.Townsfolk),
 			Outsiders: int32(adjusted.Outsiders),
@@ -203,6 +228,9 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 		SelectedTravellerCharacters: charactersToProto(travellerChars),
 		ExtraCharacterDetails:       charactersToProto(extraChars),
 		ReminderTokens:              tokens,
+		SelectedBluffIds:            g.SelectedBluffs,
+		SelectedBluffCharacters:     charactersToProto(bluffChars),
+		BagSubstitutions:            bagSubstitutionsToProto(g.BagSubstitutions),
 	}
 
 	// Populate traveller alignments.
@@ -216,6 +244,23 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 				proto.TravellerAlignments[id] = clockkeeperv1.TravellerAlignment_TRAVELLER_ALIGNMENT_EVIL
 			}
 		}
+	}
+
+	// Populate grimoire state.
+	if len(g.GrimoirePositions) > 0 {
+		proto.GrimoirePositions = make(map[string]*clockkeeperv1.Position, len(g.GrimoirePositions))
+		for id, pos := range g.GrimoirePositions {
+			proto.GrimoirePositions[id] = &clockkeeperv1.Position{X: float32(pos.X), Y: float32(pos.Y)}
+		}
+	}
+	if len(g.GrimoirePlayerNames) > 0 {
+		proto.GrimoirePlayerNames = g.GrimoirePlayerNames
+	}
+	if len(g.GrimoireGameNotes) > 0 {
+		proto.GrimoireGameNotes = g.GrimoireGameNotes
+	}
+	if len(g.GrimoireRoundNotes) > 0 {
+		proto.GrimoireRoundNotes = g.GrimoireRoundNotes
 	}
 
 	// Populate play_state from eager-loaded phases+deaths.

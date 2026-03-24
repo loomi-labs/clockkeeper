@@ -1,235 +1,272 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
-	import { client } from '~/lib/api';
-	import { invalidateSidebar } from '~/lib/sidebar-data.svelte';
-	import { getErrorMessage } from '~/lib/errors';
-	import { editionStyle } from '~/lib/editions';
-	import type { Script, Edition, RoleDistribution } from '~/lib/gen/clockkeeper/v1/clockkeeper_pb';
-	import DistributionBar from '~/lib/components/DistributionBar.svelte';
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { page } from "$app/state";
+  import { client } from "~/lib/api";
+  import { invalidateSidebar } from "~/lib/sidebar-data.svelte";
+  import { getErrorMessage } from "~/lib/errors";
+  import { editionStyle } from "~/lib/editions";
+  import type {
+    Script,
+    Edition,
+    RoleDistribution,
+  } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
+  import DistributionBar from "~/lib/components/DistributionBar.svelte";
 
-	let scripts = $state<Script[]>([]);
-	let editions = $state<Edition[]>([]);
-	let selectedScriptId = $state<bigint | undefined>();
-	let totalCount = $state(8);
-	let travellerCount = $state(0);
-	let loading = $state(true);
-	let creating = $state(false);
-	let error = $state('');
-	let currentDist = $state<RoleDistribution | undefined>();
+  let scripts = $state<Script[]>([]);
+  let editions = $state<Edition[]>([]);
+  let selectedScriptId = $state<bigint | undefined>();
+  let totalCount = $state(8);
+  let travellerCount = $state(0);
+  let loading = $state(true);
+  let creating = $state(false);
+  let error = $state("");
+  let currentDist = $state<RoleDistribution | undefined>();
 
-	const playerCount = $derived(Math.min(totalCount, 15));
-	const minTravellers = $derived(Math.max(0, totalCount - 15));
-	const selectedScript = $derived(scripts.find((s) => s.id === selectedScriptId));
-	const totalPeople = $derived(playerCount + travellerCount);
-	const showTotalWarning = $derived(totalPeople > 20);
+  const playerCount = $derived(Math.min(totalCount, 15));
+  const minTravellers = $derived(Math.max(0, totalCount - 15));
+  const selectedScript = $derived(
+    scripts.find((s) => s.id === selectedScriptId),
+  );
+  const totalPeople = $derived(playerCount + travellerCount);
+  const showTotalWarning = $derived(totalPeople > 20);
 
-	// When totalCount changes, ensure travellerCount is at least the minimum.
-	$effect(() => {
-		if (travellerCount < minTravellers) {
-			travellerCount = minTravellers;
-		}
-	});
+  // When totalCount changes, ensure travellerCount is at least the minimum.
+  $effect(() => {
+    if (travellerCount < minTravellers) {
+      travellerCount = minTravellers;
+    }
+  });
 
-	// Fetch distribution from API when player count changes.
-	$effect(() => {
-		const pc = playerCount;
-		client
-			.getDistribution({ playerCount: pc })
-			.then((resp) => {
-				currentDist = resp.distribution;
-			})
-			.catch(() => {
-				currentDist = undefined;
-			});
-	});
+  // Fetch distribution from API when player count changes.
+  $effect(() => {
+    const pc = playerCount;
+    client
+      .getDistribution({ playerCount: pc })
+      .then((resp) => {
+        currentDist = resp.distribution;
+      })
+      .catch(() => {
+        currentDist = undefined;
+      });
+  });
 
-	onMount(async () => {
-		try {
-			const [scriptsResp, editionsResp] = await Promise.all([
-				client.listScripts({}),
-				client.listEditions({})
-			]);
-			scripts = scriptsResp.scripts;
-			editions = editionsResp.editions;
+  onMount(async () => {
+    try {
+      const [scriptsResp, editionsResp] = await Promise.all([
+        client.listScripts({}),
+        client.listEditions({}),
+      ]);
+      scripts = scriptsResp.scripts;
+      editions = editionsResp.editions;
 
-			// Pre-select from query param.
-			const scriptParam = page.url.searchParams.get('script');
-			if (scriptParam) {
-				try {
-					const parsedId = BigInt(scriptParam);
-					if (scripts.some((s) => s.id === parsedId)) {
-						selectedScriptId = parsedId;
-					}
-				} catch {
-					// Ignore invalid script parameter
-				}
-			}
-		} catch (err) {
-			error = getErrorMessage(err, 'Failed to load');
-		} finally {
-			loading = false;
-		}
-	});
+      // Pre-select from query param.
+      const scriptParam = page.url.searchParams.get("script");
+      if (scriptParam) {
+        try {
+          const parsedId = BigInt(scriptParam);
+          if (scripts.some((s) => s.id === parsedId)) {
+            selectedScriptId = parsedId;
+          }
+        } catch {
+          // Ignore invalid script parameter
+        }
+      }
+    } catch (err) {
+      error = getErrorMessage(err, "Failed to load");
+    } finally {
+      loading = false;
+    }
+  });
 
-	function selectEdition(editionId: string) {
-		const existing = scripts.find((s) => s.edition === editionId && s.isSystem);
-		if (existing) {
-			selectedScriptId = existing.id;
-		}
-	}
+  function selectEdition(editionId: string) {
+    const existing = scripts.find((s) => s.edition === editionId && s.isSystem);
+    if (existing) {
+      selectedScriptId = existing.id;
+    }
+  }
 
-	async function createGame() {
-		if (!selectedScriptId) return;
-		creating = true;
-		error = '';
-		try {
-			const resp = await client.createGame({
-				scriptId: selectedScriptId,
-				playerCount,
-				travellerCount
-			});
-			if (resp.game) {
-				invalidateSidebar();
-				goto(`/games/${resp.game.id}`);
-			}
-		} catch (err) {
-			error = getErrorMessage(err, 'Failed to create game');
-		} finally {
-			creating = false;
-		}
-	}
+  async function createGame() {
+    if (!selectedScriptId) return;
+    creating = true;
+    error = "";
+    try {
+      const resp = await client.createGame({
+        scriptId: selectedScriptId,
+        playerCount,
+        travellerCount,
+      });
+      if (resp.game) {
+        invalidateSidebar();
+        goto(`/games/${resp.game.id}`);
+      }
+    } catch (err) {
+      error = getErrorMessage(err, "Failed to create game");
+    } finally {
+      creating = false;
+    }
+  }
 </script>
 
 <div class="mx-auto max-w-2xl space-y-8">
-	<h1 class="text-2xl font-bold">New Game</h1>
+  <h1 class="text-2xl font-bold">New Game</h1>
 
-	{#if error}
-		<div class="rounded-lg bg-error-bg border border-error-border px-4 py-2 text-sm text-error-text">{error}</div>
-	{/if}
+  {#if error}
+    <div
+      class="rounded-lg bg-error-bg border border-error-border px-4 py-2 text-sm text-error-text"
+    >
+      {error}
+    </div>
+  {/if}
 
-	{#if loading}
-		<p class="text-secondary">Loading...</p>
-	{:else}
-		<!-- Step 1: Pick script -->
-		<section class="space-y-3">
-			<h2 class="text-lg font-semibold text-medium">1. Choose an Edition</h2>
+  {#if loading}
+    <p class="text-secondary">Loading...</p>
+  {:else}
+    <!-- Step 1: Pick script -->
+    <section class="space-y-3">
+      <h2 class="text-lg font-semibold text-medium">1. Choose an Edition</h2>
 
-			<!-- Edition templates -->
-			{#if editions.length > 0}
-				<div class="grid gap-3 sm:grid-cols-3">
-					{#each editions as edition}
-						{@const style = editionStyle(edition.id)}
-						{@const isSelected = selectedScript?.isSystem === true && selectedScript?.edition === edition.id}
-						<button
-							onclick={() => selectEdition(edition.id)}
-							class="flex flex-col items-center rounded-lg border p-5 transition-all hover:scale-[1.02] hover:brightness-110 {isSelected
-								? `${style.activeBorder} ${style.activeBg}`
-								: `${style.border} ${style.bg}`}"
-						>
-							<img
-								src="/editions/{edition.id}.webp"
-								alt={edition.name}
-								class="h-16 object-contain"
-							/>
-							<p class="mt-3 text-sm text-secondary">{edition.characterIds.length} characters</p>
-						</button>
-					{/each}
-				</div>
-			{/if}
+      <!-- Edition templates -->
+      {#if editions.length > 0}
+        <div class="grid gap-3 sm:grid-cols-3">
+          {#each editions as edition}
+            {@const style = editionStyle(edition.id)}
+            {@const isSelected =
+              selectedScript?.isSystem === true &&
+              selectedScript?.edition === edition.id}
+            <button
+              onclick={() => selectEdition(edition.id)}
+              class="flex flex-col items-center rounded-lg border p-5 transition-all hover:scale-[1.02] hover:brightness-110 {isSelected
+                ? `${style.activeBorder} ${style.activeBg}`
+                : `${style.border} ${style.bg}`}"
+            >
+              <img
+                src="/editions/{edition.id}.webp"
+                alt={edition.name}
+                class="h-16 object-contain"
+              />
+              <p class="mt-3 text-sm text-secondary">
+                {edition.characterIds.length} characters
+              </p>
+            </button>
+          {/each}
+        </div>
+      {/if}
 
-			<!-- Saved scripts -->
-			{#if scripts.filter((s) => !s.isSystem).length > 0}
-				<p class="text-sm text-muted">Or choose a saved script:</p>
-				<div class="grid gap-2 sm:grid-cols-2">
-					{#each scripts.filter((s) => !s.isSystem) as script (script.id)}
-						<button
-							onclick={() => (selectedScriptId = script.id)}
-							class="card-slate rounded-lg border p-3 text-left transition-colors {selectedScriptId === script.id
-								? 'border-indigo-500 bg-indigo-500/10'
-								: 'border-border bg-surface hover:border-border-strong'}"
-						>
-							<span class="font-medium text-primary">{script.name}</span>
-							<span class="ml-2 text-sm text-secondary">{script.characterIds.length} chars</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</section>
+      <!-- Saved scripts -->
+      {#if scripts.filter((s) => !s.isSystem).length > 0}
+        <p class="text-sm text-muted">Or choose a saved script:</p>
+        <div class="grid gap-2 sm:grid-cols-2">
+          {#each scripts.filter((s) => !s.isSystem) as script (script.id)}
+            <button
+              onclick={() => (selectedScriptId = script.id)}
+              class="card-slate rounded-lg border p-3 text-left transition-colors {selectedScriptId ===
+              script.id
+                ? 'border-indigo-500 bg-indigo-500/10'
+                : 'border-border bg-surface hover:border-border-strong'}"
+            >
+              <span class="font-medium text-primary">{script.name}</span>
+              <span class="ml-2 text-sm text-secondary"
+                >{script.characterIds.length} chars</span
+              >
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </section>
 
-		<!-- Step 2: Player count -->
-		{#if selectedScriptId}
-			<section class="space-y-3">
-				<h2 class="text-lg font-semibold text-medium">2. How many people?</h2>
-				<div class="flex flex-wrap gap-2">
-					{#each Array.from({ length: 16 }, (_, i) => i + 5) as n}
-						<button
-							onclick={() => (totalCount = n)}
-							class="h-10 w-10 rounded-lg text-sm font-medium transition-colors {totalCount === n
-								? 'bg-indigo-500 text-white'
-								: 'border border-border bg-surface text-medium hover:bg-hover'}"
-						>
-							{n}
-						</button>
-					{/each}
-				</div>
+    <!-- Step 2: Player count -->
+    {#if selectedScriptId}
+      <section class="space-y-3">
+        <h2 class="text-lg font-semibold text-medium">2. How many people?</h2>
+        <div class="flex flex-wrap gap-2">
+          {#each Array.from({ length: 16 }, (_, i) => i + 5) as n}
+            <button
+              onclick={() => (totalCount = n)}
+              class="h-10 w-10 rounded-lg text-sm font-medium transition-colors {totalCount ===
+              n
+                ? 'bg-indigo-500 text-white'
+                : 'border border-border bg-surface text-medium hover:bg-hover'}"
+            >
+              {n}
+            </button>
+          {/each}
+        </div>
 
-				{#if totalCount > 15}
-					<p class="text-sm text-secondary">
-						Max 15 players — {totalCount - 15} will be {totalCount - 15 === 1 ? 'a traveller' : 'travellers'}
-					</p>
-				{/if}
+        {#if totalCount > 15}
+          <p class="text-sm text-secondary">
+            Max 15 players — {totalCount - 15} will be {totalCount - 15 === 1
+              ? "a traveller"
+              : "travellers"}
+          </p>
+        {/if}
 
-				{#if currentDist}
-					<div class="rounded-lg border border-border bg-surface p-4">
-						<p class="mb-2 text-sm text-secondary">Expected distribution for {playerCount} players:</p>
-						<DistributionBar current={{ townsfolk: currentDist.townsfolk, outsiders: currentDist.outsiders, minions: currentDist.minions, demons: currentDist.demons }} travellers={travellerCount} />
-					</div>
-				{/if}
-			</section>
+        {#if currentDist}
+          <div class="rounded-lg border border-border bg-surface p-4">
+            <p class="mb-2 text-sm text-secondary">
+              Expected distribution for {playerCount} players:
+            </p>
+            <DistributionBar
+              current={{
+                townsfolk: currentDist.townsfolk,
+                outsiders: currentDist.outsiders,
+                minions: currentDist.minions,
+                demons: currentDist.demons,
+              }}
+              travellers={travellerCount}
+            />
+          </div>
+        {/if}
+      </section>
 
-			<!-- Step 3: Travellers -->
-			<section class="space-y-3">
-				<h2 class="text-lg font-semibold text-medium">3. Travellers</h2>
-				<div class="flex items-center gap-3">
-					<button
-						onclick={() => (travellerCount = Math.max(minTravellers, travellerCount - 1))}
-						disabled={travellerCount <= minTravellers}
-						class="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface text-lg font-medium text-medium transition-colors hover:bg-hover disabled:opacity-30"
-					>
-						-
-					</button>
-					<span class="w-8 text-center text-lg font-medium text-primary">{travellerCount}</span>
-					<button
-						onclick={() => (travellerCount = travellerCount + 1)}
-						disabled={totalPeople >= 25}
-						class="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface text-lg font-medium text-medium transition-colors hover:bg-hover disabled:opacity-30"
-					>
-						+
-					</button>
-					<span class="text-sm text-secondary">
-						Total: {totalPeople} {totalPeople === 1 ? 'person' : 'people'}
-					</span>
-				</div>
+      <!-- Step 3: Travellers -->
+      <section class="space-y-3">
+        <h2 class="text-lg font-semibold text-medium">3. Travellers</h2>
+        <div class="flex items-center gap-3">
+          <button
+            onclick={() =>
+              (travellerCount = Math.max(minTravellers, travellerCount - 1))}
+            disabled={travellerCount <= minTravellers}
+            class="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface text-lg font-medium text-medium transition-colors hover:bg-hover disabled:opacity-30"
+          >
+            -
+          </button>
+          <span class="w-8 text-center text-lg font-medium text-primary"
+            >{travellerCount}</span
+          >
+          <button
+            onclick={() => (travellerCount = travellerCount + 1)}
+            disabled={totalPeople >= 25}
+            class="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface text-lg font-medium text-medium transition-colors hover:bg-hover disabled:opacity-30"
+          >
+            +
+          </button>
+          <span class="text-sm text-secondary">
+            Total: {totalPeople}
+            {totalPeople === 1 ? "person" : "people"}
+          </span>
+        </div>
 
-				{#if showTotalWarning}
-					<div class="rounded-lg border border-warning-border bg-warning-bg px-4 py-2 text-sm text-warning-text">
-						The recommended maximum is 20 players. Games with more players may be harder to manage.
-					</div>
-				{/if}
-			</section>
+        {#if showTotalWarning}
+          <div
+            class="rounded-lg border border-warning-border bg-warning-bg px-4 py-2 text-sm text-warning-text"
+          >
+            The recommended maximum is 20 players. Games with more players may
+            be harder to manage.
+          </div>
+        {/if}
+      </section>
 
-			<!-- Step 4: Create -->
-			<section>
-				<button
-					onclick={createGame}
-					disabled={creating || !selectedScriptId}
-					class="btn-primary rounded-lg bg-indigo-500 px-6 py-2.5 font-medium text-white transition-colors hover:bg-indigo-400 disabled:opacity-50"
-				>
-					{creating ? 'Creating...' : 'Create Game'}
-				</button>
-			</section>
-		{/if}
-	{/if}
+      <!-- Step 4: Create -->
+      <section>
+        <button
+          onclick={createGame}
+          disabled={creating || !selectedScriptId}
+          class="btn-primary rounded-lg bg-indigo-500 px-6 py-2.5 font-medium text-white transition-colors hover:bg-indigo-400 disabled:opacity-50"
+        >
+          {creating ? "Creating..." : "Create Game"}
+        </button>
+      </section>
+    {/if}
+  {/if}
 </div>
