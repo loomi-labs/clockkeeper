@@ -67,7 +67,7 @@ func TestStartGame_Success(t *testing.T) {
 	assert.Equal(t, int32(1), game.PlayState.CurrentRound)
 	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, game.PlayState.CurrentPhase.Type)
 	assert.True(t, game.PlayState.CurrentPhase.IsActive)
-	assert.Len(t, game.PlayState.Phases, 1)
+	assert.Len(t, game.PlayState.Phases, 2, "should have Night 1 + Day 1")
 }
 
 func TestStartGame_FailsNoRoles(t *testing.T) {
@@ -162,36 +162,11 @@ func TestStartGame_BlocksOtherUser(t *testing.T) {
 
 // --- AdvancePhase tests ---
 
-func TestAdvancePhase_NightToDay(t *testing.T) {
+func TestAdvancePhase_CreatesNextRound(t *testing.T) {
 	handler := testHandler(t)
 	ownerName, game := startedGame(t, handler)
 
-	// Game starts at Night 1 — advance to Day 1.
-	resp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
-		GameId: game.Id,
-	}))
-	require.NoError(t, err)
-
-	g := resp.Msg.Game
-	require.NotNil(t, g.PlayState)
-	require.NotNil(t, g.PlayState.CurrentPhase)
-	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, g.PlayState.CurrentPhase.Type)
-	assert.Equal(t, int32(1), g.PlayState.CurrentRound, "round should stay the same when going night->day")
-	assert.True(t, g.PlayState.CurrentPhase.IsActive)
-	assert.Len(t, g.PlayState.Phases, 2)
-}
-
-func TestAdvancePhase_DayToNight(t *testing.T) {
-	handler := testHandler(t)
-	ownerName, game := startedGame(t, handler)
-
-	// Advance Night 1 -> Day 1.
-	_, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
-		GameId: game.Id,
-	}))
-	require.NoError(t, err)
-
-	// Advance Day 1 -> Night 2.
+	// Game starts at Night 1 + Day 1. Advance creates Night 2 + Day 2.
 	resp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
 		GameId: game.Id,
 	}))
@@ -201,9 +176,34 @@ func TestAdvancePhase_DayToNight(t *testing.T) {
 	require.NotNil(t, g.PlayState)
 	require.NotNil(t, g.PlayState.CurrentPhase)
 	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, g.PlayState.CurrentPhase.Type)
-	assert.Equal(t, int32(2), g.PlayState.CurrentRound, "round should increment when going day->night")
+	assert.Equal(t, int32(2), g.PlayState.CurrentRound, "round should advance to 2")
 	assert.True(t, g.PlayState.CurrentPhase.IsActive)
-	assert.Len(t, g.PlayState.Phases, 3)
+	assert.Len(t, g.PlayState.Phases, 4, "should have 2 rounds × 2 phases each")
+}
+
+func TestAdvancePhase_MultipleRounds(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, game := startedGame(t, handler)
+
+	// Advance once: creates round 2 (Night 2 + Day 2).
+	_, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
+		GameId: game.Id,
+	}))
+	require.NoError(t, err)
+
+	// Advance again: creates round 3 (Night 3 + Day 3).
+	resp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
+		GameId: game.Id,
+	}))
+	require.NoError(t, err)
+
+	g := resp.Msg.Game
+	require.NotNil(t, g.PlayState)
+	require.NotNil(t, g.PlayState.CurrentPhase)
+	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, g.PlayState.CurrentPhase.Type)
+	assert.Equal(t, int32(3), g.PlayState.CurrentRound, "round should be 3 after two advances")
+	assert.True(t, g.PlayState.CurrentPhase.IsActive)
+	assert.Len(t, g.PlayState.Phases, 6, "should have 3 rounds × 2 phases each")
 }
 
 func TestAdvancePhase_FailsNotInProgress(t *testing.T) {
@@ -683,18 +683,16 @@ func TestRecordDeath_PropagateToAllLaterPhases(t *testing.T) {
 	require.NotEmpty(t, game.SelectedRoleIds)
 	roleID := game.SelectedRoleIds[0]
 
-	// Advance to Day 1, then Night 2 (3 phases total).
-	_, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
-	require.NoError(t, err)
+	// Advance once: creates round 2 (Night 2 + Day 2). Total 4 phases.
 	advResp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
 	require.NoError(t, err)
 	game = advResp.Msg.Game
-	require.Len(t, game.PlayState.Phases, 3)
+	require.Len(t, game.PlayState.Phases, 4)
 
 	n1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
 	require.NotNil(t, n1)
 
-	// Record death on Night 1 with propagation — should hit all 3 phases.
+	// Record death on Night 1 with propagation — should hit all 4 phases.
 	resp, err := handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
 		GameId:    game.Id,
 		RoleId:    roleID,
@@ -710,9 +708,12 @@ func TestRecordDeath_PropagateToAllLaterPhases(t *testing.T) {
 	require.NotNil(t, pD1, "expected phase type=DAY round=1")
 	pN2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
 	require.NotNil(t, pN2, "expected phase type=NIGHT round=2")
+	pD2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
+	require.NotNil(t, pD2, "expected phase type=DAY round=2")
 	assert.True(t, phaseHasDeathForRole(pN1, roleID))
 	assert.True(t, phaseHasDeathForRole(pD1, roleID))
 	assert.True(t, phaseHasDeathForRole(pN2, roleID))
+	assert.True(t, phaseHasDeathForRole(pD2, roleID))
 }
 
 func TestRemoveDeath_Propagate(t *testing.T) {
@@ -823,23 +824,27 @@ func TestAdvancePhase_CopiesDeaths(t *testing.T) {
 	require.NotEmpty(t, game.SelectedRoleIds)
 	roleID := game.SelectedRoleIds[0]
 
-	// Record death in Night 1.
+	// Record death in Night 1 with propagation so it reaches Day 1 too.
 	_, err := handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
-		GameId: game.Id, RoleId: roleID,
+		GameId: game.Id, RoleId: roleID, Propagate: true,
 	}))
 	require.NoError(t, err)
 
-	// Advance to Day 1 — should auto-copy the death.
+	// Advance — propagates Day 1 deaths into Night 2 + Day 2.
 	advResp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
 	require.NoError(t, err)
 
 	g := advResp.Msg.Game
-	d1 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
-	require.NotNil(t, d1)
-	assert.True(t, phaseHasDeathForRole(d1, roleID), "death should be copied to Day 1")
+	n2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
+	require.NotNil(t, n2)
+	assert.True(t, phaseHasDeathForRole(n2, roleID), "death should be copied to Night 2")
+
+	d2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
+	require.NotNil(t, d2)
+	assert.True(t, phaseHasDeathForRole(d2, roleID), "death should be copied to Day 2")
 
 	// Verify ghost_vote is preserved.
-	for _, d := range d1.Deaths {
+	for _, d := range n2.Deaths {
 		if d.RoleId == roleID {
 			assert.True(t, d.GhostVote, "ghost vote should be preserved when copying")
 		}
@@ -854,20 +859,25 @@ func TestAdvancePhase_CopiesMultipleDeaths(t *testing.T) {
 	role1 := game.SelectedRoleIds[0]
 	role2 := game.SelectedRoleIds[1]
 
-	// Record two deaths in Night 1.
-	_, err := handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{GameId: game.Id, RoleId: role1}))
+	// Record two deaths in Night 1 with propagation so they reach Day 1.
+	_, err := handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{GameId: game.Id, RoleId: role1, Propagate: true}))
 	require.NoError(t, err)
-	_, err = handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{GameId: game.Id, RoleId: role2}))
+	_, err = handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{GameId: game.Id, RoleId: role2, Propagate: true}))
 	require.NoError(t, err)
 
-	// Advance.
+	// Advance — propagates Day 1 deaths into Night 2 + Day 2.
 	advResp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
 	require.NoError(t, err)
 
-	d1 := findPhase(advResp.Msg.Game, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
-	require.NotNil(t, d1)
-	assert.True(t, phaseHasDeathForRole(d1, role1), "role1 death should be copied")
-	assert.True(t, phaseHasDeathForRole(d1, role2), "role2 death should be copied")
+	n2 := findPhase(advResp.Msg.Game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
+	require.NotNil(t, n2)
+	assert.True(t, phaseHasDeathForRole(n2, role1), "role1 death should be copied to Night 2")
+	assert.True(t, phaseHasDeathForRole(n2, role2), "role2 death should be copied to Night 2")
+
+	d2 := findPhase(advResp.Msg.Game, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
+	require.NotNil(t, d2)
+	assert.True(t, phaseHasDeathForRole(d2, role1), "role1 death should be copied to Day 2")
+	assert.True(t, phaseHasDeathForRole(d2, role2), "role2 death should be copied to Day 2")
 }
 
 func TestUseGhostVote_SyncsAcrossPhases(t *testing.T) {
@@ -910,21 +920,19 @@ func TestRecordDeath_ResurrectionFlow(t *testing.T) {
 	require.NotEmpty(t, game.SelectedRoleIds)
 	roleID := game.SelectedRoleIds[0]
 
-	// Record death in Night 1 (auto-propagates to current phase only since it's the only one).
+	// Record death in Night 1 with propagation so it reaches Day 1.
 	_, err := handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
-		GameId: game.Id, RoleId: roleID,
+		GameId: game.Id, RoleId: roleID, Propagate: true,
 	}))
 	require.NoError(t, err)
 
-	// Advance to Day 1 (death copied), then Night 2 (death copied again).
-	_, err = handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
-	require.NoError(t, err)
+	// Advance once: creates round 2 (Night 2 + Day 2). Day 1 deaths propagate to both.
 	advResp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
 	require.NoError(t, err)
 	game = advResp.Msg.Game
 
-	// Dead in all 3 phases.
-	require.Len(t, game.PlayState.Phases, 3)
+	// Dead in all 4 phases (N1, D1, N2, D2).
+	require.Len(t, game.PlayState.Phases, 4)
 	for _, p := range game.PlayState.Phases {
 		assert.True(t, phaseHasDeathForRole(p, roleID), "should be dead in %v %d", p.Type, p.RoundNumber)
 	}
@@ -947,16 +955,19 @@ func TestRecordDeath_ResurrectionFlow(t *testing.T) {
 	require.NoError(t, err)
 	game = removeResp.Msg.Game
 
-	// Dead in N1 and D1, alive in N2.
+	// Dead in N1, D1, D2; alive in N2.
 	resN1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
 	require.NotNil(t, resN1, "expected phase type=NIGHT round=1")
 	resD1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
 	require.NotNil(t, resD1, "expected phase type=DAY round=1")
 	resN2 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
 	require.NotNil(t, resN2, "expected phase type=NIGHT round=2")
+	resD2 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
+	require.NotNil(t, resD2, "expected phase type=DAY round=2")
 	assert.True(t, phaseHasDeathForRole(resN1, roleID), "dead in N1")
 	assert.True(t, phaseHasDeathForRole(resD1, roleID), "dead in D1")
 	assert.False(t, phaseHasDeathForRole(resN2, roleID), "alive in N2 (resurrected)")
+	assert.True(t, phaseHasDeathForRole(resD2, roleID), "dead in D2")
 
 	// Can die again in Night 2.
 	resp, err := handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
@@ -974,16 +985,17 @@ func TestGetGame_IncludesPlayState(t *testing.T) {
 	handler := testHandler(t)
 	ownerName, game := startedGame(t, handler)
 
-	// Record a death so there's play state data.
+	// Record a death with propagation so it reaches Day 1 too.
 	require.NotEmpty(t, game.SelectedRoleIds)
 	roleID := game.SelectedRoleIds[0]
 	_, err := handler.RecordDeath(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
-		GameId: game.Id,
-		RoleId: roleID,
+		GameId:    game.Id,
+		RoleId:    roleID,
+		Propagate: true,
 	}))
 	require.NoError(t, err)
 
-	// Advance to day.
+	// Advance — propagates Day 1 deaths to Night 2 + Day 2.
 	_, err = handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
 		GameId: game.Id,
 	}))
@@ -998,10 +1010,14 @@ func TestGetGame_IncludesPlayState(t *testing.T) {
 	g := resp.Msg.Game
 	assert.Equal(t, clockkeeperv1.GameState_GAME_STATE_IN_PROGRESS, g.State)
 	require.NotNil(t, g.PlayState)
-	assert.Equal(t, int32(1), g.PlayState.CurrentRound)
-	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, g.PlayState.CurrentPhase.Type)
-	assert.Len(t, g.PlayState.Phases, 2, "should have night 1 and day 1")
-	assert.Len(t, g.PlayState.AllDeaths, 2, "death should be in both phases (propagated via AdvancePhase)")
+	// After AdvancePhase: Night 1+Day 1 (round 1) + Night 2+Day 2 (round 2) = 4 phases.
+	// Active phase is Night 2.
+	assert.Equal(t, int32(2), g.PlayState.CurrentRound)
+	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, g.PlayState.CurrentPhase.Type)
+	assert.Len(t, g.PlayState.Phases, 4, "should have night+day for round 1 and round 2")
+	// Death recorded on Night 1, propagated to Day 1, then AdvancePhase propagates Day 1 deaths
+	// to Night 2 and Day 2. Total: 4 death records across 4 phases (1 per phase).
+	assert.Len(t, g.PlayState.AllDeaths, 4, "death should propagate to all phases")
 	assert.Equal(t, roleID, g.PlayState.AllDeaths[0].RoleId)
 }
 
@@ -1429,12 +1445,17 @@ func TestToggleNightAction_FailsDayPhase(t *testing.T) {
 	handler := testHandler(t)
 	ownerName, game := startedGame(t, handler)
 
-	// Advance Night 1 -> Day 1.
-	advResp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
-		GameId: game.Id,
-	}))
+	// Find the Day 1 phase (created alongside Night 1 at game start).
+	getResp, err := handler.GetGame(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.GetGameRequest{Id: game.Id}))
 	require.NoError(t, err)
-	dayPhaseId := advResp.Msg.Game.PlayState.CurrentPhase.Id
+	var dayPhaseId int64
+	for _, p := range getResp.Msg.Game.PlayState.Phases {
+		if p.Type == clockkeeperv1.PhaseType_PHASE_TYPE_DAY {
+			dayPhaseId = p.Id
+			break
+		}
+	}
+	require.NotZero(t, dayPhaseId)
 
 	// Try to toggle a night action on the day phase.
 	_, err = handler.ToggleNightAction(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.ToggleNightActionRequest{
@@ -1586,4 +1607,482 @@ func TestDeleteGame_BlocksOtherUser(t *testing.T) {
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+// --- DuplicateGame tests ---
+
+func TestDuplicateGame_CopiesSetupFields(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, gameID := createTestGame(t, handler)
+
+	// Randomize roles so the game has setup fields populated.
+	randResp, err := handler.RandomizeRoles(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+		GameId: gameID,
+	}))
+	require.NoError(t, err)
+	src := randResp.Msg.Game
+
+	// Duplicate the game.
+	dupResp, err := handler.DuplicateGame(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.DuplicateGameRequest{
+		GameId: gameID,
+	}))
+	require.NoError(t, err)
+	dup := dupResp.Msg.Game
+
+	// Different game, same setup.
+	assert.NotEqual(t, src.Id, dup.Id)
+	assert.Equal(t, clockkeeperv1.GameState_GAME_STATE_SETUP, dup.State)
+	assert.Equal(t, src.PlayerCount, dup.PlayerCount)
+	assert.Equal(t, src.TravellerCount, dup.TravellerCount)
+	assert.Equal(t, src.ScriptId, dup.ScriptId)
+	assert.Equal(t, src.SelectedRoleIds, dup.SelectedRoleIds)
+	assert.Equal(t, src.SelectedTravellerIds, dup.SelectedTravellerIds)
+	assert.Equal(t, src.SelectedBluffIds, dup.SelectedBluffIds)
+	assert.Equal(t, len(src.BagSubstitutions), len(dup.BagSubstitutions))
+}
+
+func TestDuplicateGame_FromStartedGame(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, game := startedGame(t, handler)
+
+	assert.Equal(t, clockkeeperv1.GameState_GAME_STATE_IN_PROGRESS, game.State)
+
+	// Duplicate the in-progress game.
+	dupResp, err := handler.DuplicateGame(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.DuplicateGameRequest{
+		GameId: game.Id,
+	}))
+	require.NoError(t, err)
+	dup := dupResp.Msg.Game
+
+	// Duplicated game should be in setup state with same roles.
+	assert.NotEqual(t, game.Id, dup.Id)
+	assert.Equal(t, clockkeeperv1.GameState_GAME_STATE_SETUP, dup.State)
+	assert.Equal(t, game.SelectedRoleIds, dup.SelectedRoleIds)
+	assert.Nil(t, dup.PlayState)
+}
+
+func TestDuplicateGame_BlocksOtherUser(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+	_, gameID := createTestGame(t, handler)
+
+	// Create an attacker user.
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("attacker").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	// Attacker tries to duplicate the game.
+	_, err = handler.DuplicateGame(authedCtx("attacker"), connect.NewRequest(&clockkeeperv1.DuplicateGameRequest{
+		GameId: gameID,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+// --- UpdateGrimoireState tests ---
+
+func TestUpdateGrimoireState_PersistsPositions(t *testing.T) {
+	handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	// Update positions and player names.
+	_, err := handler.UpdateGrimoireState(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGrimoireStateRequest{
+		GameId: gameID,
+		Positions: map[string]*clockkeeperv1.Position{
+			"washerwoman": {X: 100, Y: 200},
+		},
+		PlayerNames: map[string]string{
+			"washerwoman": "Alice",
+		},
+	}))
+	require.NoError(t, err)
+
+	// Verify via GetGame.
+	getResp, err := handler.GetGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.GetGameRequest{
+		Id: gameID,
+	}))
+	require.NoError(t, err)
+	g := getResp.Msg.Game
+
+	require.Contains(t, g.GrimoirePositions, "washerwoman")
+	assert.InDelta(t, 100, g.GrimoirePositions["washerwoman"].X, 0.01)
+	assert.InDelta(t, 200, g.GrimoirePositions["washerwoman"].Y, 0.01)
+	require.Contains(t, g.GrimoirePlayerNames, "washerwoman")
+	assert.Equal(t, "Alice", g.GrimoirePlayerNames["washerwoman"])
+}
+
+func TestUpdateGrimoireState_PersistsNotes(t *testing.T) {
+	handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	gameNotes := map[string]string{"general": "some game note"}
+	roundNotes := map[string]string{"round1": "night 1 observation"}
+
+	_, err := handler.UpdateGrimoireState(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGrimoireStateRequest{
+		GameId:    gameID,
+		GameNotes: gameNotes,
+		RoundNotes: roundNotes,
+	}))
+	require.NoError(t, err)
+
+	// Verify via GetGame.
+	getResp, err := handler.GetGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.GetGameRequest{
+		Id: gameID,
+	}))
+	require.NoError(t, err)
+	g := getResp.Msg.Game
+
+	assert.Equal(t, "some game note", g.GrimoireGameNotes["general"])
+	assert.Equal(t, "night 1 observation", g.GrimoireRoundNotes["round1"])
+}
+
+func TestUpdateGrimoireState_BlocksOtherUser(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+	_, gameID := createTestGame(t, handler)
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("userB").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	_, err = handler.UpdateGrimoireState(authedCtx("userB"), connect.NewRequest(&clockkeeperv1.UpdateGrimoireStateRequest{
+		GameId: gameID,
+		Positions: map[string]*clockkeeperv1.Position{
+			"washerwoman": {X: 1, Y: 2},
+		},
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+// --- UpdateCharacterAlignment tests ---
+
+func TestUpdateCharacterAlignment_SetsAlignment(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, game := startedGame(t, handler)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	roleID := game.SelectedRoleIds[0]
+
+	// Get the Night 1 phase ID.
+	n1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+
+	resp, err := handler.UpdateCharacterAlignment(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateCharacterAlignmentRequest{
+		GameId:    game.Id,
+		PhaseId:   n1.Id,
+		RoleId:    roleID,
+		Alignment: "evil",
+	}))
+	require.NoError(t, err)
+
+	// Verify alignment on the Night 1 phase.
+	n1After := findPhase(resp.Msg.Game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1After)
+	assert.Equal(t, "evil", n1After.CharacterAlignments[roleID])
+}
+
+func TestUpdateCharacterAlignment_Propagates(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, game := startedGame(t, handler)
+
+	// Advance to round 2 so we have Night 1, Day 1, Night 2, Day 2.
+	advResp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
+		GameId: game.Id,
+	}))
+	require.NoError(t, err)
+	game = advResp.Msg.Game
+	require.Len(t, game.PlayState.Phases, 4)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	roleID := game.SelectedRoleIds[0]
+
+	n1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+
+	// Set alignment on Night 1 with propagate=true.
+	resp, err := handler.UpdateCharacterAlignment(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateCharacterAlignmentRequest{
+		GameId:    game.Id,
+		PhaseId:   n1.Id,
+		RoleId:    roleID,
+		Alignment: "evil",
+		Propagate: true,
+	}))
+	require.NoError(t, err)
+	g := resp.Msg.Game
+
+	// Verify all subsequent phases have the alignment.
+	d1 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
+	require.NotNil(t, d1)
+	assert.Equal(t, "evil", d1.CharacterAlignments[roleID])
+
+	n2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
+	require.NotNil(t, n2)
+	assert.Equal(t, "evil", n2.CharacterAlignments[roleID])
+
+	d2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
+	require.NotNil(t, d2)
+	assert.Equal(t, "evil", d2.CharacterAlignments[roleID])
+}
+
+func TestUpdateCharacterAlignment_ClearsAlignment(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, game := startedGame(t, handler)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	roleID := game.SelectedRoleIds[0]
+
+	n1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+
+	// Set alignment first.
+	_, err := handler.UpdateCharacterAlignment(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateCharacterAlignmentRequest{
+		GameId:    game.Id,
+		PhaseId:   n1.Id,
+		RoleId:    roleID,
+		Alignment: "evil",
+	}))
+	require.NoError(t, err)
+
+	// Clear alignment with empty string.
+	resp, err := handler.UpdateCharacterAlignment(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateCharacterAlignmentRequest{
+		GameId:    game.Id,
+		PhaseId:   n1.Id,
+		RoleId:    roleID,
+		Alignment: "",
+	}))
+	require.NoError(t, err)
+
+	n1After := findPhase(resp.Msg.Game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1After)
+	_, exists := n1After.CharacterAlignments[roleID]
+	assert.False(t, exists, "alignment should be removed")
+}
+
+func TestUpdateCharacterAlignment_InvalidAlignment(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, game := startedGame(t, handler)
+
+	n1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	_, err := handler.UpdateCharacterAlignment(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateCharacterAlignmentRequest{
+		GameId:    game.Id,
+		PhaseId:   n1.Id,
+		RoleId:    game.SelectedRoleIds[0],
+		Alignment: "neutral",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestUpdateCharacterAlignment_BlocksOtherUser(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+	_, game := startedGame(t, handler)
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("attacker").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	n1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	_, err = handler.UpdateCharacterAlignment(authedCtx("attacker"), connect.NewRequest(&clockkeeperv1.UpdateCharacterAlignmentRequest{
+		GameId:    game.Id,
+		PhaseId:   n1.Id,
+		RoleId:    game.SelectedRoleIds[0],
+		Alignment: "evil",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+// --- Alignment Seeding/Propagation tests ---
+
+func TestStartGame_SeedsTravellerAlignments(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("owner").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	// Find a system script.
+	scriptsResp, err := handler.ListScripts(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	require.NoError(t, err)
+	var scriptID int64
+	for _, s := range scriptsResp.Msg.Scripts {
+		if s.IsSystem {
+			scriptID = s.Id
+			break
+		}
+	}
+	require.NotZero(t, scriptID)
+
+	// Create a 5-player game.
+	gameResp, err := handler.CreateGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+		ScriptId:    scriptID,
+		PlayerCount: 5,
+	}))
+	require.NoError(t, err)
+	gameID := gameResp.Msg.Game.Id
+
+	// Randomize roles.
+	_, err = handler.RandomizeRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+		GameId: gameID,
+	}))
+	require.NoError(t, err)
+
+	// Manually add a traveller ("thief" is a Trouble Brewing traveller).
+	travellerID := "thief"
+	_, err = handler.UpdateGameTravellers(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGameTravellersRequest{
+		GameId:              gameID,
+		SelectedTravellerIds: []string{travellerID},
+	}))
+	require.NoError(t, err)
+
+	// Set traveller alignment to GOOD.
+	_, err = handler.UpdateTravellerAlignment(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateTravellerAlignmentRequest{
+		GameId:    gameID,
+		RoleId:    travellerID,
+		Alignment: clockkeeperv1.TravellerAlignment_TRAVELLER_ALIGNMENT_GOOD,
+	}))
+	require.NoError(t, err)
+
+	// Start the game.
+	startResp, err := handler.StartGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.StartGameRequest{
+		GameId: gameID,
+	}))
+	require.NoError(t, err)
+	g := startResp.Msg.Game
+
+	// Verify Night 1 and Day 1 both have the traveller alignment seeded.
+	n1 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+	assert.Equal(t, "good", n1.CharacterAlignments[travellerID])
+
+	d1 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
+	require.NotNil(t, d1)
+	assert.Equal(t, "good", d1.CharacterAlignments[travellerID])
+}
+
+func TestAdvancePhase_PropagatesAlignments(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, game := startedGame(t, handler)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	roleID := game.SelectedRoleIds[0]
+
+	// Set alignment on Day 1.
+	d1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
+	require.NotNil(t, d1)
+
+	_, err := handler.UpdateCharacterAlignment(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateCharacterAlignmentRequest{
+		GameId:    game.Id,
+		PhaseId:   d1.Id,
+		RoleId:    roleID,
+		Alignment: "evil",
+	}))
+	require.NoError(t, err)
+
+	// Advance to round 2.
+	advResp, err := handler.AdvancePhase(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
+		GameId: game.Id,
+	}))
+	require.NoError(t, err)
+	g := advResp.Msg.Game
+	require.Len(t, g.PlayState.Phases, 4)
+
+	// Verify Night 2 and Day 2 have the alignment propagated from Day 1.
+	n2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
+	require.NotNil(t, n2)
+	assert.Equal(t, "evil", n2.CharacterAlignments[roleID])
+
+	d2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
+	require.NotNil(t, d2)
+	assert.Equal(t, "evil", d2.CharacterAlignments[roleID])
+}
+
+// --- UpdateDemonBluffs tests ---
+
+func TestUpdateDemonBluffs_Success(t *testing.T) {
+	handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	bluffs := []string{"washerwoman", "librarian"}
+	resp, err := handler.UpdateDemonBluffs(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
+		GameId:  gameID,
+		BluffIds: bluffs,
+	}))
+	require.NoError(t, err)
+
+	// Verify via GetGame.
+	getResp, err := handler.GetGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.GetGameRequest{
+		Id: gameID,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, bluffs, getResp.Msg.Game.SelectedBluffIds)
+	// Also check direct response.
+	assert.Equal(t, bluffs, resp.Msg.Game.SelectedBluffIds)
+}
+
+func TestUpdateDemonBluffs_FailsNotSetup(t *testing.T) {
+	handler := testHandler(t)
+	ownerName, game := startedGame(t, handler)
+
+	_, err := handler.UpdateDemonBluffs(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
+		GameId:  game.Id,
+		BluffIds: []string{"washerwoman"},
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+}
+
+func TestUpdateDemonBluffs_BlocksOtherUser(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+	_, gameID := createTestGame(t, handler)
+
+	hash, err := HashPassword("pass")
+	require.NoError(t, err)
+	_, err = handler.db.User.Create().SetUsername("attacker").SetPasswordHash(hash).Save(ctx)
+	require.NoError(t, err)
+
+	_, err = handler.UpdateDemonBluffs(authedCtx("attacker"), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
+		GameId:  gameID,
+		BluffIds: []string{"washerwoman"},
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+}
+
+// --- RandomizeRoles bluff integration test ---
+
+func TestRandomizeRoles_AutoSelectsBluffs(t *testing.T) {
+	handler := testHandler(t)
+	_, gameID := createTestGame(t, handler)
+
+	resp, err := handler.RandomizeRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+		GameId: gameID,
+	}))
+	require.NoError(t, err)
+	g := resp.Msg.Game
+
+	assert.NotEmpty(t, g.SelectedBluffIds, "bluffs should be auto-selected")
+
+	// Ensure none of the bluff IDs appear in selected role IDs.
+	roleSet := make(map[string]bool)
+	for _, id := range g.SelectedRoleIds {
+		roleSet[id] = true
+	}
+	for _, bluffID := range g.SelectedBluffIds {
+		assert.False(t, roleSet[bluffID], "bluff %s should not be in selected roles", bluffID)
+	}
 }

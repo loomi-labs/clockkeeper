@@ -29,6 +29,8 @@ const (
 	FieldIsActive = "is_active"
 	// FieldCompletedActions holds the string denoting the completed_actions field in the database.
 	FieldCompletedActions = "completed_actions"
+	// FieldCharacterAlignments holds the string denoting the character_alignments field in the database.
+	FieldCharacterAlignments = "character_alignments"
 	// EdgeGame holds the string denoting the game edge name in mutations.
 	EdgeGame = "game"
 	// EdgeDeaths holds the string denoting the deaths edge name in mutations.
@@ -61,6 +63,7 @@ var Columns = []string{
 	FieldType,
 	FieldIsActive,
 	FieldCompletedActions,
+	FieldCharacterAlignments,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -86,6 +89,8 @@ var (
 	DefaultIsActive bool
 	// DefaultCompletedActions holds the default value on creation for the "completed_actions" field.
 	DefaultCompletedActions []string
+	// DefaultCharacterAlignments holds the default value on creation for the "character_alignments" field.
+	DefaultCharacterAlignments map[string]string
 )
 
 // Type defines the type for the "type" enum field.

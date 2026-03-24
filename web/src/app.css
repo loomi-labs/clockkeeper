@@ -3,302 +3,362 @@
 @custom-variant dark (&:where(.dark, .dark *, :is([data-theme="tavern"], [data-theme="crypt"]) .card-slate, :is([data-theme="tavern"], [data-theme="crypt"]) .card-slate *));
 
 @theme {
-	/* Surfaces — light (clean) defaults */
-	--color-page: #faf9f7;
-	--color-surface: #ffffff;
-	--color-surface-alt: #f3f2f0;
+  /* Surfaces — light (clean) defaults */
+  --color-page: #faf9f7;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f3f2f0;
 
-	/* Text */
-	--color-primary: #111827;
-	--color-secondary: #6b7280;
-	--color-muted: #9ca3af;
-	--color-medium: #374151;
-	--color-label: #4b5563;
+  /* Text */
+  --color-primary: #111827;
+  --color-secondary: #6b7280;
+  --color-muted: #9ca3af;
+  --color-medium: #374151;
+  --color-label: #4b5563;
 
-	/* Borders */
-	--color-border: #e5e7eb;
-	--color-border-strong: #d1d5db;
+  /* Borders */
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
 
-	/* Interactive */
-	--color-hover: #f3f4f6;
-	--color-element: #e5e7eb;
+  /* Interactive */
+  --color-hover: #f3f4f6;
+  --color-element: #e5e7eb;
 
-	/* Status */
-	--color-error-bg: #fef2f2;
-	--color-error-text: #dc2626;
-	--color-error-border: #fecaca;
-	--color-warning-bg: #fefce8;
-	--color-warning-text: #a16207;
-	--color-warning-border: #fde68a;
-	--color-success-bg: #f0fdf4;
-	--color-success-text: #15803d;
-	--color-success-border: #86efac;
-	--color-info-bg: #eef2ff;
-	--color-info-text: #4f46e5;
+  /* Status */
+  --color-error-bg: #fef2f2;
+  --color-error-text: #dc2626;
+  --color-error-border: #fecaca;
+  --color-warning-bg: #fefce8;
+  --color-warning-text: #a16207;
+  --color-warning-border: #fde68a;
+  --color-success-bg: #f0fdf4;
+  --color-success-text: #15803d;
+  --color-success-border: #86efac;
+  --color-info-bg: #eef2ff;
+  --color-info-text: #4f46e5;
 
-	/* Edition bgRaw */
-	--color-edition-default-raw: rgba(255, 255, 255, 0.4);
-	--color-edition-tb-raw: rgba(255, 228, 230, 0.4);
-	--color-edition-bmr-raw: rgba(255, 237, 213, 0.4);
-	--color-edition-snv-raw: rgba(237, 233, 254, 0.4);
+  /* Edition bgRaw */
+  --color-edition-default-raw: rgba(255, 255, 255, 0.4);
+  --color-edition-tb-raw: rgba(255, 228, 230, 0.4);
+  --color-edition-bmr-raw: rgba(255, 237, 213, 0.4);
+  --color-edition-snv-raw: rgba(237, 233, 254, 0.4);
 }
 
 /* Dark (clean) */
 .dark {
-	--color-page: #0f0f0f;
-	--color-surface: #1a1a1a;
-	--color-surface-alt: #262626;
+  --color-page: #0f0f0f;
+  --color-surface: #1a1a1a;
+  --color-surface-alt: #262626;
 
-	--color-primary: #f3f4f6;
-	--color-secondary: #9ca3af;
-	--color-muted: #6b7280;
-	--color-medium: #d1d5db;
-	--color-label: #9ca3af;
+  --color-primary: #f3f4f6;
+  --color-secondary: #9ca3af;
+  --color-muted: #6b7280;
+  --color-medium: #d1d5db;
+  --color-label: #9ca3af;
 
-	--color-border: #374151;
-	--color-border-strong: #4b5563;
+  --color-border: #374151;
+  --color-border-strong: #4b5563;
 
-	--color-hover: #262626;
-	--color-element: #374151;
+  --color-hover: #262626;
+  --color-element: #374151;
 
-	--color-error-bg: rgba(127, 29, 29, 0.3);
-	--color-error-text: #fca5a5;
-	--color-error-border: #991b1b;
-	--color-warning-bg: rgba(113, 63, 18, 0.3);
-	--color-warning-text: #fde68a;
-	--color-warning-border: #92400e;
-	--color-success-bg: rgba(20, 83, 45, 0.3);
-	--color-success-text: #86efac;
-	--color-success-border: #166534;
-	--color-info-bg: rgba(49, 46, 129, 0.3);
-	--color-info-text: #a5b4fc;
+  --color-error-bg: rgba(127, 29, 29, 0.3);
+  --color-error-text: #fca5a5;
+  --color-error-border: #991b1b;
+  --color-warning-bg: rgba(113, 63, 18, 0.3);
+  --color-warning-text: #fde68a;
+  --color-warning-border: #92400e;
+  --color-success-bg: rgba(20, 83, 45, 0.3);
+  --color-success-text: #86efac;
+  --color-success-border: #166534;
+  --color-info-bg: rgba(49, 46, 129, 0.3);
+  --color-info-text: #a5b4fc;
 
-	--color-edition-default-raw: rgba(26, 26, 26, 0.4);
-	--color-edition-tb-raw: rgba(136, 19, 55, 0.3);
-	--color-edition-bmr-raw: rgba(154, 52, 18, 0.3);
-	--color-edition-snv-raw: rgba(91, 33, 182, 0.3);
+  --color-edition-default-raw: rgba(26, 26, 26, 0.4);
+  --color-edition-tb-raw: rgba(136, 19, 55, 0.3);
+  --color-edition-bmr-raw: rgba(154, 52, 18, 0.3);
+  --color-edition-snv-raw: rgba(91, 33, 182, 0.3);
 }
 
 /* Tavern — warm surfaces over texture */
 [data-theme="tavern"] {
-	--color-page: #ede0cc;
-	--color-surface: #f5edd8;
-	--color-surface-alt: #e8d9c0;
+  --color-page: #ede0cc;
+  --color-surface: #f5edd8;
+  --color-surface-alt: #e8d9c0;
 
-	--color-border: #d4c4a8;
-	--color-border-strong: #c4b08e;
+  --color-border: #d4c4a8;
+  --color-border-strong: #c4b08e;
 
-	--color-hover: #e8d9c0;
-	--color-element: #d4c4a8;
+  --color-hover: #e8d9c0;
+  --color-element: #d4c4a8;
 }
 
 /* Crypt — warm dark surfaces over texture */
 [data-theme="crypt"] {
-	--color-page: #1a1510;
-	--color-surface: #2a2218;
-	--color-surface-alt: #3a3025;
+  --color-page: #1a1510;
+  --color-surface: #2a2218;
+  --color-surface-alt: #3a3025;
 
-	--color-primary: #f3f4f6;
-	--color-secondary: #9ca3af;
-	--color-muted: #6b7280;
-	--color-medium: #d1d5db;
-	--color-label: #9ca3af;
+  --color-primary: #f3f4f6;
+  --color-secondary: #9ca3af;
+  --color-muted: #6b7280;
+  --color-medium: #d1d5db;
+  --color-label: #9ca3af;
 
-	--color-border: #4a3d2e;
-	--color-border-strong: #5a4d3e;
+  --color-border: #4a3d2e;
+  --color-border-strong: #5a4d3e;
 
-	--color-hover: #3a3025;
-	--color-element: #4a3d2e;
+  --color-hover: #3a3025;
+  --color-element: #4a3d2e;
 
-	--color-error-bg: rgba(127, 29, 29, 0.3);
-	--color-error-text: #fca5a5;
-	--color-error-border: #991b1b;
-	--color-warning-bg: rgba(113, 63, 18, 0.3);
-	--color-warning-text: #fde68a;
-	--color-warning-border: #92400e;
-	--color-success-bg: rgba(20, 83, 45, 0.3);
-	--color-success-text: #86efac;
-	--color-success-border: #166534;
-	--color-info-bg: rgba(49, 46, 129, 0.3);
-	--color-info-text: #a5b4fc;
+  --color-error-bg: rgba(127, 29, 29, 0.3);
+  --color-error-text: #fca5a5;
+  --color-error-border: #991b1b;
+  --color-warning-bg: rgba(113, 63, 18, 0.3);
+  --color-warning-text: #fde68a;
+  --color-warning-border: #92400e;
+  --color-success-bg: rgba(20, 83, 45, 0.3);
+  --color-success-text: #86efac;
+  --color-success-border: #166534;
+  --color-info-bg: rgba(49, 46, 129, 0.3);
+  --color-info-text: #a5b4fc;
 
-	--color-edition-default-raw: rgba(26, 26, 26, 0.4);
-	--color-edition-tb-raw: rgba(136, 19, 55, 0.3);
-	--color-edition-bmr-raw: rgba(154, 52, 18, 0.3);
-	--color-edition-snv-raw: rgba(91, 33, 182, 0.3);
+  --color-edition-default-raw: rgba(26, 26, 26, 0.4);
+  --color-edition-tb-raw: rgba(136, 19, 55, 0.3);
+  --color-edition-bmr-raw: rgba(154, 52, 18, 0.3);
+  --color-edition-snv-raw: rgba(91, 33, 182, 0.3);
 }
 
 /* View Transition: disable default crossfade, use circular clip-path instead */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-	animation: none;
-	mix-blend-mode: normal;
+  animation: none;
+  mix-blend-mode: normal;
 }
 
 @font-face {
-	font-family: 'Goudy Stout';
-	src: url('/fonts/GoudyStM.woff2') format('woff2');
-	font-weight: normal;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Goudy Stout";
+  src: url("/fonts/GoudyStM.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }
 
 /* Page backgrounds */
 :root {
-	background-color: var(--color-page);
+  background-color: var(--color-page);
 }
 
 [data-theme="tavern"] {
-	background-image: url('/tavern-bg.webp');
-	background-repeat: repeat-x;
-	background-size: auto 100%;
-	background-attachment: fixed;
+  background-image: url("/tavern-bg.webp");
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  background-attachment: fixed;
 }
 
 [data-theme="crypt"] {
-	background-image: url('/crypt-bg.webp');
-	background-repeat: repeat-x;
-	background-size: auto 100%;
-	background-attachment: fixed;
+  background-image: url("/crypt-bg.webp");
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  background-attachment: fixed;
 }
 
 /* Slate card textures — only active in tavern/crypt themes */
 :is([data-theme="tavern"], [data-theme="crypt"]) .card-slate {
-	background-size: cover;
-	background-position: center;
-	background-image: url('/card-neutral-slate.webp');
+  background-size: cover;
+  background-position: center;
+  background-image: url("/card-neutral-slate.webp");
 
-	/* Override semantic colors for light-on-dark text */
-	--color-primary: #f3f4f6;
-	--color-secondary: #9ca3af;
-	--color-muted: #6b7280;
-	--color-medium: #d1d5db;
-	--color-label: #9ca3af;
-	--color-surface: rgba(255, 255, 255, 0.06);
-	--color-surface-alt: rgba(255, 255, 255, 0.04);
-	--color-border: rgba(255, 255, 255, 0.12);
-	--color-border-strong: rgba(255, 255, 255, 0.2);
-	--color-hover: rgba(255, 255, 255, 0.08);
-	--color-element: rgba(255, 255, 255, 0.12);
+  /* Override semantic colors for light-on-dark text */
+  --color-primary: #f3f4f6;
+  --color-secondary: #9ca3af;
+  --color-muted: #6b7280;
+  --color-medium: #d1d5db;
+  --color-label: #9ca3af;
+  --color-surface: rgba(255, 255, 255, 0.06);
+  --color-surface-alt: rgba(255, 255, 255, 0.04);
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.2);
+  --color-hover: rgba(255, 255, 255, 0.08);
+  --color-element: rgba(255, 255, 255, 0.12);
 
-	--color-error-bg: rgba(127, 29, 29, 0.3);
-	--color-error-text: #fca5a5;
-	--color-error-border: #991b1b;
-	--color-warning-bg: rgba(113, 63, 18, 0.3);
-	--color-warning-text: #fde68a;
-	--color-warning-border: #92400e;
-	--color-success-bg: rgba(20, 83, 45, 0.3);
-	--color-success-text: #86efac;
-	--color-success-border: #166534;
-	--color-info-bg: rgba(49, 46, 129, 0.3);
-	--color-info-text: #a5b4fc;
+  --color-error-bg: rgba(127, 29, 29, 0.3);
+  --color-error-text: #fca5a5;
+  --color-error-border: #991b1b;
+  --color-warning-bg: rgba(113, 63, 18, 0.3);
+  --color-warning-text: #fde68a;
+  --color-warning-border: #92400e;
+  --color-success-bg: rgba(20, 83, 45, 0.3);
+  --color-success-text: #86efac;
+  --color-success-border: #166534;
+  --color-info-bg: rgba(49, 46, 129, 0.3);
+  --color-info-text: #a5b4fc;
 }
 
 /* Team-specific slate textures — tavern */
-[data-theme="tavern"] .card-slate[data-team="townsfolk"] { background-image: url('/card-townsfolk-slate.webp'); }
-[data-theme="tavern"] .card-slate[data-team="outsider"] { background-image: url('/card-outsider-slate.webp'); }
-[data-theme="tavern"] .card-slate[data-team="minion"] { background-image: url('/card-minion-slate.webp'); }
-[data-theme="tavern"] .card-slate[data-team="demon"] { background-image: url('/card-demon-slate.webp'); }
-[data-theme="tavern"] .card-slate[data-team="traveller"] { background-image: linear-gradient(to right, rgba(37, 99, 235, 0.25) 50%, rgba(220, 38, 38, 0.25) 50%); }
-[data-theme="tavern"] .card-slate[data-team="fabled"] { background-image: url('/card-traveller-slate.webp'); }
+[data-theme="tavern"] .card-slate[data-team="townsfolk"] {
+  background-image: url("/card-townsfolk-slate.webp");
+}
+[data-theme="tavern"] .card-slate[data-team="outsider"] {
+  background-image: url("/card-outsider-slate.webp");
+}
+[data-theme="tavern"] .card-slate[data-team="minion"] {
+  background-image: url("/card-minion-slate.webp");
+}
+[data-theme="tavern"] .card-slate[data-team="demon"] {
+  background-image: url("/card-demon-slate.webp");
+}
+[data-theme="tavern"] .card-slate[data-team="traveller"] {
+  background-image: linear-gradient(
+    to right,
+    rgba(37, 99, 235, 0.25) 50%,
+    rgba(220, 38, 38, 0.25) 50%
+  );
+}
+[data-theme="tavern"] .card-slate[data-team="fabled"] {
+  background-image: url("/card-traveller-slate.webp");
+}
 
 /* Team-specific slate textures — crypt (lighter variants) */
-[data-theme="crypt"] .card-slate { background-image: url('/card-neutral-slate-dark.webp'); }
-[data-theme="crypt"] .card-slate[data-team="townsfolk"] { background-image: url('/card-townsfolk-slate-dark.webp'); }
-[data-theme="crypt"] .card-slate[data-team="outsider"] { background-image: url('/card-outsider-slate-dark.webp'); }
-[data-theme="crypt"] .card-slate[data-team="minion"] { background-image: url('/card-minion-slate-dark.webp'); }
-[data-theme="crypt"] .card-slate[data-team="demon"] { background-image: url('/card-demon-slate-dark.webp'); }
-[data-theme="crypt"] .card-slate[data-team="traveller"] { background-image: linear-gradient(to right, rgba(23, 37, 84, 0.4) 50%, rgba(69, 10, 10, 0.4) 50%); }
-[data-theme="crypt"] .card-slate[data-team="fabled"] { background-image: url('/card-traveller-slate-dark.webp'); }
+[data-theme="crypt"] .card-slate {
+  background-image: url("/card-neutral-slate-dark.webp");
+}
+[data-theme="crypt"] .card-slate[data-team="townsfolk"] {
+  background-image: url("/card-townsfolk-slate-dark.webp");
+}
+[data-theme="crypt"] .card-slate[data-team="outsider"] {
+  background-image: url("/card-outsider-slate-dark.webp");
+}
+[data-theme="crypt"] .card-slate[data-team="minion"] {
+  background-image: url("/card-minion-slate-dark.webp");
+}
+[data-theme="crypt"] .card-slate[data-team="demon"] {
+  background-image: url("/card-demon-slate-dark.webp");
+}
+[data-theme="crypt"] .card-slate[data-team="traveller"] {
+  background-image: linear-gradient(
+    to right,
+    rgba(23, 37, 84, 0.4) 50%,
+    rgba(69, 10, 10, 0.4) 50%
+  );
+}
+[data-theme="crypt"] .card-slate[data-team="fabled"] {
+  background-image: url("/card-traveller-slate-dark.webp");
+}
 
 /* Button styles for tavern/crypt themes */
 :is([data-theme="tavern"], [data-theme="crypt"]) .btn-primary {
-	background-color: transparent;
-	background-image: url('/card-neutral-slate.webp');
-	background-size: cover;
-	background-position: center;
-	border: 1px solid rgba(255, 255, 255, 0.2);
-	color: #f3f4f6;
+  background-color: transparent;
+  background-image: url("/card-neutral-slate.webp");
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f3f4f6;
 }
 :is([data-theme="tavern"], [data-theme="crypt"]) .btn-primary:hover {
-	background-color: transparent;
-	border-color: rgba(255, 255, 255, 0.4);
+  background-color: transparent;
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 :is([data-theme="tavern"], [data-theme="crypt"]) .btn-secondary {
-	background-image: url('/card-neutral-slate.webp');
-	background-size: cover;
-	background-position: center;
-	color: #f3f4f6;
-	border-color: rgba(255, 255, 255, 0.15);
+  background-image: url("/card-neutral-slate.webp");
+  background-size: cover;
+  background-position: center;
+  color: #f3f4f6;
+  border-color: rgba(255, 255, 255, 0.15);
 }
 :is([data-theme="tavern"], [data-theme="crypt"]) .btn-secondary:hover {
-	border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Traveller card — hard blue/red split with rounded gradient border */
 .card-traveller {
-	border: 1px solid transparent !important;
-	background:
-		linear-gradient(to right, #eff6ff 50%, #fef2f2 50%) padding-box,
-		linear-gradient(to right, #bfdbfe 50%, #fecaca 50%) border-box;
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(to right, #eff6ff 50%, #fef2f2 50%) padding-box,
+    linear-gradient(to right, #bfdbfe 50%, #fecaca 50%) border-box;
 }
 .dark .card-traveller {
-	background:
-		linear-gradient(to right, #121830 50%, #250d0d 50%) padding-box,
-		linear-gradient(to right, #1e40af 50%, #991b1b 50%) border-box;
+  background:
+    linear-gradient(to right, #121830 50%, #250d0d 50%) padding-box,
+    linear-gradient(to right, #1e40af 50%, #991b1b 50%) border-box;
 }
 
 /* Traveller add button — gradient border only, page-colored fill */
 .card-traveller-add {
-	border: 2px solid transparent !important;
-	background:
-		linear-gradient(var(--color-page), var(--color-page)) padding-box,
-		linear-gradient(to right, #bfdbfe 50%, #fecaca 50%) border-box;
+  border: 2px solid transparent !important;
+  background:
+    linear-gradient(var(--color-page), var(--color-page)) padding-box,
+    linear-gradient(to right, #bfdbfe 50%, #fecaca 50%) border-box;
 }
 .dark .card-traveller-add {
-	background:
-		linear-gradient(var(--color-page), var(--color-page)) padding-box,
-		linear-gradient(to right, #1e40af 50%, #991b1b 50%) border-box;
+  background:
+    linear-gradient(var(--color-page), var(--color-page)) padding-box,
+    linear-gradient(to right, #1e40af 50%, #991b1b 50%) border-box;
 }
 
 .text-gradient-traveller {
-	background: linear-gradient(to right, #60a5fa 0%, #f87171 100%);
-	-webkit-background-clip: text;
-	background-clip: text;
-	-webkit-text-fill-color: transparent;
+  background: linear-gradient(to right, #60a5fa 0%, #f87171 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* Print styles */
 @media print {
-	/* Hide non-printable elements */
-	nav, .no-print, .setup-sidebar, .nav-sidebar { display: none !important; }
+  /* Hide non-printable elements */
+  nav,
+  .no-print,
+  .setup-sidebar,
+  .nav-sidebar {
+    display: none !important;
+  }
 
-	/* Show print-only content */
-	.print-only { display: block !important; }
-	.print-title { display: block !important; }
+  /* Show print-only content */
+  .print-only {
+    display: block !important;
+  }
+  .print-title {
+    display: block !important;
+  }
 
-	/* Reset backgrounds and colors for printing */
-	body, [data-theme] {
-		background: white !important;
-		background-image: none !important;
-		color: black !important;
-	}
+  /* Reset backgrounds and colors for printing */
+  body,
+  [data-theme] {
+    background: white !important;
+    background-image: none !important;
+    color: black !important;
+  }
 
-	.card-slate {
-		background-image: none !important;
-		background-color: white !important;
-		border-color: #ccc !important;
-		color: black !important;
-		--color-primary: black;
-		--color-secondary: #555;
-		--color-muted: #888;
-	}
+  .card-slate {
+    background-image: none !important;
+    background-color: white !important;
+    border-color: #ccc !important;
+    color: black !important;
+    --color-primary: black;
+    --color-secondary: #555;
+    --color-muted: #888;
+  }
 
-	/* Night order print layout */
-	.print-night-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 2rem;
-	}
+  /* Night order print layout */
+  .print-night-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+}
+
+/* Fullscreen mode — hide nav/sidebar, expand content */
+:fullscreen nav.nav-bar {
+  display: none !important;
+}
+:fullscreen .nav-sidebar {
+  display: none !important;
+}
+:fullscreen main {
+  margin-left: 0 !important;
+  max-width: none;
+}
+:fullscreen main > div {
+  max-width: none;
+  padding: 0.5rem;
 }

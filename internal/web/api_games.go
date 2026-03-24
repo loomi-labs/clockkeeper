@@ -124,7 +124,7 @@ func (h *ClockKeeperServiceHandler) RandomizeRoles(ctx context.Context, req *con
 	}
 
 	chars := h.registry.Characters(script.CharacterIds)
-	selected, err := botc.RandomizeRoles(chars, g.PlayerCount)
+	result, err := botc.RandomizeRoles(chars, g.PlayerCount)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
@@ -150,10 +150,26 @@ func (h *ClockKeeperServiceHandler) RandomizeRoles(ctx context.Context, req *con
 		selectedTravellers = []string{}
 	}
 
+	// Auto-select 3 demon bluffs from not-in-play good characters.
+	bluffs := botc.SelectDemonBluffs(chars, result.SelectedIDs, 3)
+
+	// Convert bag substitutions to schema type for storage.
+	bagSubs := make([]schema.GameBagSubstitution, len(result.BagSubstitutions))
+	for i, bs := range result.BagSubstitutions {
+		bagSubs[i] = schema.GameBagSubstitution{
+			CausedByID:    bs.CausedByID,
+			CausedByName:  bs.CausedByName,
+			CharacterID:   bs.CharacterID,
+			CharacterName: bs.CharacterName,
+		}
+	}
+
 	g, err = g.Update().
-		SetSelectedRoles(selected).
+		SetSelectedRoles(result.SelectedIDs).
 		SetSelectedTravellers(selectedTravellers).
 		SetTravellerCount(len(selectedTravellers)).
+		SetSelectedBluffs(bluffs).
+		SetBagSubstitutions(bagSubs).
 		Save(ctx)
 	if err != nil {
 		slog.Error("save randomized roles failed", "err", err)
@@ -178,7 +194,39 @@ func (h *ClockKeeperServiceHandler) UpdateGameRoles(ctx context.Context, req *co
 		}
 	}
 
-	g, err = g.Update().SetSelectedRoles(req.Msg.SelectedRoleIds).Save(ctx)
+	// Reconcile bag substitutions: create empty ones for newly-selected setup chars,
+	// preserve existing ones, remove ones for deselected chars.
+	script, err := h.db.Script.Get(ctx, g.ScriptID)
+	if err != nil {
+		slog.Error("get script for bag sub reconciliation failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+	chars := h.registry.Characters(script.CharacterIds)
+	existingBagSubs := make([]botc.BagSubstitution, len(g.BagSubstitutions))
+	for i, bs := range g.BagSubstitutions {
+		existingBagSubs[i] = botc.BagSubstitution{
+			CausedByID:    bs.CausedByID,
+			CausedByName:  bs.CausedByName,
+			Team:          botc.Team(bs.CausedByID),
+			CharacterID:   bs.CharacterID,
+			CharacterName: bs.CharacterName,
+		}
+	}
+	reconciledBotc := botc.BagSubstitutionsForRoles(req.Msg.SelectedRoleIds, chars, existingBagSubs)
+	reconciledSubs := make([]schema.GameBagSubstitution, len(reconciledBotc))
+	for i, bs := range reconciledBotc {
+		reconciledSubs[i] = schema.GameBagSubstitution{
+			CausedByID:    bs.CausedByID,
+			CausedByName:  bs.CausedByName,
+			CharacterID:   bs.CharacterID,
+			CharacterName: bs.CharacterName,
+		}
+	}
+
+	g, err = g.Update().
+		SetSelectedRoles(req.Msg.SelectedRoleIds).
+		SetBagSubstitutions(reconciledSubs).
+		Save(ctx)
 	if err != nil {
 		slog.Error("save updated roles failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
@@ -343,6 +391,164 @@ func (h *ClockKeeperServiceHandler) UpdateGameName(ctx context.Context, req *con
 	}), nil
 }
 
+func (h *ClockKeeperServiceHandler) UpdateGrimoireState(ctx context.Context, req *connect.Request[clockkeeperv1.UpdateGrimoireStateRequest]) (*connect.Response[clockkeeperv1.UpdateGrimoireStateResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	positions := make(map[string]schema.GrimoirePosition, len(req.Msg.Positions))
+	for id, pos := range req.Msg.Positions {
+		positions[id] = schema.GrimoirePosition{X: float64(pos.X), Y: float64(pos.Y)}
+	}
+
+	g, err = g.Update().
+		SetGrimoirePositions(positions).
+		SetGrimoirePlayerNames(req.Msg.PlayerNames).
+		SetGrimoireGameNotes(req.Msg.GameNotes).
+		SetGrimoireRoundNotes(req.Msg.RoundNotes).
+		Save(ctx)
+	if err != nil {
+		slog.Error("update grimoire state failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&clockkeeperv1.UpdateGrimoireStateResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
+}
+
+func (h *ClockKeeperServiceHandler) UpdateCharacterAlignment(ctx context.Context, req *connect.Request[clockkeeperv1.UpdateCharacterAlignmentRequest]) (*connect.Response[clockkeeperv1.UpdateCharacterAlignmentResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	if g.State != game.StateInProgress {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is not in progress"))
+	}
+
+	alignment := req.Msg.Alignment
+	if alignment != "" && alignment != "good" && alignment != "evil" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("alignment must be 'good', 'evil', or empty"))
+	}
+
+	targetPhases := phasesFromID(g.Edges.Phases, int(req.Msg.PhaseId), req.Msg.Propagate)
+	if len(targetPhases) == 0 {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("phase not found"))
+	}
+
+	tx, err := h.db.Tx(ctx)
+	if err != nil {
+		slog.Error("start transaction failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	for _, p := range targetPhases {
+		alignments := make(map[string]string, len(p.CharacterAlignments))
+		for k, v := range p.CharacterAlignments {
+			alignments[k] = v
+		}
+		if alignment == "" {
+			delete(alignments, req.Msg.RoleId)
+		} else {
+			alignments[req.Msg.RoleId] = alignment
+		}
+		_, err = tx.Phase.UpdateOneID(p.ID).SetCharacterAlignments(alignments).Save(ctx)
+		if err != nil {
+			_ = tx.Rollback()
+			slog.Error("update character alignment failed", "err", err)
+			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		slog.Error("commit transaction failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&clockkeeperv1.UpdateCharacterAlignmentResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
+}
+
+func (h *ClockKeeperServiceHandler) UpdateDemonBluffs(ctx context.Context, req *connect.Request[clockkeeperv1.UpdateDemonBluffsRequest]) (*connect.Response[clockkeeperv1.UpdateDemonBluffsResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	if g.State != game.StateSetup {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is not in setup state"))
+	}
+
+	// Validate all bluff IDs exist in the registry.
+	for _, id := range req.Msg.BluffIds {
+		if _, ok := h.registry.Character(id); !ok {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown character: %s", id))
+		}
+	}
+
+	g, err = g.Update().SetSelectedBluffs(req.Msg.BluffIds).Save(ctx)
+	if err != nil {
+		slog.Error("update demon bluffs failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	return connect.NewResponse(&clockkeeperv1.UpdateDemonBluffsResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
+}
+
+func (h *ClockKeeperServiceHandler) UpdateBagSubstitutions(ctx context.Context, req *connect.Request[clockkeeperv1.UpdateBagSubstitutionsRequest]) (*connect.Response[clockkeeperv1.UpdateBagSubstitutionsResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	if g.State != game.StateSetup {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is not in setup state"))
+	}
+
+	subs := make([]schema.GameBagSubstitution, len(req.Msg.BagSubstitutions))
+	for i, bs := range req.Msg.BagSubstitutions {
+		causedBy, ok := h.registry.Character(bs.CausedById)
+		if !ok {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown character: %s", bs.CausedById))
+		}
+		char, ok := h.registry.Character(bs.CharacterId)
+		if !ok {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown character: %s", bs.CharacterId))
+		}
+		subs[i] = schema.GameBagSubstitution{
+			CausedByID:    bs.CausedById,
+			CausedByName:  causedBy.Name,
+			CharacterID:   bs.CharacterId,
+			CharacterName: char.Name,
+		}
+	}
+
+	g, err = g.Update().SetBagSubstitutions(subs).Save(ctx)
+	if err != nil {
+		slog.Error("update bag substitutions failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	return connect.NewResponse(&clockkeeperv1.UpdateBagSubstitutionsResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
+}
+
 func (h *ClockKeeperServiceHandler) GetSetupChecklist(ctx context.Context, req *connect.Request[clockkeeperv1.GetSetupChecklistRequest]) (*connect.Response[clockkeeperv1.GetSetupChecklistResponse], error) {
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
@@ -353,7 +559,20 @@ func (h *ClockKeeperServiceHandler) GetSetupChecklist(ctx context.Context, req *
 	allCharIDs = append(allCharIDs, g.SelectedRoles...)
 	allCharIDs = append(allCharIDs, g.ExtraCharacters...)
 	chars := h.registry.Characters(allCharIDs)
-	steps := botc.GenerateSetupChecklist(chars, h.registry)
+
+	// Convert stored bag substitutions to botc type.
+	var bagSubs []botc.BagSubstitution
+	for _, bs := range g.BagSubstitutions {
+		bagSubs = append(bagSubs, botc.BagSubstitution{
+			CausedByID:    bs.CausedByID,
+			CausedByName:  bs.CausedByName,
+			Team:          botc.Team(bs.CausedByID), // Not used in checklist; only names matter.
+			CharacterID:   bs.CharacterID,
+			CharacterName: bs.CharacterName,
+		})
+	}
+
+	steps := botc.GenerateSetupChecklist(chars, h.registry, bagSubs)
 
 	protoSteps := make([]*clockkeeperv1.SetupStep, len(steps))
 	for i, s := range steps {
@@ -399,12 +618,10 @@ func (h *ClockKeeperServiceHandler) DeleteGame(ctx context.Context, req *connect
 	}
 
 	// Delete deaths for all phases of this game.
-	for _, p := range g.Edges.Phases {
-		if _, err := tx.Death.Delete().Where(death.HasPhaseWith(phase.ID(p.ID))).Exec(ctx); err != nil {
-			_ = tx.Rollback()
-			slog.Error("delete deaths failed", "err", err)
-			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
-		}
+	if _, err := tx.Death.Delete().Where(death.HasPhaseWith(phase.HasGameWith(game.ID(g.ID)))).Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		slog.Error("delete deaths failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
 	// Delete all phases.
@@ -427,6 +644,58 @@ func (h *ClockKeeperServiceHandler) DeleteGame(ctx context.Context, req *connect
 	}
 
 	return connect.NewResponse(&clockkeeperv1.DeleteGameResponse{}), nil
+}
+
+func (h *ClockKeeperServiceHandler) DuplicateGame(ctx context.Context, req *connect.Request[clockkeeperv1.DuplicateGameRequest]) (*connect.Response[clockkeeperv1.DuplicateGameResponse], error) {
+	src, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	// Get script name for the default game name.
+	script, err := h.db.Script.Get(ctx, src.ScriptID)
+	if err != nil {
+		slog.Error("get script for duplicate failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	defaultName := fmt.Sprintf("%s - %s", script.Name, time.Now().Format("Jan 2"))
+
+	g, err := h.db.Game.Create().
+		SetName(defaultName).
+		SetUserID(src.UserID).
+		SetScriptID(src.ScriptID).
+		SetPlayerCount(src.PlayerCount).
+		SetTravellerCount(src.TravellerCount).
+		SetSelectedRoles(src.SelectedRoles).
+		SetSelectedTravellers(src.SelectedTravellers).
+		SetExtraCharacters(src.ExtraCharacters).
+		SetSelectedBluffs(src.SelectedBluffs).
+		SetTravellerAlignments(src.TravellerAlignments).
+		SetBagSubstitutions(src.BagSubstitutions).
+		SetState(game.StateSetup).
+		Save(ctx)
+	if err != nil {
+		slog.Error("duplicate game failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Reload with script edge for proto conversion.
+	g, err = h.db.Game.Query().
+		Where(game.ID(g.ID)).
+		WithScript().
+		WithPhases(func(q *ent.PhaseQuery) {
+			q.WithDeaths()
+		}).
+		Only(ctx)
+	if err != nil {
+		slog.Error("reload duplicated game failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	return connect.NewResponse(&clockkeeperv1.DuplicateGameResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
 }
 
 // getOwnedGame fetches a game by ID with eager-loaded phases+deaths and verifies the current user owns it.

@@ -38,6 +38,11 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260321131451_add_game_name":                       validateGameName,
 	"20260321133230_add_completed_actions":               validateCompletedActions,
 	"20260322103914_add_death_unique_index":              validateDeathUniqueIndex,
+	"20260323093114_add_grimoire_state":                  validateGrimoireState,
+	"20260323102548_add_grimoire_notes":                  validateGrimoireNotes,
+	"20260323131712_add_character_alignments":            validateCharacterAlignments,
+	"20260323135528_add_demon_bluffs":                   validateDemonBluffs,
+	"20260323161223_add_bag_substitutions":               validateBagSubstitutions,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -450,6 +455,80 @@ func validateDeathUniqueIndex(t *testing.T, ctx context.Context, db *sql.DB, _ *
 	}
 	if !exists {
 		t.Error("death_role_id_phase_id unique index should exist")
+	}
+}
+
+// validateGrimoireState checks that grimoire_positions and grimoire_player_names columns exist.
+func validateGrimoireState(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.GrimoirePositions != nil && len(g.GrimoirePositions) != 0 {
+		t.Errorf("expected nil or empty grimoire_positions, got %v", g.GrimoirePositions)
+	}
+	if g.GrimoirePlayerNames != nil && len(g.GrimoirePlayerNames) != 0 {
+		t.Errorf("expected nil or empty grimoire_player_names, got %v", g.GrimoirePlayerNames)
+	}
+}
+
+// validateGrimoireNotes checks that grimoire_game_notes and grimoire_round_notes columns exist.
+func validateGrimoireNotes(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.GrimoireGameNotes != nil && len(g.GrimoireGameNotes) != 0 {
+		t.Errorf("expected nil or empty grimoire_game_notes, got %v", g.GrimoireGameNotes)
+	}
+	if g.GrimoireRoundNotes != nil && len(g.GrimoireRoundNotes) != 0 {
+		t.Errorf("expected nil or empty grimoire_round_notes, got %v", g.GrimoireRoundNotes)
+	}
+}
+
+// validateDemonBluffs checks that the selected_bluffs column exists on games.
+func validateDemonBluffs(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.SelectedBluffs != nil && len(g.SelectedBluffs) != 0 {
+		t.Errorf("expected nil or empty selected_bluffs, got %v", g.SelectedBluffs)
+	}
+}
+
+// validateCharacterAlignments checks that the character_alignments column exists on phases.
+func validateCharacterAlignments(t *testing.T, ctx context.Context, db *sql.DB, _ *ent.Client) {
+	t.Helper()
+
+	var exists bool
+	err := db.QueryRowContext(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_name = 'phases' AND column_name = 'character_alignments'
+		)`).Scan(&exists)
+	if err != nil {
+		t.Fatalf("failed to check column: %v", err)
+	}
+	if !exists {
+		t.Error("character_alignments column should exist on phases table")
+	}
+}
+
+// validateBagSubstitutions checks that the bag_substitutions column exists on games.
+func validateBagSubstitutions(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.BagSubstitutions != nil && len(g.BagSubstitutions) != 0 {
+		t.Errorf("expected nil or empty bag_substitutions, got %v", g.BagSubstitutions)
 	}
 }
 

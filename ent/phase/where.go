@@ -260,6 +260,16 @@ func CompletedActionsNotNil() predicate.Phase {
 	return predicate.Phase(sql.FieldNotNull(FieldCompletedActions))
 }
 
+// CharacterAlignmentsIsNil applies the IsNil predicate on the "character_alignments" field.
+func CharacterAlignmentsIsNil() predicate.Phase {
+	return predicate.Phase(sql.FieldIsNull(FieldCharacterAlignments))
+}
+
+// CharacterAlignmentsNotNil applies the NotNil predicate on the "character_alignments" field.
+func CharacterAlignmentsNotNil() predicate.Phase {
+	return predicate.Phase(sql.FieldNotNull(FieldCharacterAlignments))
+}
+
 // HasGame applies the HasEdge predicate on the "game" edge.
 func HasGame() predicate.Phase {
 	return predicate.Phase(func(s *sql.Selector) {

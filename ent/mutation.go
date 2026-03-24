@@ -654,7 +654,15 @@ type GameMutation struct {
 	appendselected_travellers []string
 	extra_characters          *[]string
 	appendextra_characters    []string
+	selected_bluffs           *[]string
+	appendselected_bluffs     []string
 	traveller_alignments      *map[string]schema.TravellerAlignment
+	grimoire_positions        *map[string]schema.GrimoirePosition
+	grimoire_player_names     *map[string]string
+	grimoire_game_notes       *map[string]string
+	grimoire_round_notes      *map[string]string
+	bag_substitutions         *[]schema.GameBagSubstitution
+	appendbag_substitutions   []schema.GameBagSubstitution
 	state                     *game.State
 	clearedFields             map[string]struct{}
 	owner                     *int
@@ -1226,6 +1234,71 @@ func (m *GameMutation) ResetExtraCharacters() {
 	delete(m.clearedFields, game.FieldExtraCharacters)
 }
 
+// SetSelectedBluffs sets the "selected_bluffs" field.
+func (m *GameMutation) SetSelectedBluffs(s []string) {
+	m.selected_bluffs = &s
+	m.appendselected_bluffs = nil
+}
+
+// SelectedBluffs returns the value of the "selected_bluffs" field in the mutation.
+func (m *GameMutation) SelectedBluffs() (r []string, exists bool) {
+	v := m.selected_bluffs
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSelectedBluffs returns the old "selected_bluffs" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldSelectedBluffs(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSelectedBluffs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSelectedBluffs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSelectedBluffs: %w", err)
+	}
+	return oldValue.SelectedBluffs, nil
+}
+
+// AppendSelectedBluffs adds s to the "selected_bluffs" field.
+func (m *GameMutation) AppendSelectedBluffs(s []string) {
+	m.appendselected_bluffs = append(m.appendselected_bluffs, s...)
+}
+
+// AppendedSelectedBluffs returns the list of values that were appended to the "selected_bluffs" field in this mutation.
+func (m *GameMutation) AppendedSelectedBluffs() ([]string, bool) {
+	if len(m.appendselected_bluffs) == 0 {
+		return nil, false
+	}
+	return m.appendselected_bluffs, true
+}
+
+// ClearSelectedBluffs clears the value of the "selected_bluffs" field.
+func (m *GameMutation) ClearSelectedBluffs() {
+	m.selected_bluffs = nil
+	m.appendselected_bluffs = nil
+	m.clearedFields[game.FieldSelectedBluffs] = struct{}{}
+}
+
+// SelectedBluffsCleared returns if the "selected_bluffs" field was cleared in this mutation.
+func (m *GameMutation) SelectedBluffsCleared() bool {
+	_, ok := m.clearedFields[game.FieldSelectedBluffs]
+	return ok
+}
+
+// ResetSelectedBluffs resets all changes to the "selected_bluffs" field.
+func (m *GameMutation) ResetSelectedBluffs() {
+	m.selected_bluffs = nil
+	m.appendselected_bluffs = nil
+	delete(m.clearedFields, game.FieldSelectedBluffs)
+}
+
 // SetTravellerAlignments sets the "traveller_alignments" field.
 func (m *GameMutation) SetTravellerAlignments(ma map[string]schema.TravellerAlignment) {
 	m.traveller_alignments = &ma
@@ -1273,6 +1346,267 @@ func (m *GameMutation) TravellerAlignmentsCleared() bool {
 func (m *GameMutation) ResetTravellerAlignments() {
 	m.traveller_alignments = nil
 	delete(m.clearedFields, game.FieldTravellerAlignments)
+}
+
+// SetGrimoirePositions sets the "grimoire_positions" field.
+func (m *GameMutation) SetGrimoirePositions(mp map[string]schema.GrimoirePosition) {
+	m.grimoire_positions = &mp
+}
+
+// GrimoirePositions returns the value of the "grimoire_positions" field in the mutation.
+func (m *GameMutation) GrimoirePositions() (r map[string]schema.GrimoirePosition, exists bool) {
+	v := m.grimoire_positions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrimoirePositions returns the old "grimoire_positions" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldGrimoirePositions(ctx context.Context) (v map[string]schema.GrimoirePosition, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrimoirePositions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrimoirePositions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrimoirePositions: %w", err)
+	}
+	return oldValue.GrimoirePositions, nil
+}
+
+// ClearGrimoirePositions clears the value of the "grimoire_positions" field.
+func (m *GameMutation) ClearGrimoirePositions() {
+	m.grimoire_positions = nil
+	m.clearedFields[game.FieldGrimoirePositions] = struct{}{}
+}
+
+// GrimoirePositionsCleared returns if the "grimoire_positions" field was cleared in this mutation.
+func (m *GameMutation) GrimoirePositionsCleared() bool {
+	_, ok := m.clearedFields[game.FieldGrimoirePositions]
+	return ok
+}
+
+// ResetGrimoirePositions resets all changes to the "grimoire_positions" field.
+func (m *GameMutation) ResetGrimoirePositions() {
+	m.grimoire_positions = nil
+	delete(m.clearedFields, game.FieldGrimoirePositions)
+}
+
+// SetGrimoirePlayerNames sets the "grimoire_player_names" field.
+func (m *GameMutation) SetGrimoirePlayerNames(value map[string]string) {
+	m.grimoire_player_names = &value
+}
+
+// GrimoirePlayerNames returns the value of the "grimoire_player_names" field in the mutation.
+func (m *GameMutation) GrimoirePlayerNames() (r map[string]string, exists bool) {
+	v := m.grimoire_player_names
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrimoirePlayerNames returns the old "grimoire_player_names" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldGrimoirePlayerNames(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrimoirePlayerNames is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrimoirePlayerNames requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrimoirePlayerNames: %w", err)
+	}
+	return oldValue.GrimoirePlayerNames, nil
+}
+
+// ClearGrimoirePlayerNames clears the value of the "grimoire_player_names" field.
+func (m *GameMutation) ClearGrimoirePlayerNames() {
+	m.grimoire_player_names = nil
+	m.clearedFields[game.FieldGrimoirePlayerNames] = struct{}{}
+}
+
+// GrimoirePlayerNamesCleared returns if the "grimoire_player_names" field was cleared in this mutation.
+func (m *GameMutation) GrimoirePlayerNamesCleared() bool {
+	_, ok := m.clearedFields[game.FieldGrimoirePlayerNames]
+	return ok
+}
+
+// ResetGrimoirePlayerNames resets all changes to the "grimoire_player_names" field.
+func (m *GameMutation) ResetGrimoirePlayerNames() {
+	m.grimoire_player_names = nil
+	delete(m.clearedFields, game.FieldGrimoirePlayerNames)
+}
+
+// SetGrimoireGameNotes sets the "grimoire_game_notes" field.
+func (m *GameMutation) SetGrimoireGameNotes(value map[string]string) {
+	m.grimoire_game_notes = &value
+}
+
+// GrimoireGameNotes returns the value of the "grimoire_game_notes" field in the mutation.
+func (m *GameMutation) GrimoireGameNotes() (r map[string]string, exists bool) {
+	v := m.grimoire_game_notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrimoireGameNotes returns the old "grimoire_game_notes" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldGrimoireGameNotes(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrimoireGameNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrimoireGameNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrimoireGameNotes: %w", err)
+	}
+	return oldValue.GrimoireGameNotes, nil
+}
+
+// ClearGrimoireGameNotes clears the value of the "grimoire_game_notes" field.
+func (m *GameMutation) ClearGrimoireGameNotes() {
+	m.grimoire_game_notes = nil
+	m.clearedFields[game.FieldGrimoireGameNotes] = struct{}{}
+}
+
+// GrimoireGameNotesCleared returns if the "grimoire_game_notes" field was cleared in this mutation.
+func (m *GameMutation) GrimoireGameNotesCleared() bool {
+	_, ok := m.clearedFields[game.FieldGrimoireGameNotes]
+	return ok
+}
+
+// ResetGrimoireGameNotes resets all changes to the "grimoire_game_notes" field.
+func (m *GameMutation) ResetGrimoireGameNotes() {
+	m.grimoire_game_notes = nil
+	delete(m.clearedFields, game.FieldGrimoireGameNotes)
+}
+
+// SetGrimoireRoundNotes sets the "grimoire_round_notes" field.
+func (m *GameMutation) SetGrimoireRoundNotes(value map[string]string) {
+	m.grimoire_round_notes = &value
+}
+
+// GrimoireRoundNotes returns the value of the "grimoire_round_notes" field in the mutation.
+func (m *GameMutation) GrimoireRoundNotes() (r map[string]string, exists bool) {
+	v := m.grimoire_round_notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrimoireRoundNotes returns the old "grimoire_round_notes" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldGrimoireRoundNotes(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrimoireRoundNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrimoireRoundNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrimoireRoundNotes: %w", err)
+	}
+	return oldValue.GrimoireRoundNotes, nil
+}
+
+// ClearGrimoireRoundNotes clears the value of the "grimoire_round_notes" field.
+func (m *GameMutation) ClearGrimoireRoundNotes() {
+	m.grimoire_round_notes = nil
+	m.clearedFields[game.FieldGrimoireRoundNotes] = struct{}{}
+}
+
+// GrimoireRoundNotesCleared returns if the "grimoire_round_notes" field was cleared in this mutation.
+func (m *GameMutation) GrimoireRoundNotesCleared() bool {
+	_, ok := m.clearedFields[game.FieldGrimoireRoundNotes]
+	return ok
+}
+
+// ResetGrimoireRoundNotes resets all changes to the "grimoire_round_notes" field.
+func (m *GameMutation) ResetGrimoireRoundNotes() {
+	m.grimoire_round_notes = nil
+	delete(m.clearedFields, game.FieldGrimoireRoundNotes)
+}
+
+// SetBagSubstitutions sets the "bag_substitutions" field.
+func (m *GameMutation) SetBagSubstitutions(sbs []schema.GameBagSubstitution) {
+	m.bag_substitutions = &sbs
+	m.appendbag_substitutions = nil
+}
+
+// BagSubstitutions returns the value of the "bag_substitutions" field in the mutation.
+func (m *GameMutation) BagSubstitutions() (r []schema.GameBagSubstitution, exists bool) {
+	v := m.bag_substitutions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBagSubstitutions returns the old "bag_substitutions" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldBagSubstitutions(ctx context.Context) (v []schema.GameBagSubstitution, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBagSubstitutions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBagSubstitutions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBagSubstitutions: %w", err)
+	}
+	return oldValue.BagSubstitutions, nil
+}
+
+// AppendBagSubstitutions adds sbs to the "bag_substitutions" field.
+func (m *GameMutation) AppendBagSubstitutions(sbs []schema.GameBagSubstitution) {
+	m.appendbag_substitutions = append(m.appendbag_substitutions, sbs...)
+}
+
+// AppendedBagSubstitutions returns the list of values that were appended to the "bag_substitutions" field in this mutation.
+func (m *GameMutation) AppendedBagSubstitutions() ([]schema.GameBagSubstitution, bool) {
+	if len(m.appendbag_substitutions) == 0 {
+		return nil, false
+	}
+	return m.appendbag_substitutions, true
+}
+
+// ClearBagSubstitutions clears the value of the "bag_substitutions" field.
+func (m *GameMutation) ClearBagSubstitutions() {
+	m.bag_substitutions = nil
+	m.appendbag_substitutions = nil
+	m.clearedFields[game.FieldBagSubstitutions] = struct{}{}
+}
+
+// BagSubstitutionsCleared returns if the "bag_substitutions" field was cleared in this mutation.
+func (m *GameMutation) BagSubstitutionsCleared() bool {
+	_, ok := m.clearedFields[game.FieldBagSubstitutions]
+	return ok
+}
+
+// ResetBagSubstitutions resets all changes to the "bag_substitutions" field.
+func (m *GameMutation) ResetBagSubstitutions() {
+	m.bag_substitutions = nil
+	m.appendbag_substitutions = nil
+	delete(m.clearedFields, game.FieldBagSubstitutions)
 }
 
 // SetState sets the "state" field.
@@ -1466,7 +1800,7 @@ func (m *GameMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GameMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 18)
 	if m.created_at != nil {
 		fields = append(fields, game.FieldCreatedAt)
 	}
@@ -1497,8 +1831,26 @@ func (m *GameMutation) Fields() []string {
 	if m.extra_characters != nil {
 		fields = append(fields, game.FieldExtraCharacters)
 	}
+	if m.selected_bluffs != nil {
+		fields = append(fields, game.FieldSelectedBluffs)
+	}
 	if m.traveller_alignments != nil {
 		fields = append(fields, game.FieldTravellerAlignments)
+	}
+	if m.grimoire_positions != nil {
+		fields = append(fields, game.FieldGrimoirePositions)
+	}
+	if m.grimoire_player_names != nil {
+		fields = append(fields, game.FieldGrimoirePlayerNames)
+	}
+	if m.grimoire_game_notes != nil {
+		fields = append(fields, game.FieldGrimoireGameNotes)
+	}
+	if m.grimoire_round_notes != nil {
+		fields = append(fields, game.FieldGrimoireRoundNotes)
+	}
+	if m.bag_substitutions != nil {
+		fields = append(fields, game.FieldBagSubstitutions)
 	}
 	if m.state != nil {
 		fields = append(fields, game.FieldState)
@@ -1531,8 +1883,20 @@ func (m *GameMutation) Field(name string) (ent.Value, bool) {
 		return m.SelectedTravellers()
 	case game.FieldExtraCharacters:
 		return m.ExtraCharacters()
+	case game.FieldSelectedBluffs:
+		return m.SelectedBluffs()
 	case game.FieldTravellerAlignments:
 		return m.TravellerAlignments()
+	case game.FieldGrimoirePositions:
+		return m.GrimoirePositions()
+	case game.FieldGrimoirePlayerNames:
+		return m.GrimoirePlayerNames()
+	case game.FieldGrimoireGameNotes:
+		return m.GrimoireGameNotes()
+	case game.FieldGrimoireRoundNotes:
+		return m.GrimoireRoundNotes()
+	case game.FieldBagSubstitutions:
+		return m.BagSubstitutions()
 	case game.FieldState:
 		return m.State()
 	}
@@ -1564,8 +1928,20 @@ func (m *GameMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldSelectedTravellers(ctx)
 	case game.FieldExtraCharacters:
 		return m.OldExtraCharacters(ctx)
+	case game.FieldSelectedBluffs:
+		return m.OldSelectedBluffs(ctx)
 	case game.FieldTravellerAlignments:
 		return m.OldTravellerAlignments(ctx)
+	case game.FieldGrimoirePositions:
+		return m.OldGrimoirePositions(ctx)
+	case game.FieldGrimoirePlayerNames:
+		return m.OldGrimoirePlayerNames(ctx)
+	case game.FieldGrimoireGameNotes:
+		return m.OldGrimoireGameNotes(ctx)
+	case game.FieldGrimoireRoundNotes:
+		return m.OldGrimoireRoundNotes(ctx)
+	case game.FieldBagSubstitutions:
+		return m.OldBagSubstitutions(ctx)
 	case game.FieldState:
 		return m.OldState(ctx)
 	}
@@ -1647,12 +2023,54 @@ func (m *GameMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetExtraCharacters(v)
 		return nil
+	case game.FieldSelectedBluffs:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSelectedBluffs(v)
+		return nil
 	case game.FieldTravellerAlignments:
 		v, ok := value.(map[string]schema.TravellerAlignment)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTravellerAlignments(v)
+		return nil
+	case game.FieldGrimoirePositions:
+		v, ok := value.(map[string]schema.GrimoirePosition)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrimoirePositions(v)
+		return nil
+	case game.FieldGrimoirePlayerNames:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrimoirePlayerNames(v)
+		return nil
+	case game.FieldGrimoireGameNotes:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrimoireGameNotes(v)
+		return nil
+	case game.FieldGrimoireRoundNotes:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrimoireRoundNotes(v)
+		return nil
+	case game.FieldBagSubstitutions:
+		v, ok := value.([]schema.GameBagSubstitution)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBagSubstitutions(v)
 		return nil
 	case game.FieldState:
 		v, ok := value.(game.State)
@@ -1721,8 +2139,26 @@ func (m *GameMutation) ClearedFields() []string {
 	if m.FieldCleared(game.FieldExtraCharacters) {
 		fields = append(fields, game.FieldExtraCharacters)
 	}
+	if m.FieldCleared(game.FieldSelectedBluffs) {
+		fields = append(fields, game.FieldSelectedBluffs)
+	}
 	if m.FieldCleared(game.FieldTravellerAlignments) {
 		fields = append(fields, game.FieldTravellerAlignments)
+	}
+	if m.FieldCleared(game.FieldGrimoirePositions) {
+		fields = append(fields, game.FieldGrimoirePositions)
+	}
+	if m.FieldCleared(game.FieldGrimoirePlayerNames) {
+		fields = append(fields, game.FieldGrimoirePlayerNames)
+	}
+	if m.FieldCleared(game.FieldGrimoireGameNotes) {
+		fields = append(fields, game.FieldGrimoireGameNotes)
+	}
+	if m.FieldCleared(game.FieldGrimoireRoundNotes) {
+		fields = append(fields, game.FieldGrimoireRoundNotes)
+	}
+	if m.FieldCleared(game.FieldBagSubstitutions) {
+		fields = append(fields, game.FieldBagSubstitutions)
 	}
 	return fields
 }
@@ -1741,8 +2177,26 @@ func (m *GameMutation) ClearField(name string) error {
 	case game.FieldExtraCharacters:
 		m.ClearExtraCharacters()
 		return nil
+	case game.FieldSelectedBluffs:
+		m.ClearSelectedBluffs()
+		return nil
 	case game.FieldTravellerAlignments:
 		m.ClearTravellerAlignments()
+		return nil
+	case game.FieldGrimoirePositions:
+		m.ClearGrimoirePositions()
+		return nil
+	case game.FieldGrimoirePlayerNames:
+		m.ClearGrimoirePlayerNames()
+		return nil
+	case game.FieldGrimoireGameNotes:
+		m.ClearGrimoireGameNotes()
+		return nil
+	case game.FieldGrimoireRoundNotes:
+		m.ClearGrimoireRoundNotes()
+		return nil
+	case game.FieldBagSubstitutions:
+		m.ClearBagSubstitutions()
 		return nil
 	}
 	return fmt.Errorf("unknown Game nullable field %s", name)
@@ -1782,8 +2236,26 @@ func (m *GameMutation) ResetField(name string) error {
 	case game.FieldExtraCharacters:
 		m.ResetExtraCharacters()
 		return nil
+	case game.FieldSelectedBluffs:
+		m.ResetSelectedBluffs()
+		return nil
 	case game.FieldTravellerAlignments:
 		m.ResetTravellerAlignments()
+		return nil
+	case game.FieldGrimoirePositions:
+		m.ResetGrimoirePositions()
+		return nil
+	case game.FieldGrimoirePlayerNames:
+		m.ResetGrimoirePlayerNames()
+		return nil
+	case game.FieldGrimoireGameNotes:
+		m.ResetGrimoireGameNotes()
+		return nil
+	case game.FieldGrimoireRoundNotes:
+		m.ResetGrimoireRoundNotes()
+		return nil
+	case game.FieldBagSubstitutions:
+		m.ResetBagSubstitutions()
 		return nil
 	case game.FieldState:
 		m.ResetState()
@@ -1926,6 +2398,7 @@ type PhaseMutation struct {
 	is_active               *bool
 	completed_actions       *[]string
 	appendcompleted_actions []string
+	character_alignments    *map[string]string
 	clearedFields           map[string]struct{}
 	game                    *int
 	clearedgame             bool
@@ -2336,6 +2809,55 @@ func (m *PhaseMutation) ResetCompletedActions() {
 	delete(m.clearedFields, phase.FieldCompletedActions)
 }
 
+// SetCharacterAlignments sets the "character_alignments" field.
+func (m *PhaseMutation) SetCharacterAlignments(value map[string]string) {
+	m.character_alignments = &value
+}
+
+// CharacterAlignments returns the value of the "character_alignments" field in the mutation.
+func (m *PhaseMutation) CharacterAlignments() (r map[string]string, exists bool) {
+	v := m.character_alignments
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCharacterAlignments returns the old "character_alignments" field's value of the Phase entity.
+// If the Phase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PhaseMutation) OldCharacterAlignments(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCharacterAlignments is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCharacterAlignments requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCharacterAlignments: %w", err)
+	}
+	return oldValue.CharacterAlignments, nil
+}
+
+// ClearCharacterAlignments clears the value of the "character_alignments" field.
+func (m *PhaseMutation) ClearCharacterAlignments() {
+	m.character_alignments = nil
+	m.clearedFields[phase.FieldCharacterAlignments] = struct{}{}
+}
+
+// CharacterAlignmentsCleared returns if the "character_alignments" field was cleared in this mutation.
+func (m *PhaseMutation) CharacterAlignmentsCleared() bool {
+	_, ok := m.clearedFields[phase.FieldCharacterAlignments]
+	return ok
+}
+
+// ResetCharacterAlignments resets all changes to the "character_alignments" field.
+func (m *PhaseMutation) ResetCharacterAlignments() {
+	m.character_alignments = nil
+	delete(m.clearedFields, phase.FieldCharacterAlignments)
+}
+
 // ClearGame clears the "game" edge to the Game entity.
 func (m *PhaseMutation) ClearGame() {
 	m.clearedgame = true
@@ -2451,7 +2973,7 @@ func (m *PhaseMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PhaseMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.created_at != nil {
 		fields = append(fields, phase.FieldCreatedAt)
 	}
@@ -2472,6 +2994,9 @@ func (m *PhaseMutation) Fields() []string {
 	}
 	if m.completed_actions != nil {
 		fields = append(fields, phase.FieldCompletedActions)
+	}
+	if m.character_alignments != nil {
+		fields = append(fields, phase.FieldCharacterAlignments)
 	}
 	return fields
 }
@@ -2495,6 +3020,8 @@ func (m *PhaseMutation) Field(name string) (ent.Value, bool) {
 		return m.IsActive()
 	case phase.FieldCompletedActions:
 		return m.CompletedActions()
+	case phase.FieldCharacterAlignments:
+		return m.CharacterAlignments()
 	}
 	return nil, false
 }
@@ -2518,6 +3045,8 @@ func (m *PhaseMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldIsActive(ctx)
 	case phase.FieldCompletedActions:
 		return m.OldCompletedActions(ctx)
+	case phase.FieldCharacterAlignments:
+		return m.OldCharacterAlignments(ctx)
 	}
 	return nil, fmt.Errorf("unknown Phase field %s", name)
 }
@@ -2576,6 +3105,13 @@ func (m *PhaseMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCompletedActions(v)
 		return nil
+	case phase.FieldCharacterAlignments:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCharacterAlignments(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Phase field %s", name)
 }
@@ -2624,6 +3160,9 @@ func (m *PhaseMutation) ClearedFields() []string {
 	if m.FieldCleared(phase.FieldCompletedActions) {
 		fields = append(fields, phase.FieldCompletedActions)
 	}
+	if m.FieldCleared(phase.FieldCharacterAlignments) {
+		fields = append(fields, phase.FieldCharacterAlignments)
+	}
 	return fields
 }
 
@@ -2640,6 +3179,9 @@ func (m *PhaseMutation) ClearField(name string) error {
 	switch name {
 	case phase.FieldCompletedActions:
 		m.ClearCompletedActions()
+		return nil
+	case phase.FieldCharacterAlignments:
+		m.ClearCharacterAlignments()
 		return nil
 	}
 	return fmt.Errorf("unknown Phase nullable field %s", name)
@@ -2669,6 +3211,9 @@ func (m *PhaseMutation) ResetField(name string) error {
 		return nil
 	case phase.FieldCompletedActions:
 		m.ResetCompletedActions()
+		return nil
+	case phase.FieldCharacterAlignments:
+		m.ResetCharacterAlignments()
 		return nil
 	}
 	return fmt.Errorf("unknown Phase field %s", name)

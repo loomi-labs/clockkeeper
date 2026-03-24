@@ -116,9 +116,45 @@ func (_c *GameCreate) SetExtraCharacters(v []string) *GameCreate {
 	return _c
 }
 
+// SetSelectedBluffs sets the "selected_bluffs" field.
+func (_c *GameCreate) SetSelectedBluffs(v []string) *GameCreate {
+	_c.mutation.SetSelectedBluffs(v)
+	return _c
+}
+
 // SetTravellerAlignments sets the "traveller_alignments" field.
 func (_c *GameCreate) SetTravellerAlignments(v map[string]schema.TravellerAlignment) *GameCreate {
 	_c.mutation.SetTravellerAlignments(v)
+	return _c
+}
+
+// SetGrimoirePositions sets the "grimoire_positions" field.
+func (_c *GameCreate) SetGrimoirePositions(v map[string]schema.GrimoirePosition) *GameCreate {
+	_c.mutation.SetGrimoirePositions(v)
+	return _c
+}
+
+// SetGrimoirePlayerNames sets the "grimoire_player_names" field.
+func (_c *GameCreate) SetGrimoirePlayerNames(v map[string]string) *GameCreate {
+	_c.mutation.SetGrimoirePlayerNames(v)
+	return _c
+}
+
+// SetGrimoireGameNotes sets the "grimoire_game_notes" field.
+func (_c *GameCreate) SetGrimoireGameNotes(v map[string]string) *GameCreate {
+	_c.mutation.SetGrimoireGameNotes(v)
+	return _c
+}
+
+// SetGrimoireRoundNotes sets the "grimoire_round_notes" field.
+func (_c *GameCreate) SetGrimoireRoundNotes(v map[string]string) *GameCreate {
+	_c.mutation.SetGrimoireRoundNotes(v)
+	return _c
+}
+
+// SetBagSubstitutions sets the "bag_substitutions" field.
+func (_c *GameCreate) SetBagSubstitutions(v []schema.GameBagSubstitution) *GameCreate {
+	_c.mutation.SetBagSubstitutions(v)
 	return _c
 }
 
@@ -222,9 +258,33 @@ func (_c *GameCreate) defaults() {
 		v := game.DefaultExtraCharacters
 		_c.mutation.SetExtraCharacters(v)
 	}
+	if _, ok := _c.mutation.SelectedBluffs(); !ok {
+		v := game.DefaultSelectedBluffs
+		_c.mutation.SetSelectedBluffs(v)
+	}
 	if _, ok := _c.mutation.TravellerAlignments(); !ok {
 		v := game.DefaultTravellerAlignments
 		_c.mutation.SetTravellerAlignments(v)
+	}
+	if _, ok := _c.mutation.GrimoirePositions(); !ok {
+		v := game.DefaultGrimoirePositions
+		_c.mutation.SetGrimoirePositions(v)
+	}
+	if _, ok := _c.mutation.GrimoirePlayerNames(); !ok {
+		v := game.DefaultGrimoirePlayerNames
+		_c.mutation.SetGrimoirePlayerNames(v)
+	}
+	if _, ok := _c.mutation.GrimoireGameNotes(); !ok {
+		v := game.DefaultGrimoireGameNotes
+		_c.mutation.SetGrimoireGameNotes(v)
+	}
+	if _, ok := _c.mutation.GrimoireRoundNotes(); !ok {
+		v := game.DefaultGrimoireRoundNotes
+		_c.mutation.SetGrimoireRoundNotes(v)
+	}
+	if _, ok := _c.mutation.BagSubstitutions(); !ok {
+		v := game.DefaultBagSubstitutions
+		_c.mutation.SetBagSubstitutions(v)
 	}
 	if _, ok := _c.mutation.State(); !ok {
 		v := game.DefaultState
@@ -343,9 +403,33 @@ func (_c *GameCreate) createSpec() (*Game, *sqlgraph.CreateSpec) {
 		_spec.SetField(game.FieldExtraCharacters, field.TypeJSON, value)
 		_node.ExtraCharacters = value
 	}
+	if value, ok := _c.mutation.SelectedBluffs(); ok {
+		_spec.SetField(game.FieldSelectedBluffs, field.TypeJSON, value)
+		_node.SelectedBluffs = value
+	}
 	if value, ok := _c.mutation.TravellerAlignments(); ok {
 		_spec.SetField(game.FieldTravellerAlignments, field.TypeJSON, value)
 		_node.TravellerAlignments = value
+	}
+	if value, ok := _c.mutation.GrimoirePositions(); ok {
+		_spec.SetField(game.FieldGrimoirePositions, field.TypeJSON, value)
+		_node.GrimoirePositions = value
+	}
+	if value, ok := _c.mutation.GrimoirePlayerNames(); ok {
+		_spec.SetField(game.FieldGrimoirePlayerNames, field.TypeJSON, value)
+		_node.GrimoirePlayerNames = value
+	}
+	if value, ok := _c.mutation.GrimoireGameNotes(); ok {
+		_spec.SetField(game.FieldGrimoireGameNotes, field.TypeJSON, value)
+		_node.GrimoireGameNotes = value
+	}
+	if value, ok := _c.mutation.GrimoireRoundNotes(); ok {
+		_spec.SetField(game.FieldGrimoireRoundNotes, field.TypeJSON, value)
+		_node.GrimoireRoundNotes = value
+	}
+	if value, ok := _c.mutation.BagSubstitutions(); ok {
+		_spec.SetField(game.FieldBagSubstitutions, field.TypeJSON, value)
+		_node.BagSubstitutions = value
 	}
 	if value, ok := _c.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)

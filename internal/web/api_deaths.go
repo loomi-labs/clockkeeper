@@ -133,6 +133,12 @@ func (h *ClockKeeperServiceHandler) RemoveDeath(ctx context.Context, req *connec
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("death not found"))
 	}
 
+	tx, err := h.db.Tx(ctx)
+	if err != nil {
+		slog.Error("start transaction failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
 	if req.Msg.Propagate {
 		// Delete death records for this role in this phase and all later phases.
 		laterPhases := phasesFromID(g.Edges.Phases, d.Edges.Phase.ID, true)
@@ -140,17 +146,23 @@ func (h *ClockKeeperServiceHandler) RemoveDeath(ctx context.Context, req *connec
 		for _, p := range laterPhases {
 			laterPhaseIDs = append(laterPhaseIDs, p.ID)
 		}
-		_, err = h.db.Death.Delete().
+		_, err = tx.Death.Delete().
 			Where(
 				death.RoleID(d.RoleID),
 				death.PhaseIDIn(laterPhaseIDs...),
 			).
 			Exec(ctx)
 	} else {
-		err = h.db.Death.DeleteOneID(d.ID).Exec(ctx)
+		err = tx.Death.DeleteOneID(d.ID).Exec(ctx)
 	}
 	if err != nil {
+		_ = tx.Rollback()
 		slog.Error("delete death failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	if err = tx.Commit(); err != nil {
+		slog.Error("commit transaction failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 

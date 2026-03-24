@@ -10,6 +10,20 @@ import (
 // TravellerAlignment represents the good/evil alignment of a traveller in a game.
 type TravellerAlignment string
 
+// GrimoirePosition stores the x/y position of a token on the grimoire canvas.
+type GrimoirePosition struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// GameBagSubstitution represents an extra token needed in the physical bag.
+type GameBagSubstitution struct {
+	CausedByID    string `json:"caused_by_id"`
+	CausedByName  string `json:"caused_by_name"`
+	CharacterID   string `json:"character_id"`
+	CharacterName string `json:"character_name"`
+}
+
 const (
 	AlignmentUnset TravellerAlignment = ""
 	AlignmentGood  TravellerAlignment = "good"
@@ -37,7 +51,13 @@ func (Game) Fields() []ent.Field {
 		field.JSON("selected_roles", []string{}),
 		field.JSON("selected_travellers", []string{}),
 		field.JSON("extra_characters", []string{}).Optional().Default([]string{}),
+		field.JSON("selected_bluffs", []string{}).Optional().Default([]string{}),
 		field.JSON("traveller_alignments", map[string]TravellerAlignment{}).Optional().Default(map[string]TravellerAlignment{}),
+		field.JSON("grimoire_positions", map[string]GrimoirePosition{}).Optional().Default(map[string]GrimoirePosition{}),
+		field.JSON("grimoire_player_names", map[string]string{}).Optional().Default(map[string]string{}),
+		field.JSON("grimoire_game_notes", map[string]string{}).Optional().Default(map[string]string{}),
+		field.JSON("grimoire_round_notes", map[string]string{}).Optional().Default(map[string]string{}),
+		field.JSON("bag_substitutions", []GameBagSubstitution{}).Optional().Default([]GameBagSubstitution{}),
 		field.Enum("state").
 			Values("setup", "in_progress", "completed").
 			Default("setup"),

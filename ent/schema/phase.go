@@ -25,6 +25,7 @@ func (Phase) Fields() []ent.Field {
 		field.Enum("type").Values("night", "day"),
 		field.Bool("is_active").Default(true),
 		field.JSON("completed_actions", []string{}).Optional().Default([]string{}),
+		field.JSON("character_alignments", map[string]string{}).Optional().Default(map[string]string{}),
 	}
 }
 

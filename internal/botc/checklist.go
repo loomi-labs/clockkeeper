@@ -14,13 +14,25 @@ type SetupStep struct {
 }
 
 // GenerateSetupChecklist creates a dynamic setup checklist based on the selected characters.
-func GenerateSetupChecklist(chars []*Character, registry *Registry) []SetupStep {
+// bagSubs contains bag substitutions from randomization (e.g., Drunk → townsfolk token).
+func GenerateSetupChecklist(chars []*Character, registry *Registry, bagSubs []BagSubstitution) []SetupStep {
 	var steps []SetupStep
 
+	// Build a set of bag substitution character IDs for token list adjustment.
+	bagSubCausedBy := make(map[string]BagSubstitution, len(bagSubs))
+	for _, bs := range bagSubs {
+		bagSubCausedBy[bs.CausedByID] = bs
+	}
+
 	// 1. Character tokens to prepare.
+	// For bag substitutions: list the substitute token instead of the original.
 	var tokenNames []string
 	for _, c := range chars {
-		tokenNames = append(tokenNames, c.Name)
+		if bs, ok := bagSubCausedBy[c.ID]; ok && bs.CharacterName != "" {
+			tokenNames = append(tokenNames, fmt.Sprintf("%s (for %s)", bs.CharacterName, c.Name))
+		} else {
+			tokenNames = append(tokenNames, c.Name)
+		}
 	}
 	desc := "No character tokens to prepare."
 	if len(tokenNames) > 0 {
@@ -33,20 +45,32 @@ func GenerateSetupChecklist(chars []*Character, registry *Registry) []SetupStep 
 		RequiresAction: true,
 	})
 
-	// 2. Setup modifications.
-	if dist, err := DistributionForPlayerCount(len(chars)); err == nil {
-		_, manual := ApplySetupModifiers(dist, chars)
-		for _, m := range manual {
+	// 2. Setup modifications — one step per setup character showing ability text.
+	for _, c := range chars {
+		if !c.Setup {
+			continue
+		}
+		steps = append(steps, SetupStep{
+			ID:             fmt.Sprintf("setup_mod_%s", c.ID),
+			Title:          fmt.Sprintf("Setup: %s", c.Name),
+			Description:    c.Ability,
+			RequiresAction: true,
+		})
+	}
+
+	// 3. Bag substitution steps.
+	for _, bs := range bagSubs {
+		if bs.CharacterName != "" {
 			steps = append(steps, SetupStep{
-				ID:             fmt.Sprintf("setup_mod_%s", m.CharacterID),
-				Title:          fmt.Sprintf("Setup: %s", m.CharacterName),
-				Description:    m.Description,
-				RequiresAction: true,
+				ID:             fmt.Sprintf("bag_sub_%s", bs.CausedByID),
+				Title:          fmt.Sprintf("Bag: %s", bs.CausedByName),
+				Description:    fmt.Sprintf("Put the %s token in the bag instead of the %s token.", bs.CharacterName, bs.CausedByName),
+				RequiresAction: false,
 			})
 		}
 	}
 
-	// 3. Reminder tokens.
+	// 4. Reminder tokens.
 	var reminders []string
 	for _, c := range chars {
 		for _, r := range c.Reminders {
@@ -65,7 +89,7 @@ func GenerateSetupChecklist(chars []*Character, registry *Registry) []SetupStep 
 		})
 	}
 
-	// 4. Jinxes.
+	// 5. Jinxes.
 	if registry != nil {
 		charIDs := make([]string, len(chars))
 		for i, c := range chars {
@@ -86,7 +110,7 @@ func GenerateSetupChecklist(chars []*Character, registry *Registry) []SetupStep 
 		}
 	}
 
-	// 5. Bag tokens.
+	// 6. Bag tokens.
 	steps = append(steps, SetupStep{
 		ID:             "bag_tokens",
 		Title:          "Put tokens in the bag",
@@ -94,7 +118,7 @@ func GenerateSetupChecklist(chars []*Character, registry *Registry) []SetupStep 
 		RequiresAction: true,
 	})
 
-	// 6. Distribute.
+	// 7. Distribute.
 	steps = append(steps, SetupStep{
 		ID:             "distribute_tokens",
 		Title:          "Distribute tokens to players",
@@ -102,7 +126,7 @@ func GenerateSetupChecklist(chars []*Character, registry *Registry) []SetupStep 
 		RequiresAction: true,
 	})
 
-	// 7. Collect tokens back (optional).
+	// 8. Collect tokens back (optional).
 	steps = append(steps, SetupStep{
 		ID:             "collect_tokens",
 		Title:          "Collect tokens back",
@@ -110,7 +134,7 @@ func GenerateSetupChecklist(chars []*Character, registry *Registry) []SetupStep 
 		RequiresAction: true,
 	})
 
-	// 8. Begin first night.
+	// 9. Begin first night.
 	steps = append(steps, SetupStep{
 		ID:             "begin_night",
 		Title:          "Begin first night",

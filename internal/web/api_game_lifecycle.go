@@ -9,6 +9,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 )
 
@@ -31,22 +32,59 @@ func (h *ClockKeeperServiceHandler) StartGame(ctx context.Context, req *connect.
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	_, err = tx.Game.UpdateOneID(g.ID).SetState(game.StateInProgress).Save(ctx)
+	n, err := tx.Game.Update().
+		Where(game.IDEQ(g.ID), game.StateEQ(game.StateSetup)).
+		SetState(game.StateInProgress).
+		Save(ctx)
 	if err != nil {
 		_ = tx.Rollback()
 		slog.Error("update game state failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+	if n == 0 {
+		_ = tx.Rollback()
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is not in setup state"))
+	}
 
-	_, err = tx.Phase.Create().
+	// Seed initial character alignments from traveller setup alignments.
+	initialAlignments := make(map[string]string)
+	for id, align := range g.TravellerAlignments {
+		switch align {
+		case schema.AlignmentGood:
+			initialAlignments[id] = "good"
+		case schema.AlignmentEvil:
+			initialAlignments[id] = "evil"
+		}
+	}
+
+	// Create Night+Day pair for round 1.
+	nightCreate := tx.Phase.Create().
 		SetGameID(g.ID).
 		SetRoundNumber(1).
 		SetType(phase.TypeNight).
-		SetIsActive(true).
-		Save(ctx)
+		SetIsActive(true)
+	if len(initialAlignments) > 0 {
+		nightCreate = nightCreate.SetCharacterAlignments(initialAlignments)
+	}
+	_, err = nightCreate.Save(ctx)
 	if err != nil {
 		_ = tx.Rollback()
-		slog.Error("create first phase failed", "err", err)
+		slog.Error("create first night phase failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	dayCreate := tx.Phase.Create().
+		SetGameID(g.ID).
+		SetRoundNumber(1).
+		SetType(phase.TypeDay).
+		SetIsActive(false)
+	if len(initialAlignments) > 0 {
+		dayCreate = dayCreate.SetCharacterAlignments(initialAlignments)
+	}
+	_, err = dayCreate.Save(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		slog.Error("create first day phase failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
@@ -67,6 +105,7 @@ func (h *ClockKeeperServiceHandler) StartGame(ctx context.Context, req *connect.
 }
 
 func (h *ClockKeeperServiceHandler) AdvancePhase(ctx context.Context, req *connect.Request[clockkeeperv1.AdvancePhaseRequest]) (*connect.Response[clockkeeperv1.AdvancePhaseResponse], error) {
+	// Ownership check before the transaction (auth gate only).
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
 		return nil, err
@@ -76,65 +115,116 @@ func (h *ClockKeeperServiceHandler) AdvancePhase(ctx context.Context, req *conne
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is not in progress"))
 	}
 
-	activePhase, err := h.getActivePhase(ctx, g.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Determine next phase.
-	var nextType phase.Type
-	var nextRound int
-	if activePhase.Type == phase.TypeNight {
-		nextType = phase.TypeDay
-		nextRound = activePhase.RoundNumber
-	} else {
-		nextType = phase.TypeNight
-		nextRound = activePhase.RoundNumber + 1
-	}
-
 	tx, err := h.db.Tx(ctx)
 	if err != nil {
 		slog.Error("start transaction failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	_, err = tx.Phase.UpdateOneID(activePhase.ID).SetIsActive(false).Save(ctx)
+	// Re-query the game inside the transaction so all reads are consistent with writes.
+	g, err = tx.Game.Query().
+		Where(game.ID(g.ID)).
+		WithPhases(func(q *ent.PhaseQuery) {
+			q.WithDeaths().
+				Order(ent.Asc(phase.FieldID))
+		}).
+		Only(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		slog.Error("re-fetch game in tx failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Find the active night phase inside the transaction.
+	activeNight, err := tx.Phase.Query().
+		Where(phase.GameID(g.ID), phase.IsActive(true)).
+		Only(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		if ent.IsNotFound(err) {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no active phase"))
+		}
+		slog.Error("get active phase failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	if activeNight.Type != phase.TypeNight {
+		_ = tx.Rollback()
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("active phase is not a night phase"))
+	}
+
+	// Find the companion day phase of the current round.
+	var currentDayDeaths []*ent.Death
+	var currentDayAlignments map[string]string
+	for _, p := range g.Edges.Phases {
+		if p.RoundNumber == activeNight.RoundNumber && p.Type == phase.TypeDay {
+			currentDayDeaths = p.Edges.Deaths
+			currentDayAlignments = p.CharacterAlignments
+			break
+		}
+	}
+
+	nextRound := activeNight.RoundNumber + 1
+
+	// Deactivate current night phase.
+	_, err = tx.Phase.UpdateOneID(activeNight.ID).SetIsActive(false).Save(ctx)
 	if err != nil {
 		_ = tx.Rollback()
 		slog.Error("deactivate phase failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	newPhase, err := tx.Phase.Create().
+	// Create next Night+Day pair (with propagated alignments).
+	nightCreate := tx.Phase.Create().
 		SetGameID(g.ID).
 		SetRoundNumber(nextRound).
-		SetType(nextType).
-		SetIsActive(true).
-		Save(ctx)
+		SetType(phase.TypeNight).
+		SetIsActive(true)
+	if len(currentDayAlignments) > 0 {
+		nightCreate = nightCreate.SetCharacterAlignments(currentDayAlignments)
+	}
+	newNight, err := nightCreate.Save(ctx)
 	if err != nil {
 		_ = tx.Rollback()
-		slog.Error("create next phase failed", "err", err)
+		slog.Error("create next night phase failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	// Copy death records from the old phase to the new phase (auto-propagation).
-	// Use the game's eagerly-loaded phase data (activePhase from getActivePhase has no edges).
-	var oldPhaseDeaths []*ent.Death
-	for _, p := range g.Edges.Phases {
-		if p.ID == activePhase.ID {
-			oldPhaseDeaths = p.Edges.Deaths
-			break
-		}
+	dayCreate := tx.Phase.Create().
+		SetGameID(g.ID).
+		SetRoundNumber(nextRound).
+		SetType(phase.TypeDay).
+		SetIsActive(false)
+	if len(currentDayAlignments) > 0 {
+		dayCreate = dayCreate.SetCharacterAlignments(currentDayAlignments)
 	}
-	for _, d := range oldPhaseDeaths {
+	newDay, err := dayCreate.Save(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		slog.Error("create next day phase failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Propagate deaths from Day N (has all accumulated deaths) into both new phases.
+	for _, d := range currentDayDeaths {
 		_, err = tx.Death.Create().
-			SetPhaseID(newPhase.ID).
+			SetPhaseID(newNight.ID).
 			SetRoleID(d.RoleID).
 			SetGhostVote(d.GhostVote).
 			Save(ctx)
 		if err != nil {
 			_ = tx.Rollback()
-			slog.Error("copy death to new phase failed", "err", err)
+			slog.Error("copy death to new night failed", "err", err)
+			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		}
+		_, err = tx.Death.Create().
+			SetPhaseID(newDay.ID).
+			SetRoleID(d.RoleID).
+			SetGhostVote(d.GhostVote).
+			Save(ctx)
+		if err != nil {
+			_ = tx.Rollback()
+			slog.Error("copy death to new day failed", "err", err)
 			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 		}
 	}

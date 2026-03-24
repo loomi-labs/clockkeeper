@@ -88,6 +88,12 @@ func (_c *PhaseCreate) SetCompletedActions(v []string) *PhaseCreate {
 	return _c
 }
 
+// SetCharacterAlignments sets the "character_alignments" field.
+func (_c *PhaseCreate) SetCharacterAlignments(v map[string]string) *PhaseCreate {
+	_c.mutation.SetCharacterAlignments(v)
+	return _c
+}
+
 // SetGame sets the "game" edge to the Game entity.
 func (_c *PhaseCreate) SetGame(v *Game) *PhaseCreate {
 	return _c.SetGameID(v.ID)
@@ -158,6 +164,10 @@ func (_c *PhaseCreate) defaults() {
 	if _, ok := _c.mutation.CompletedActions(); !ok {
 		v := phase.DefaultCompletedActions
 		_c.mutation.SetCompletedActions(v)
+	}
+	if _, ok := _c.mutation.CharacterAlignments(); !ok {
+		v := phase.DefaultCharacterAlignments
+		_c.mutation.SetCharacterAlignments(v)
 	}
 }
 
@@ -243,6 +253,10 @@ func (_c *PhaseCreate) createSpec() (*Phase, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CompletedActions(); ok {
 		_spec.SetField(phase.FieldCompletedActions, field.TypeJSON, value)
 		_node.CompletedActions = value
+	}
+	if value, ok := _c.mutation.CharacterAlignments(); ok {
+		_spec.SetField(phase.FieldCharacterAlignments, field.TypeJSON, value)
+		_node.CharacterAlignments = value
 	}
 	if nodes := _c.mutation.GameIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

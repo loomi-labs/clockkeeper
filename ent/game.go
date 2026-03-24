@@ -41,8 +41,20 @@ type Game struct {
 	SelectedTravellers []string `json:"selected_travellers,omitempty"`
 	// ExtraCharacters holds the value of the "extra_characters" field.
 	ExtraCharacters []string `json:"extra_characters,omitempty"`
+	// SelectedBluffs holds the value of the "selected_bluffs" field.
+	SelectedBluffs []string `json:"selected_bluffs,omitempty"`
 	// TravellerAlignments holds the value of the "traveller_alignments" field.
 	TravellerAlignments map[string]schema.TravellerAlignment `json:"traveller_alignments,omitempty"`
+	// GrimoirePositions holds the value of the "grimoire_positions" field.
+	GrimoirePositions map[string]schema.GrimoirePosition `json:"grimoire_positions,omitempty"`
+	// GrimoirePlayerNames holds the value of the "grimoire_player_names" field.
+	GrimoirePlayerNames map[string]string `json:"grimoire_player_names,omitempty"`
+	// GrimoireGameNotes holds the value of the "grimoire_game_notes" field.
+	GrimoireGameNotes map[string]string `json:"grimoire_game_notes,omitempty"`
+	// GrimoireRoundNotes holds the value of the "grimoire_round_notes" field.
+	GrimoireRoundNotes map[string]string `json:"grimoire_round_notes,omitempty"`
+	// BagSubstitutions holds the value of the "bag_substitutions" field.
+	BagSubstitutions []schema.GameBagSubstitution `json:"bag_substitutions,omitempty"`
 	// State holds the value of the "state" field.
 	State game.State `json:"state,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -100,7 +112,7 @@ func (*Game) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case game.FieldSelectedRoles, game.FieldSelectedTravellers, game.FieldExtraCharacters, game.FieldTravellerAlignments:
+		case game.FieldSelectedRoles, game.FieldSelectedTravellers, game.FieldExtraCharacters, game.FieldSelectedBluffs, game.FieldTravellerAlignments, game.FieldGrimoirePositions, game.FieldGrimoirePlayerNames, game.FieldGrimoireGameNotes, game.FieldGrimoireRoundNotes, game.FieldBagSubstitutions:
 			values[i] = new([]byte)
 		case game.FieldID, game.FieldUserID, game.FieldScriptID, game.FieldPlayerCount, game.FieldTravellerCount:
 			values[i] = new(sql.NullInt64)
@@ -195,12 +207,60 @@ func (_m *Game) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field extra_characters: %w", err)
 				}
 			}
+		case game.FieldSelectedBluffs:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field selected_bluffs", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.SelectedBluffs); err != nil {
+					return fmt.Errorf("unmarshal field selected_bluffs: %w", err)
+				}
+			}
 		case game.FieldTravellerAlignments:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field traveller_alignments", values[i])
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.TravellerAlignments); err != nil {
 					return fmt.Errorf("unmarshal field traveller_alignments: %w", err)
+				}
+			}
+		case game.FieldGrimoirePositions:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field grimoire_positions", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.GrimoirePositions); err != nil {
+					return fmt.Errorf("unmarshal field grimoire_positions: %w", err)
+				}
+			}
+		case game.FieldGrimoirePlayerNames:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field grimoire_player_names", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.GrimoirePlayerNames); err != nil {
+					return fmt.Errorf("unmarshal field grimoire_player_names: %w", err)
+				}
+			}
+		case game.FieldGrimoireGameNotes:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field grimoire_game_notes", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.GrimoireGameNotes); err != nil {
+					return fmt.Errorf("unmarshal field grimoire_game_notes: %w", err)
+				}
+			}
+		case game.FieldGrimoireRoundNotes:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field grimoire_round_notes", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.GrimoireRoundNotes); err != nil {
+					return fmt.Errorf("unmarshal field grimoire_round_notes: %w", err)
+				}
+			}
+		case game.FieldBagSubstitutions:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field bag_substitutions", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.BagSubstitutions); err != nil {
+					return fmt.Errorf("unmarshal field bag_substitutions: %w", err)
 				}
 			}
 		case game.FieldState:
@@ -290,8 +350,26 @@ func (_m *Game) String() string {
 	builder.WriteString("extra_characters=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ExtraCharacters))
 	builder.WriteString(", ")
+	builder.WriteString("selected_bluffs=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SelectedBluffs))
+	builder.WriteString(", ")
 	builder.WriteString("traveller_alignments=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TravellerAlignments))
+	builder.WriteString(", ")
+	builder.WriteString("grimoire_positions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.GrimoirePositions))
+	builder.WriteString(", ")
+	builder.WriteString("grimoire_player_names=")
+	builder.WriteString(fmt.Sprintf("%v", _m.GrimoirePlayerNames))
+	builder.WriteString(", ")
+	builder.WriteString("grimoire_game_notes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.GrimoireGameNotes))
+	builder.WriteString(", ")
+	builder.WriteString("grimoire_round_notes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.GrimoireRoundNotes))
+	builder.WriteString(", ")
+	builder.WriteString("bag_substitutions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BagSubstitutions))
 	builder.WriteString(", ")
 	builder.WriteString("state=")
 	builder.WriteString(fmt.Sprintf("%v", _m.State))

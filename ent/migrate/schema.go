@@ -49,7 +49,13 @@ var (
 		{Name: "selected_roles", Type: field.TypeJSON},
 		{Name: "selected_travellers", Type: field.TypeJSON},
 		{Name: "extra_characters", Type: field.TypeJSON, Nullable: true},
+		{Name: "selected_bluffs", Type: field.TypeJSON, Nullable: true},
 		{Name: "traveller_alignments", Type: field.TypeJSON, Nullable: true},
+		{Name: "grimoire_positions", Type: field.TypeJSON, Nullable: true},
+		{Name: "grimoire_player_names", Type: field.TypeJSON, Nullable: true},
+		{Name: "grimoire_game_notes", Type: field.TypeJSON, Nullable: true},
+		{Name: "grimoire_round_notes", Type: field.TypeJSON, Nullable: true},
+		{Name: "bag_substitutions", Type: field.TypeJSON, Nullable: true},
 		{Name: "state", Type: field.TypeEnum, Enums: []string{"setup", "in_progress", "completed"}, Default: "setup"},
 		{Name: "script_id", Type: field.TypeInt},
 		{Name: "user_id", Type: field.TypeInt},
@@ -62,13 +68,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "games_scripts_games",
-				Columns:    []*schema.Column{GamesColumns[11]},
+				Columns:    []*schema.Column{GamesColumns[17]},
 				RefColumns: []*schema.Column{ScriptsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "games_users_games",
-				Columns:    []*schema.Column{GamesColumns[12]},
+				Columns:    []*schema.Column{GamesColumns[18]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -83,6 +89,7 @@ var (
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"night", "day"}},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
 		{Name: "completed_actions", Type: field.TypeJSON, Nullable: true},
+		{Name: "character_alignments", Type: field.TypeJSON, Nullable: true},
 		{Name: "game_id", Type: field.TypeInt},
 	}
 	// PhasesTable holds the schema information for the "phases" table.
@@ -93,7 +100,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "phases_games_phases",
-				Columns:    []*schema.Column{PhasesColumns[7]},
+				Columns:    []*schema.Column{PhasesColumns[8]},
 				RefColumns: []*schema.Column{GamesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

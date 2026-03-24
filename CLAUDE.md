@@ -43,6 +43,7 @@ See @docs/commands.md for the full reference. Most common:
 | Type-check frontend | `task check` |
 | Generate all code | `task gen` |
 | Build binary | `task build` |
+| Format frontend | `task format` |
 | Apply DB migrations | `task db:migrate` |
 
 ## Scripts
