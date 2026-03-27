@@ -38,10 +38,37 @@
 
   const canGoBack = $derived(viewingRoundIndex > 0);
   const canGoForward = $derived(viewingRoundIndex < rounds.length - 1);
+
+  let breadcrumbsEl: HTMLDivElement | undefined = $state();
+  let headerHidden = $state(false);
+
+  $effect(() => {
+    if (!breadcrumbsEl) return;
+    const activeEl = breadcrumbsEl.querySelector<HTMLButtonElement>(
+      `button[data-round-index="${viewingRoundIndex}"]`,
+    );
+    activeEl?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  });
+
+  $effect(() => {
+    if (!isFullscreen) headerHidden = false;
+  });
 </script>
 
-<div class="no-print rounded-lg border border-border bg-surface p-4">
-  <div class="flex items-center justify-between gap-4">
+{#if isFullscreen && headerHidden}
+  <button
+    onclick={() => (headerHidden = false)}
+    class="no-print rounded-lg border border-border bg-surface/80 p-1.5 text-secondary transition-colors hover:bg-hover hover:text-medium"
+    title="Show header"
+    aria-label="Show header"
+  >
+    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  </button>
+{:else}
+<div class="no-print rounded-lg border border-border bg-surface p-3 sm:p-4">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
     <!-- Round display with arrow navigation -->
     <div>
       <div class="flex items-center gap-2">
@@ -65,7 +92,7 @@
             />
           </svg>
         </button>
-        <h2 class="text-2xl font-bold text-primary">Night {roundNumber}</h2>
+        <h2 class="text-xl font-bold text-primary sm:text-2xl">Night {roundNumber}</h2>
         <button
           onclick={() => onnavigate(viewingRoundIndex + 1)}
           disabled={!canGoForward}
@@ -89,11 +116,12 @@
       </div>
       <!-- Round breadcrumbs (clickable) -->
       {#if rounds.length > 1}
-        <div class="mt-1 flex items-center gap-1">
+        <div bind:this={breadcrumbsEl} class="mt-1 flex items-center gap-1 overflow-x-auto [scrollbar-width:none]">
           {#each rounds as round, i (round.roundNumber)}
             {@const isFirst = round.roundNumber === 1}
             {@const isActive = i === viewingRoundIndex}
             <button
+              data-round-index={i}
               onclick={() => onnavigate(i)}
               class="rounded px-1.5 py-0.5 text-xs font-medium transition-colors {isActive
                 ? isFirst
@@ -111,7 +139,7 @@
     </div>
 
     <!-- Right side: view toggle + actions -->
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-2 sm:gap-3">
       <!-- View toggle: Night Sheet / Grimoire + Fullscreen -->
       {#if onviewchange}
         <div class="flex items-center gap-1.5">
@@ -135,6 +163,18 @@
               Grimoire
             </button>
           </div>
+          {#if isFullscreen}
+            <button
+              onclick={() => (headerHidden = true)}
+              class="rounded-lg border border-border p-2 text-secondary transition-colors hover:bg-hover hover:text-medium"
+              title="Hide header"
+              aria-label="Hide header"
+            >
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+          {/if}
           {#if ontogglefullscreen}
             <button
               onclick={ontogglefullscreen}
@@ -197,3 +237,4 @@
     </div>
   </div>
 </div>
+{/if}

@@ -31,6 +31,27 @@ tasks:
         pnpm --dir web run dev &
         wait
 
+  dev:lan:
+    desc: Start full dev environment exposed on LAN (for testing on phone)
+    cmds:
+      - docker compose up -d postgres
+      - defer: docker compose stop postgres
+      - |
+        for i in $(seq 1 60); do
+          if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 0.5
+        done
+        echo "Postgres did not become ready in 30s" >&2
+        exit 1
+      - task: db:migrate
+      - |
+        trap 'kill 0' EXIT
+        go tool air &
+        pnpm --dir web exec vite dev --host &
+        wait
+
   build:
     desc: Build the Clock Keeper binary
     cmds:
