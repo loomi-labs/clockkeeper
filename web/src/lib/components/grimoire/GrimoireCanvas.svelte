@@ -9,6 +9,11 @@
     angleFromPosition,
     distanceBetween,
   } from "./layout";
+  import {
+    useComposedGesture,
+    pinchComposition,
+    type GestureCustomEvent,
+  } from "svelte-gestures";
 
   let {
     players,
@@ -47,26 +52,89 @@
   let zoom = $state(1);
   let showNotes = $state(true);
 
-  let isPanning = $state(false);
-  let panStartX = $state(0);
-  let panStartY = $state(0);
-  let panOriginX = $state(0);
-  let panOriginY = $state(0);
-
-  // Pinch zoom tracking
-  let pointers = new Map<number, PointerEvent>();
-  let lastPinchDist = 0;
-
   let canvasEl: HTMLDivElement;
 
   // Track which player is being highlighted as an attach target during reminder drag
   let attachPreviewPlayerId = $state<string | null>(null);
+
+  // Pan tracking
+  let isPanning = false;
+  let panStartClientX = 0;
+  let panStartClientY = 0;
+  let panOriginX = 0;
+  let panOriginY = 0;
+
+  // Pinch tracking — zoomAtPinchStart converts cumulative scale to absolute zoom
+  let zoomAtPinchStart = 1;
+
+  interface PinchDetail {
+    scale: number;
+    center: { x: number; y: number };
+    pointerType: string;
+  }
+
+  const canvasGesture = useComposedGesture(
+    (register) => {
+      const pinchFns = register(pinchComposition, { touchAction: "none" });
+      return (activeEvents: PointerEvent[], event: PointerEvent) => {
+        // Forward to pinch detection (only dispatches when 2 pointers)
+        pinchFns.onMove?.(activeEvents, event);
+      };
+    },
+    {
+      oncomposedGesturedown: (e: GestureCustomEvent) => {
+        if (e.detail.pointersCount === 1) {
+          isPanning = true;
+          panStartClientX = e.detail.event.clientX;
+          panStartClientY = e.detail.event.clientY;
+          panOriginX = panX;
+          panOriginY = panY;
+        } else if (e.detail.pointersCount === 2) {
+          isPanning = false;
+          zoomAtPinchStart = zoom;
+        }
+      },
+      oncomposedGesturemove: (e: GestureCustomEvent) => {
+        if (e.detail.pointersCount !== 1) return;
+        if (!isPanning) {
+          isPanning = true;
+          panStartClientX = e.detail.event.clientX;
+          panStartClientY = e.detail.event.clientY;
+          panOriginX = panX;
+          panOriginY = panY;
+          return;
+        }
+        panX = panOriginX + (e.detail.event.clientX - panStartClientX);
+        panY = panOriginY + (e.detail.event.clientY - panStartClientY);
+      },
+      oncomposedGestureup: (e: GestureCustomEvent) => {
+        if (e.detail.pointersCount === 0) {
+          isPanning = false;
+        }
+      },
+    } as Record<string, (e: GestureCustomEvent) => void>,
+  );
 
   onMount(() => {
     if (!canvasEl) return;
     const rect = canvasEl.getBoundingClientRect();
     panX = rect.width / 2;
     panY = rect.height / 2;
+
+    // Listen for pinch custom events dispatched by svelte-gestures
+    const handlePinch = ((e: CustomEvent<PinchDetail>) => {
+      const { scale, center } = e.detail;
+      const newZoom = Math.max(0.3, Math.min(3.0, zoomAtPinchStart * scale));
+
+      panX = center.x - (center.x - panX) * (newZoom / zoom);
+      panY = center.y - (center.y - panY) * (newZoom / zoom);
+      zoom = newZoom;
+    }) as EventListener;
+    canvasEl.addEventListener("pinch", handlePinch);
+
+    return () => {
+      canvasEl.removeEventListener("pinch", handlePinch);
+    };
   });
 
   function findNearestPlayer(
@@ -134,72 +202,6 @@
     attachPreviewPlayerId = nearPlayer?.id ?? null;
   }
 
-  function handlePointerDown(e: PointerEvent) {
-    pointers.set(e.pointerId, e);
-
-    if (pointers.size === 2) {
-      // Start pinch — cancel any pan
-      isPanning = false;
-      const pts = [...pointers.values()];
-      lastPinchDist = Math.hypot(
-        pts[0].clientX - pts[1].clientX,
-        pts[0].clientY - pts[1].clientY,
-      );
-      return;
-    }
-
-    if (pointers.size === 1) {
-      isPanning = true;
-      panStartX = e.clientX;
-      panStartY = e.clientY;
-      panOriginX = panX;
-      panOriginY = panY;
-      canvasEl.setPointerCapture(e.pointerId);
-    }
-  }
-
-  function handlePointerMove(e: PointerEvent) {
-    pointers.set(e.pointerId, e);
-
-    if (pointers.size === 2) {
-      const pts = [...pointers.values()];
-      const dist = Math.hypot(
-        pts[0].clientX - pts[1].clientX,
-        pts[0].clientY - pts[1].clientY,
-      );
-      if (lastPinchDist > 0) {
-        const scale = dist / lastPinchDist;
-        const newZoom = Math.max(0.3, Math.min(3.0, zoom * scale));
-
-        // Zoom toward pinch center
-        const rect = canvasEl.getBoundingClientRect();
-        const centerX =
-          (pts[0].clientX + pts[1].clientX) / 2 - rect.left;
-        const centerY =
-          (pts[0].clientY + pts[1].clientY) / 2 - rect.top;
-        panX = centerX - (centerX - panX) * (newZoom / zoom);
-        panY = centerY - (centerY - panY) * (newZoom / zoom);
-        zoom = newZoom;
-      }
-      lastPinchDist = dist;
-      return;
-    }
-
-    if (!isPanning) return;
-    panX = panOriginX + (e.clientX - panStartX);
-    panY = panOriginY + (e.clientY - panStartY);
-  }
-
-  function handlePointerUp(e: PointerEvent) {
-    pointers.delete(e.pointerId);
-    if (pointers.size < 2) {
-      lastPinchDist = 0;
-    }
-    if (pointers.size === 0) {
-      isPanning = false;
-    }
-  }
-
   function handleWheel(e: WheelEvent) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -215,12 +217,9 @@
 </script>
 
 <div
-  class="relative h-full w-full overflow-hidden bg-page touch-none"
+  class="relative h-full w-full overflow-hidden bg-page"
   bind:this={canvasEl}
-  onpointerdown={handlePointerDown}
-  onpointermove={handlePointerMove}
-  onpointerup={handlePointerUp}
-  onpointercancel={handlePointerUp}
+  {...canvasGesture}
   onwheel={handleWheel}
   role="application"
   aria-label="Grimoire canvas"

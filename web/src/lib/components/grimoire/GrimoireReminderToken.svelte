@@ -6,6 +6,7 @@
     evilColors,
     teamDataAttr,
   } from "~/lib/team-styles";
+  import { usePan, type GestureCustomEvent } from "svelte-gestures";
   import type { GrimoireReminder } from "./types";
 
   let {
@@ -52,48 +53,49 @@
   const isAttached = $derived(!!reminder.attachedTo);
 
   let dragging = $state(false);
-  let dragStartX = $state(0);
-  let dragStartY = $state(0);
   let offsetX = $state(0);
   let offsetY = $state(0);
   let imgError = $state(false);
+  let dragStartClientX = 0;
+  let dragStartClientY = 0;
 
-  function onPointerDown(e: PointerEvent) {
-    e.stopPropagation();
-    dragging = true;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
-    offsetX = 0;
-    offsetY = 0;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-
-  function onPointerMove(e: PointerEvent) {
-    if (!dragging) return;
-    offsetX = (e.clientX - dragStartX) / zoom;
-    offsetY = (e.clientY - dragStartY) / zoom;
-    ondragmove?.(reminder.x + offsetX, reminder.y + offsetY);
-  }
-
-  function onPointerUp() {
-    if (!dragging) return;
-    dragging = false;
-    if (offsetX !== 0 || offsetY !== 0) {
-      onmove?.(reminder.x + offsetX, reminder.y + offsetY);
-    }
-    offsetX = 0;
-    offsetY = 0;
-  }
+  const gesture = usePan(
+    () => {},
+    () => ({ delay: 0, touchAction: "none" }),
+    {
+      onpandown: (e: GestureCustomEvent) => {
+        e.detail.event.stopPropagation();
+        dragging = true;
+        dragStartClientX = e.detail.event.clientX;
+        dragStartClientY = e.detail.event.clientY;
+        offsetX = 0;
+        offsetY = 0;
+        e.detail.attachmentNode.setPointerCapture(e.detail.event.pointerId);
+      },
+      onpanmove: (e: GestureCustomEvent) => {
+        if (!dragging) return;
+        offsetX = (e.detail.event.clientX - dragStartClientX) / zoom;
+        offsetY = (e.detail.event.clientY - dragStartClientY) / zoom;
+        ondragmove?.(reminder.x + offsetX, reminder.y + offsetY);
+      },
+      onpanup: (e: GestureCustomEvent) => {
+        if (!dragging) return;
+        dragging = false;
+        if (offsetX !== 0 || offsetY !== 0) {
+          onmove?.(reminder.x + offsetX, reminder.y + offsetY);
+        }
+        offsetX = 0;
+        offsetY = 0;
+      },
+    },
+  );
 </script>
 
 <div
-  class="absolute touch-none select-none"
+  class="absolute select-none"
   style="left: {reminder.x + offsetX}px; top: {reminder.y +
     offsetY}px; transform: translate(-50%, -50%); z-index: {dragging ? 50 : 0};"
-  onpointerdown={onPointerDown}
-  onpointermove={onPointerMove}
-  onpointerup={onPointerUp}
-  onpointercancel={onPointerUp}
+  {...gesture}
   role="button"
   tabindex="0"
 >

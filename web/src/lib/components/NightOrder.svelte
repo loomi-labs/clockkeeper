@@ -47,54 +47,157 @@
     onalignment?: (id: string, alignment: string) => void;
   } = $props();
 
-  import { usePan, type PanCustomEvent } from "svelte-gestures";
+  import { onDestroy } from "svelte";
+  import { usePan, type GestureCustomEvent } from "svelte-gestures";
 
   const SWIPE_THRESHOLD = 80;
+  const HORIZONTAL_LOCK_THRESHOLD = 8;
   const NON_INTERACTIVE_SPECIALS = new Set(["dusk", "dawn"]);
+  const SNAP_BACK_TRANSITION = "transform 250ms cubic-bezier(0.2, 0, 0, 1)";
 
-  let panState = $state<{ id: string; startX: number; dx: number } | null>(
-    null,
-  );
+  // Direct DOM manipulation during swipes avoids Svelte re-renders that can
+  // interfere with active pointer/touch events on mobile.
+  let activeDrag: {
+    id: string;
+    startX: number;
+    startY: number;
+    dx: number;
+    el: HTMLElement;
+    overlayEl: HTMLElement | null;
+    lockedHorizontal: boolean;
+    pointerId: number;
+    removeTouchHandler: (() => void) | null;
+  } | null = null;
+
+  onDestroy(() => {
+    activeDrag?.removeTouchHandler?.();
+    activeDrag = null;
+  });
+
+  const gestureCache = new Map<string, object>();
 
   function panProps(entryId: string, onLeftSwipe?: () => void) {
-    const allowLeft = !!onLeftSwipe;
-    if (!ontoggle && !allowLeft) return {};
-    return usePan(
-      (e: PanCustomEvent) => {
-        if (!panState || panState.id !== entryId) {
-          panState = { id: entryId, startX: e.detail.x, dx: 0 };
-        } else {
-          let dx = e.detail.x - panState.startX;
-          if (!ontoggle) dx = Math.min(0, dx);
-          if (!allowLeft) dx = Math.max(0, dx);
-          panState = { ...panState, dx };
-        }
-      },
+    if (!ontoggle && !onLeftSwipe) return {};
+
+    let cached = gestureCache.get(entryId);
+    if (cached) return cached;
+
+    const isCharEntry = !(entryId in SPECIAL_ENTRIES);
+
+    cached = usePan(
+      () => {},
       () => ({ delay: 0, touchAction: "pan-y" as const }),
       {
-        onpanup: () => {
-          if (panState && panState.id === entryId) {
-            if (panState.dx > SWIPE_THRESHOLD) {
-              const isDone = completedActions?.has(entryId) ?? false;
-              ontoggle?.(entryId, !isDone);
-            } else if (panState.dx < -SWIPE_THRESHOLD && allowLeft) {
-              onLeftSwipe?.();
+        onpandown: (e: GestureCustomEvent) => {
+          const node = e.detail.attachmentNode;
+          const wrapper = node.parentElement;
+
+          // Add touchmove handler to prevent browser scroll when swiping
+          // horizontally. Without this, touch-action: pan-y causes
+          // pointercancel when the touch has any vertical component.
+          const startX = e.detail.event.clientX;
+          const startY = e.detail.event.clientY;
+          let locked = false;
+          const handleTouchMove = (te: TouchEvent) => {
+            const touch = te.touches[0];
+            if (!touch) return;
+            const dx = Math.abs(touch.clientX - startX);
+            const dy = Math.abs(touch.clientY - startY);
+            if (!locked && dx > HORIZONTAL_LOCK_THRESHOLD && dx > dy) {
+              locked = true;
+            }
+            if (locked) {
+              te.preventDefault();
+            }
+          };
+          node.addEventListener("touchmove", handleTouchMove, {
+            passive: false,
+          });
+
+          activeDrag = {
+            id: entryId,
+            startX: e.detail.event.clientX,
+            startY: e.detail.event.clientY,
+            dx: 0,
+            el: node,
+            overlayEl: wrapper?.querySelector("[data-swipe-overlay]") ?? null,
+            lockedHorizontal: false,
+            pointerId: e.detail.event.pointerId,
+            removeTouchHandler: () =>
+              node.removeEventListener("touchmove", handleTouchMove),
+          };
+        },
+        onpanmove: (e: GestureCustomEvent) => {
+          if (!activeDrag || activeDrag.id !== entryId) return;
+          let dx = e.detail.event.clientX - activeDrag.startX;
+          const dy = e.detail.event.clientY - activeDrag.startY;
+          if (!ontoggle) dx = Math.min(0, dx);
+          if (!isCharEntry || (!ondeath && !onundodeath))
+            dx = Math.max(0, dx);
+
+          // Require clear horizontal intent before locking the swipe,
+          // so mostly-vertical scrolls aren't intercepted.
+          if (
+            !activeDrag.lockedHorizontal &&
+            (Math.abs(dx) <= HORIZONTAL_LOCK_THRESHOLD ||
+              Math.abs(dx) <= Math.abs(dy))
+          ) {
+            return;
+          }
+          if (!activeDrag.lockedHorizontal) {
+            activeDrag.lockedHorizontal = true;
+            activeDrag.el.setPointerCapture(activeDrag.pointerId);
+          }
+
+          activeDrag.dx = dx;
+
+          // Direct DOM updates — no Svelte re-render
+          activeDrag.el.style.transform = `translate3d(${dx}px, 0, 0)`;
+          activeDrag.el.style.transition = "none";
+          if (activeDrag.overlayEl) {
+            const dir = dx > 0 ? "right" : dx < 0 ? "left" : null;
+            activeDrag.overlayEl.style.display = dir ? "" : "none";
+            for (const child of activeDrag.overlayEl.children) {
+              const el = child as HTMLElement;
+              el.classList.toggle(
+                "hidden",
+                el.dataset.dir !== dir,
+              );
             }
           }
-          panState = null;
+        },
+        onpanup: () => {
+          if (!activeDrag || activeDrag.id !== entryId) return;
+          const { dx, el, overlayEl, removeTouchHandler } = activeDrag;
+
+          // Clean up touchmove handler
+          removeTouchHandler?.();
+
+          if (dx > SWIPE_THRESHOLD) {
+            const isDone = completedActions?.has(entryId) ?? false;
+            ontoggle?.(entryId, !isDone);
+          } else if (dx < -SWIPE_THRESHOLD && isCharEntry) {
+            const isDead = deadRoleIds?.has(entryId) ?? false;
+            if (isDead) {
+              onundodeath?.(entryId);
+            } else {
+              ondeath?.(entryId);
+            }
+          }
+
+          // Animate snap-back
+          el.style.transition = SNAP_BACK_TRANSITION;
+          el.style.transform = "translate3d(0, 0, 0)";
+          if (overlayEl) {
+            overlayEl.style.display = "none";
+          }
+
+          activeDrag = null;
         },
       },
     );
-  }
-
-  function swipeTransform(entryId: string): string {
-    return `translate3d(${panState?.id === entryId ? panState.dx : 0}px, 0, 0)`;
-  }
-
-  function swipeTransition(entryId: string): string {
-    return panState?.id === entryId
-      ? "none"
-      : "transform 250ms cubic-bezier(0.2, 0, 0, 1)";
+    gestureCache.set(entryId, cached);
+    return cached;
   }
 
   interface NightEntry {
@@ -409,12 +512,7 @@
           <div class="overflow-hidden rounded-lg" data-entry={entry.id}>
             <div
               {...isInteractive ? panProps(entry.id) : {}}
-              style="transform: {isInteractive
-                ? swipeTransform(entry.id)
-                : 'translate3d(0,0,0)'}; transition: {isInteractive
-                ? swipeTransition(entry.id)
-                : 'none'}"
-              class="relative flex items-center gap-3 bg-element/50 px-3 py-2.5 {isInteractive &&
+              class="relative flex items-center gap-2 bg-element/50 px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5 {isInteractive &&
               isDone
                 ? 'opacity-50 border-l-4 border-l-green-500'
                 : ''}"
@@ -422,7 +520,7 @@
               <img
                 src={specialIcons[entry.id]}
                 alt=""
-                class="h-20 w-20 shrink-0 object-contain"
+                class="h-12 w-12 shrink-0 object-contain sm:h-20 sm:w-20"
                 onerror={(e: Event) =>
                   ((e.target as HTMLImageElement).style.display = "none")}
               />
@@ -504,27 +602,35 @@
             class="relative overflow-hidden rounded-lg"
             data-entry={entry.id}
           >
-            {#if panState?.id === entry.id && panState.dx !== 0}
-              {#if panState.dx > 0}
-                <div
-                  class="absolute inset-0 flex items-center rounded-lg bg-green-500/20 pl-4"
+            <!-- Swipe overlays: always in DOM, toggled via direct DOM manipulation -->
+            <div
+              data-swipe-overlay
+              style="display: none"
+              class="pointer-events-none absolute inset-0 rounded-lg"
+            >
+              <!-- Right swipe: mark done -->
+              <div
+                data-dir="right"
+                class="hidden absolute inset-0 flex items-center rounded-lg bg-green-500/20 pl-4"
+              >
+                <svg
+                  class="h-6 w-6 text-green-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  ><path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="3"
+                    d="M5 13l4 4L19 7"
+                  /></svg
                 >
-                  <svg
-                    class="h-6 w-6 text-green-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    ><path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="3"
-                      d="M5 13l4 4L19 7"
-                    /></svg
-                  >
-                </div>
-              {:else if entry.isDead}
+              </div>
+              <!-- Left swipe: kill (or revive) -->
+              {#if entry.isDead}
                 <div
-                  class="absolute inset-0 flex items-center justify-end rounded-lg bg-green-500/20 pr-4"
+                  data-dir="left"
+                  class="hidden absolute inset-0 flex items-center justify-end rounded-lg bg-green-500/20 pr-4"
                 >
                   <svg
                     class="h-6 w-6 text-green-500"
@@ -541,7 +647,8 @@
                 </div>
               {:else}
                 <div
-                  class="absolute inset-0 flex items-center justify-end rounded-lg bg-red-500/20 pr-4"
+                  data-dir="left"
+                  class="hidden absolute inset-0 flex items-center justify-end rounded-lg bg-red-500/20 pr-4"
                 >
                   <svg
                     class="h-6 w-6 text-red-500"
@@ -553,13 +660,10 @@
                   >
                 </div>
               {/if}
-            {/if}
+            </div>
             <div
               {...panProps(entry.id, leftSwipeAction)}
-              style="transform: {swipeTransform(
-                entry.id,
-              )}; transition: {swipeTransition(entry.id)}"
-              class="card-slate relative flex items-center gap-3 border px-3 py-2.5 {isDone
+              class="card-slate relative flex items-center gap-2 border px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5 {isDone
                 ? 'opacity-50 border-l-4 border-l-green-500'
                 : ''} {entry.isDead
                 ? (unselectedColors[effectiveTeam(entry.id, entry.team ?? 0)] ??
@@ -580,7 +684,7 @@
                   entry.team ?? 0,
                 )}.webp"
                 alt=""
-                class="h-20 w-20 shrink-0 rounded-full {entry.isDead
+                class="h-12 w-12 shrink-0 rounded-full sm:h-20 sm:w-20 {entry.isDead
                   ? 'grayscale'
                   : ''}"
                 onerror={(e: Event) =>
@@ -588,7 +692,7 @@
               />
               <div class="min-w-0 flex-1">
                 <span
-                  class="text-base font-medium {isDone
+                  class="text-sm font-medium sm:text-base {isDone
                     ? 'line-through '
                     : ''}{entry.isDead
                     ? 'line-through text-muted'
@@ -612,7 +716,7 @@
                   </span>
                 {/if}
                 <p
-                  class="text-sm {entry.isDead
+                  class="text-xs sm:text-sm {entry.isDead
                     ? 'text-muted'
                     : 'text-secondary'}"
                 >
@@ -822,7 +926,7 @@
                   href="/almanac/{entry.id}?from={encodeURIComponent(
                     page.url.pathname + page.url.search,
                   )}"
-                  class="rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium"
+                  class="hidden rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium sm:inline-flex"
                   title="Almanac"
                   aria-label="View {entry.name} in almanac"
                 >
@@ -846,7 +950,7 @@
                   )}"
                   target="_blank"
                   rel="noopener"
-                  class="rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium"
+                  class="hidden rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium sm:inline-flex"
                   title="Wiki"
                   aria-label="View {entry.name} on wiki"
                 >

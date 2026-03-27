@@ -1,6 +1,11 @@
 <script lang="ts">
   import { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import { teamCardColors, goodColors, evilColors, teamDataAttr } from "~/lib/team-styles";
+  import {
+    useComposedGesture,
+    panComposition,
+    type GestureCustomEvent,
+  } from "svelte-gestures";
   import type { GrimoirePlayer } from "./types";
 
   let {
@@ -63,8 +68,6 @@
 
   let dragging = $state(false);
   let didDrag = $state(false);
-  let dragStartX = $state(0);
-  let dragStartY = $state(0);
   let offsetX = $state(0);
   let offsetY = $state(0);
   let imgError = $state(false);
@@ -83,44 +86,57 @@
   }
 
   const DRAG_THRESHOLD = 3;
+  let dragStartClientX = 0;
+  let dragStartClientY = 0;
 
-  function onPointerDown(e: PointerEvent) {
-    e.stopPropagation();
-    dragging = true;
-    didDrag = false;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
-    offsetX = 0;
-    offsetY = 0;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-
-  function onPointerMove(e: PointerEvent) {
-    if (!dragging) return;
-    offsetX = (e.clientX - dragStartX) / zoom;
-    offsetY = (e.clientY - dragStartY) / zoom;
-    if (
-      Math.abs(offsetX) > DRAG_THRESHOLD ||
-      Math.abs(offsetY) > DRAG_THRESHOLD
-    ) {
-      didDrag = true;
-    }
-  }
-
-  function onPointerUp() {
-    if (!dragging) return;
-    dragging = false;
-    if (didDrag) {
-      if (offsetX !== 0 || offsetY !== 0) {
-        onmove?.(player.x + offsetX, player.y + offsetY);
-      }
-    } else {
-      menuOpen = !menuOpen;
-      activeNoteType = null;
-    }
-    offsetX = 0;
-    offsetY = 0;
-  }
+  const gesture = useComposedGesture(
+    (register) => {
+      register(panComposition, { delay: 0, touchAction: "none" });
+      return (activeEvents: PointerEvent[]) => {};
+    },
+    {
+      oncomposedGesturedown: (e: GestureCustomEvent) => {
+        e.detail.event.stopPropagation();
+        if (menuOpen || activeNoteType) return;
+        dragging = true;
+        didDrag = false;
+        dragStartClientX = e.detail.event.clientX;
+        dragStartClientY = e.detail.event.clientY;
+        offsetX = 0;
+        offsetY = 0;
+      },
+      oncomposedGesturemove: (e: GestureCustomEvent) => {
+        if (!dragging) return;
+        offsetX = (e.detail.event.clientX - dragStartClientX) / zoom;
+        offsetY = (e.detail.event.clientY - dragStartClientY) / zoom;
+        if (
+          Math.abs(offsetX) > DRAG_THRESHOLD ||
+          Math.abs(offsetY) > DRAG_THRESHOLD
+        ) {
+          if (!didDrag) {
+            e.detail.attachmentNode.setPointerCapture(
+              e.detail.event.pointerId,
+            );
+          }
+          didDrag = true;
+        }
+      },
+      oncomposedGestureup: (e: GestureCustomEvent) => {
+        if (!dragging) return;
+        dragging = false;
+        if (didDrag) {
+          if (offsetX !== 0 || offsetY !== 0) {
+            onmove?.(player.x + offsetX, player.y + offsetY);
+          }
+        } else {
+          menuOpen = !menuOpen;
+          activeNoteType = null;
+        }
+        offsetX = 0;
+        offsetY = 0;
+      },
+    } as Record<string, (e: GestureCustomEvent) => void>,
+  );
 
   function handleMenuAction(action: () => void) {
     action();
@@ -136,7 +152,7 @@
 <svelte:window onpointerdown={handleWindowPointerDown} />
 
 <div
-  class="absolute touch-none select-none"
+  class="absolute select-none"
   style="left: {player.x + offsetX}px; top: {player.y +
     offsetY}px; transform: translate(-50%, -50%); z-index: {dragging
     ? 50
@@ -144,10 +160,7 @@
       ? 40
       : 1};"
   bind:this={tokenEl}
-  onpointerdown={onPointerDown}
-  onpointermove={onPointerMove}
-  onpointerup={onPointerUp}
-  onpointercancel={onPointerUp}
+  {...gesture}
   role="button"
   tabindex="0"
   onkeydown={(e: KeyboardEvent) => {
