@@ -1225,8 +1225,8 @@
           ? 'sticky top-[57px] z-10 bg-surface border border-border rounded-lg px-4 pt-2 pb-2 shadow-sm'
           : ''}"
       >
-      <div class="flex items-center justify-between">
-        <div>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
           <div class="flex items-center gap-3">
             {#if editingName}
               <input
@@ -1279,7 +1279,7 @@
               = {game.playerCount + game.travellerCount} total{/if}
           </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           {#if isSetup}
             <button
               onclick={deleteGame}

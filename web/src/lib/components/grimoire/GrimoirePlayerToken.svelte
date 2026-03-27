@@ -104,6 +104,7 @@
         dragStartClientY = e.detail.event.clientY;
         offsetX = 0;
         offsetY = 0;
+        e.detail.attachmentNode.setPointerCapture(e.detail.event.pointerId);
       },
       oncomposedGesturemove: (e: GestureCustomEvent) => {
         if (!dragging) return;
@@ -113,11 +114,6 @@
           Math.abs(offsetX) > DRAG_THRESHOLD ||
           Math.abs(offsetY) > DRAG_THRESHOLD
         ) {
-          if (!didDrag) {
-            e.detail.attachmentNode.setPointerCapture(
-              e.detail.event.pointerId,
-            );
-          }
           didDrag = true;
         }
       },

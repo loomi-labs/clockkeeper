@@ -91,23 +91,46 @@
         onpandown: (e: GestureCustomEvent) => {
           const node = e.detail.attachmentNode;
           const wrapper = node.parentElement;
-
-          // Add touchmove handler to prevent browser scroll when swiping
-          // horizontally. Without this, touch-action: pan-y causes
-          // pointercancel when the touch has any vertical component.
+          const pointerId = e.detail.event.pointerId;
           const startX = e.detail.event.clientX;
           const startY = e.detail.event.clientY;
-          let locked = false;
+
+          // Capture immediately to prevent the library's pointerleave
+          // handler from killing the gesture. With touch-action: pan-y,
+          // the browser releases implicit capture, so we need explicit.
+          node.setPointerCapture(pointerId);
+
+          // Touchmove handler decides direction and controls scroll.
+          // While undecided: preventDefault keeps the browser from
+          // starting a scroll (which would fire pointercancel).
+          // Horizontal: keep preventing, swipe takes over.
+          // Vertical: release capture → library ends gesture → browser scrolls.
           const handleTouchMove = (te: TouchEvent) => {
+            if (!activeDrag) return;
             const touch = te.touches[0];
             if (!touch) return;
             const dx = Math.abs(touch.clientX - startX);
             const dy = Math.abs(touch.clientY - startY);
-            if (!locked && dx > HORIZONTAL_LOCK_THRESHOLD && dx > dy) {
-              locked = true;
-            }
-            if (locked) {
+
+            if (activeDrag.lockedHorizontal) {
               te.preventDefault();
+              return;
+            }
+
+            if (Math.max(dx, dy) < HORIZONTAL_LOCK_THRESHOLD) {
+              // Not enough movement to decide — prevent default to keep
+              // the browser from making a premature scroll decision
+              te.preventDefault();
+              return;
+            }
+
+            if (dx > dy * 1.5) {
+              activeDrag.lockedHorizontal = true;
+              te.preventDefault();
+            } else {
+              // Vertical intent — release capture, let browser scroll.
+              // Library fires lostpointercapture → onpanup → cleanup.
+              node.releasePointerCapture(pointerId);
             }
           };
           node.addEventListener("touchmove", handleTouchMove, {
@@ -116,38 +139,41 @@
 
           activeDrag = {
             id: entryId,
-            startX: e.detail.event.clientX,
-            startY: e.detail.event.clientY,
+            startX,
+            startY,
             dx: 0,
             el: node,
             overlayEl: wrapper?.querySelector("[data-swipe-overlay]") ?? null,
             lockedHorizontal: false,
-            pointerId: e.detail.event.pointerId,
+            pointerId,
             removeTouchHandler: () =>
               node.removeEventListener("touchmove", handleTouchMove),
           };
         },
         onpanmove: (e: GestureCustomEvent) => {
           if (!activeDrag || activeDrag.id !== entryId) return;
+
+          // Direction locking for pointer (mouse) events — touchmove
+          // handler covers touch devices, but mouse has no touch events.
+          if (!activeDrag.lockedHorizontal) {
+            const adx = Math.abs(e.detail.event.clientX - activeDrag.startX);
+            const ady = Math.abs(e.detail.event.clientY - activeDrag.startY);
+            if (Math.max(adx, ady) < HORIZONTAL_LOCK_THRESHOLD) return;
+            if (adx > ady * 1.5) {
+              activeDrag.lockedHorizontal = true;
+            } else {
+              // Vertical intent — abort gesture, release capture like the touch path
+              activeDrag.el.releasePointerCapture(e.detail.event.pointerId);
+              activeDrag.removeTouchHandler?.();
+              activeDrag = null;
+              return;
+            }
+          }
+
           let dx = e.detail.event.clientX - activeDrag.startX;
-          const dy = e.detail.event.clientY - activeDrag.startY;
           if (!ontoggle) dx = Math.min(0, dx);
           if (!isCharEntry || (!ondeath && !onundodeath))
             dx = Math.max(0, dx);
-
-          // Require clear horizontal intent before locking the swipe,
-          // so mostly-vertical scrolls aren't intercepted.
-          if (
-            !activeDrag.lockedHorizontal &&
-            (Math.abs(dx) <= HORIZONTAL_LOCK_THRESHOLD ||
-              Math.abs(dx) <= Math.abs(dy))
-          ) {
-            return;
-          }
-          if (!activeDrag.lockedHorizontal) {
-            activeDrag.lockedHorizontal = true;
-            activeDrag.el.setPointerCapture(activeDrag.pointerId);
-          }
 
           activeDrag.dx = dx;
 
@@ -349,6 +375,45 @@
   }
 
   let editingNoteId = $state<string | null>(null);
+  let overflowMenu = $state<{
+    entryId: string;
+    entryName: string;
+    entryTeam: number;
+    entryIsDead: boolean;
+    top: number;
+    right: number;
+  } | null>(null);
+
+  function openOverflowMenu(
+    entry: NightEntry,
+    button: HTMLElement,
+  ) {
+    if (overflowMenu?.entryId === entry.id) {
+      overflowMenu = null;
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    overflowMenu = {
+      entryId: entry.id,
+      entryName: entry.name,
+      entryTeam: entry.team ?? 0,
+      entryIsDead: entry.isDead,
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    };
+  }
+
+  function closeOverflowMenu() {
+    overflowMenu = null;
+  }
+
+  function handleWindowClick(e: MouseEvent) {
+    if (!overflowMenu) return;
+    const target = e.target as HTMLElement;
+    if (!target.closest("[data-overflow-menu]")) {
+      overflowMenu = null;
+    }
+  }
 
   // Get the effective team for styling, accounting for alignment overrides.
   function effectiveTeam(entryId: string, originalTeam: number): number {
@@ -425,6 +490,8 @@
     return { label: "?", colorClass: "text-muted" };
   }
 </script>
+
+<svelte:window onclick={handleWindowClick} />
 
 <div class="space-y-4">
   <h2 class="print-title hidden text-xl font-bold">
@@ -845,7 +912,12 @@
                   {/if}
                 {/if}
               </div>
-              <div class="no-print flex shrink-0 items-center gap-1">
+              <!-- Desktop: inline action buttons -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="no-print hidden shrink-0 items-center gap-1 sm:flex"
+                onpointerdown={(e: PointerEvent) => e.stopPropagation()}
+              >
                 {#if ondeath && !entry.isDead}
                   <button
                     onclick={() => ondeath?.(entry.id)}
@@ -926,7 +998,7 @@
                   href="/almanac/{entry.id}?from={encodeURIComponent(
                     page.url.pathname + page.url.search,
                   )}"
-                  class="hidden rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium sm:inline-flex"
+                  class="rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium"
                   title="Almanac"
                   aria-label="View {entry.name} in almanac"
                 >
@@ -950,7 +1022,7 @@
                   )}"
                   target="_blank"
                   rel="noopener"
-                  class="hidden rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium sm:inline-flex"
+                  class="rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium"
                   title="Wiki"
                   aria-label="View {entry.name} on wiki"
                 >
@@ -967,6 +1039,26 @@
                     /></svg
                   >
                 </a>
+              </div>
+              <!-- Mobile: overflow menu -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="no-print shrink-0 sm:hidden"
+                data-overflow-menu
+                onpointerdown={(e: PointerEvent) => e.stopPropagation()}
+              >
+                <button
+                  onclick={(e: MouseEvent) =>
+                    openOverflowMenu(entry, e.currentTarget as HTMLElement)}
+                  class="rounded p-1 text-muted transition-colors hover:bg-hover"
+                  aria-label="Actions for {entry.name}"
+                >
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="5" r="1.5" fill="currentColor" />
+                    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                    <circle cx="12" cy="19" r="1.5" fill="currentColor" />
+                  </svg>
+                </button>
               </div>
               {#if ontoggle}
                 <button
@@ -1008,3 +1100,80 @@
     {/if}
   </div>
 </div>
+
+<!-- Mobile overflow menu — rendered at root to escape overflow-hidden + transform containers -->
+{#if overflowMenu}
+  {@const m = overflowMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="fixed z-50 min-w-[160px] rounded-lg border border-border bg-surface py-1 shadow-lg"
+    style="top: {m.top}px; right: {m.right}px"
+    data-overflow-menu
+    onpointerdown={(e: PointerEvent) => e.stopPropagation()}
+  >
+    {#if ondeath && !m.entryIsDead}
+      <button
+        onclick={() => { ondeath?.(m.entryId); closeOverflowMenu(); }}
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+      >
+        <svg class="h-4 w-4 text-red-500" viewBox="0 0 24 24" fill="currentColor"
+          ><path d="M12 2C7.58 2 4 5.58 4 10c0 2.76 1.34 5.2 3.4 6.72V20a1 1 0 001 1h7.2a1 1 0 001-1v-3.28C18.66 15.2 20 12.76 20 10c0-4.42-3.58-8-8-8zm-1 15v-2h2v2h-2zm4-7a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /></svg
+        >
+        Kill
+      </button>
+    {:else if onundodeath && m.entryIsDead}
+      <button
+        onclick={() => { onundodeath?.(m.entryId); closeOverflowMenu(); }}
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+      >
+        <svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg
+        >
+        Revive
+      </button>
+    {/if}
+    {#if ongamenote || onroundnote}
+      <button
+        onclick={() => { editingNoteId = editingNoteId === m.entryId ? null : m.entryId; closeOverflowMenu(); }}
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+      >
+        <svg class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+          ><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg
+        >
+        Notes
+      </button>
+    {/if}
+    {#if onalignment}
+      {@const display = alignmentDisplay(m.entryId, m.entryTeam)}
+      <button
+        onclick={() => { cycleAlignment(m.entryId, m.entryTeam); closeOverflowMenu(); }}
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+      >
+        <span class="flex h-4 w-4 items-center justify-center text-xs font-bold {display.colorClass}">{display.label}</span>
+        Alignment
+      </button>
+    {/if}
+    <a
+      href="/almanac/{m.entryId}?from={encodeURIComponent(page.url.pathname + page.url.search)}"
+      onclick={closeOverflowMenu}
+      class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+    >
+      <svg class="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg
+      >
+      Almanac
+    </a>
+    <a
+      href="https://wiki.bloodontheclocktower.com/{m.entryName.replace(/ /g, '_')}"
+      target="_blank"
+      rel="noopener"
+      onclick={closeOverflowMenu}
+      class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+    >
+      <svg class="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg
+      >
+      Wiki
+    </a>
+  </div>
+{/if}
