@@ -1,4 +1,4 @@
-h1:tnB8I50IyNHtu7SULV17I3Xi4pMwfsc9UDvSBnPOXVA=
+h1:/jN/w5nzRo7x6yTVyksY6nyKgp78cdkvSlm1oIJEv4I=
 20260315162621_initial.sql h1:UgW1c0FpXZMO/eGMw/Lq/M/duJEsK+OR2AHwiOzU7DI=
 20260315175834_add_scripts_and_games.sql h1:bvc00M1DNb9CpnkkWKihQE8UBk77yFw7GBmS0WTIAtw=
 20260315191827_add_traveller_count.sql h1:VYJyhlSU8uSA2JAc/Q2Lv5fA0ZaqJp6CnMzT2H3e6F4=
@@ -19,3 +19,4 @@ h1:tnB8I50IyNHtu7SULV17I3Xi4pMwfsc9UDvSBnPOXVA=
 20260323135528_add_demon_bluffs.sql h1:/yxfIeCvT9lqLLjTaD8t8aYCqi1op3rn92e8O2cG904=
 20260323161223_add_bag_substitutions.sql h1:ArtSgvdnYtVj3BkAdyLcrDhkFOBRHn/cBCxIM0TBVlk=
 20260324183937_add_grimoire_reminder_attachments.sql h1:V1ESWaTHUNEqWIu+qqbu0cZD6hw7JiEKTeuQNS/+lcM=
+20260406182402_add_player_presets.sql h1:t7JGl+7o97ZA/35024aWcHMFKWAHuWm/Zjh3FUconSY=

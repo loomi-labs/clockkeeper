@@ -285,6 +285,16 @@ func PasswordHashContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldPasswordHash, v))
 }
 
+// PlayerPresetsIsNil applies the IsNil predicate on the "player_presets" field.
+func PlayerPresetsIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldPlayerPresets))
+}
+
+// PlayerPresetsNotNil applies the NotNil predicate on the "player_presets" field.
+func PlayerPresetsNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldPlayerPresets))
+}
+
 // HasScripts applies the HasEdge predicate on the "scripts" edge.
 func HasScripts() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

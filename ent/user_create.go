@@ -62,6 +62,12 @@ func (_c *UserCreate) SetPasswordHash(v string) *UserCreate {
 	return _c
 }
 
+// SetPlayerPresets sets the "player_presets" field.
+func (_c *UserCreate) SetPlayerPresets(v []string) *UserCreate {
+	_c.mutation.SetPlayerPresets(v)
+	return _c
+}
+
 // AddScriptIDs adds the "scripts" edge to the Script entity by IDs.
 func (_c *UserCreate) AddScriptIDs(ids ...int) *UserCreate {
 	_c.mutation.AddScriptIDs(ids...)
@@ -135,6 +141,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.PlayerPresets(); !ok {
+		v := user.DefaultPlayerPresets
+		_c.mutation.SetPlayerPresets(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -202,6 +212,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
 		_node.PasswordHash = value
+	}
+	if value, ok := _c.mutation.PlayerPresets(); ok {
+		_spec.SetField(user.FieldPlayerPresets, field.TypeJSON, value)
+		_node.PlayerPresets = value
 	}
 	if nodes := _c.mutation.ScriptsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

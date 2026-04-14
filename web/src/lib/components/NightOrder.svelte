@@ -3,6 +3,7 @@
   import type {
     Character,
     Game,
+    BagSubstitution,
   } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import { formatReminder } from "~/lib/format";
@@ -27,6 +28,8 @@
     ongamenote,
     onroundnote,
     alignments,
+    bagSubstitutions,
+    playerNames,
     bluffs,
     onalignment,
   }: {
@@ -38,6 +41,8 @@
     gameNotes?: Map<string, string>;
     roundNotes?: Map<string, string>;
     alignments?: Map<string, string>;
+    bagSubstitutions?: BagSubstitution[];
+    playerNames?: Map<string, string>;
     bluffs?: Character[];
     ontoggle?: (id: string, done: boolean) => void;
     ondeath?: (roleId: string) => void;
@@ -89,6 +94,13 @@
       () => ({ delay: 0, touchAction: "pan-y" as const }),
       {
         onpandown: (e: GestureCustomEvent) => {
+          // Don't start gesture on interactive elements — Svelte 5
+          // delegates pointerdown to the document root, so the
+          // stopPropagation pattern doesn't prevent the library's
+          // direct DOM listener from firing first.
+          const target = e.detail.event.target as HTMLElement;
+          if (target.closest("button, a, input, textarea, [data-overflow-menu]")) return;
+
           const node = e.detail.attachmentNode;
           const wrapper = node.parentElement;
           const pointerId = e.detail.event.pointerId;
@@ -330,6 +342,26 @@
         isDead: deadRoleIds?.has(c.id) ?? false,
         pos: c[posField] || 500,
       }));
+    // Add bag substitution characters (e.g., Drunk's townsfolk token) to the night order.
+    if (bagSubstitutions) {
+      const existingIds = new Set(charEntries.map((e) => e.id));
+      for (const bs of bagSubstitutions) {
+        if (!bs.characterId || existingIds.has(bs.characterId)) continue;
+        const subChar = scriptCharacters.find((c) => c.id === bs.characterId);
+        if (!subChar || !subChar[reminderField]) continue;
+        charEntries.push({
+          id: bs.characterId,
+          name: `${subChar.name} (${bs.causedByName})`,
+          reminder: subChar[reminderField],
+          team: subChar.team,
+          edition: subChar.edition,
+          isSpecial: false,
+          inPlay: true,
+          isDead: deadRoleIds?.has(bs.characterId) ?? false,
+          pos: subChar[posField] || 500,
+        });
+      }
+    }
     const specialEntries: (NightEntry & { pos: number })[] = [];
     for (const [id, entry] of Object.entries(SPECIAL_ENTRIES)) {
       const pos =
@@ -765,7 +797,7 @@
                     ? 'line-through text-muted'
                     : (teamNameColors[
                         effectiveTeam(entry.id, entry.team ?? 0)
-                      ] ?? 'text-primary')}">{entry.name}</span
+                      ] ?? 'text-primary')}">{entry.name}{#if playerNames?.get(entry.id)}<span class="ml-1.5 text-xs font-normal text-muted">&mdash; {playerNames.get(entry.id)}</span>{/if}</span
                 >
                 {#if entry.isDead}<span
                     class="ml-2 text-xs text-red-500 dark:text-red-400"
@@ -913,10 +945,8 @@
                 {/if}
               </div>
               <!-- Desktop: inline action buttons -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 class="no-print hidden shrink-0 items-center gap-1 sm:flex"
-                onpointerdown={(e: PointerEvent) => e.stopPropagation()}
               >
                 {#if ondeath && !entry.isDead}
                   <button
@@ -1041,11 +1071,9 @@
                 </a>
               </div>
               <!-- Mobile: overflow menu -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 class="no-print shrink-0 sm:hidden"
                 data-overflow-menu
-                onpointerdown={(e: PointerEvent) => e.stopPropagation()}
               >
                 <button
                   onclick={(e: MouseEvent) =>

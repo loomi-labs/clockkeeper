@@ -28,6 +28,8 @@
     onplayergamenote,
     onplayerroundnote,
     onplayeralignment,
+    onplayertap,
+    ondropname,
   }: {
     players: GrimoirePlayer[];
     reminders: GrimoireReminder[];
@@ -45,6 +47,8 @@
     onplayergamenote?: (id: string, note: string) => void;
     onplayerroundnote?: (id: string, note: string) => void;
     onplayeralignment?: (id: string, alignment: string) => void;
+    onplayertap?: (id: string) => void;
+    ondropname?: (id: string, name: string) => void;
   } = $props();
 
   let panX = $state(0);
@@ -273,6 +277,8 @@
         onroundnote={(note: string) => onplayerroundnote?.(player.id, note)}
         onalignment={(alignment: string) =>
           onplayeralignment?.(player.id, alignment)}
+        ontap={onplayertap ? () => onplayertap?.(player.id) : undefined}
+        ondropname={ondropname ? (name: string) => ondropname?.(player.id, name) : undefined}
       />
     {/each}
   </div>

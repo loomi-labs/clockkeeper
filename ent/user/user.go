@@ -22,6 +22,8 @@ const (
 	FieldUsername = "username"
 	// FieldPasswordHash holds the string denoting the password_hash field in the database.
 	FieldPasswordHash = "password_hash"
+	// FieldPlayerPresets holds the string denoting the player_presets field in the database.
+	FieldPlayerPresets = "player_presets"
 	// EdgeScripts holds the string denoting the scripts edge name in mutations.
 	EdgeScripts = "scripts"
 	// EdgeGames holds the string denoting the games edge name in mutations.
@@ -51,6 +53,7 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldUsername,
 	FieldPasswordHash,
+	FieldPlayerPresets,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -74,6 +77,8 @@ var (
 	UsernameValidator func(string) error
 	// PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
 	PasswordHashValidator func(string) error
+	// DefaultPlayerPresets holds the default value on creation for the "player_presets" field.
+	DefaultPlayerPresets []string
 )
 
 // OrderOption defines the ordering options for the User queries.

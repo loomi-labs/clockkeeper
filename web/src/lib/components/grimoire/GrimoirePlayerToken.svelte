@@ -20,6 +20,8 @@
     ongamenote,
     onroundnote,
     onalignment,
+    ontap,
+    ondropname,
   }: {
     player: GrimoirePlayer;
     zoom: number;
@@ -32,6 +34,8 @@
     ongamenote?: (note: string) => void;
     onroundnote?: (note: string) => void;
     onalignment?: (alignment: string) => void;
+    ontap?: () => void;
+    ondropname?: (name: string) => void;
   } = $props();
 
   // Effective alignment: override or default from team
@@ -77,6 +81,7 @@
   let menuOpen = $state(false);
   let activeNoteType = $state<"game" | "round" | null>(null);
   let tokenEl: HTMLDivElement;
+  let dropHover = $state(false);
 
   function handleWindowPointerDown(e: PointerEvent) {
     if (!menuOpen && !activeNoteType) return;
@@ -124,6 +129,9 @@
           if (offsetX !== 0 || offsetY !== 0) {
             onmove?.(player.x + offsetX, player.y + offsetY);
           }
+        } else if (ontap) {
+          // Tap-to-assign mode: call ontap instead of opening menu
+          ontap();
         } else {
           menuOpen = !menuOpen;
           activeNoteType = null;
@@ -154,7 +162,9 @@
     ? 50
     : menuOpen || activeNoteType
       ? 40
-      : 1};"
+      : dropHover
+        ? 30
+        : 1};"
   bind:this={tokenEl}
   {...gesture}
   role="button"
@@ -165,9 +175,22 @@
       menuOpen = true;
     }
   }}
+  ondragover={(e) => {
+    if (!ondropname) return;
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = "copy";
+    dropHover = true;
+  }}
+  ondragleave={() => (dropHover = false)}
+  ondrop={(e) => {
+    e.preventDefault();
+    dropHover = false;
+    const name = e.dataTransfer?.getData("text/plain");
+    if (name && ondropname) ondropname(name);
+  }}
 >
   <div
-    class="card-slate flex h-32 w-32 flex-col items-center justify-center rounded-full p-1 transition-shadow {colorClass} {highlightAttach ? 'ring-3 ring-primary/40' : ''}"
+    class="card-slate flex h-32 w-32 flex-col items-center justify-center rounded-full p-1 transition-shadow {colorClass} {highlightAttach ? 'ring-3 ring-primary/40' : ''} {dropHover ? 'ring-3 ring-indigo-500' : ''} {ontap ? 'ring-2 ring-indigo-300/50' : ''}"
     class:token-bezel={!player.isDead}
     class:token-bezel-dead={player.isDead}
     class:token-bezel-drag={dragging}
