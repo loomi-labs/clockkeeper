@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/loomi-labs/clockkeeper/internal/env"
+	"github.com/shifty11/clockkeeper/internal/env"
 )
 
 // Setup initializes the global slog logger based on environment configuration.

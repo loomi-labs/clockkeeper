@@ -29,3 +29,6 @@ docs/tmp/
 
 # Playwright
 .playwright-mcp
+
+# Security review
+SECURITY-REVIEW.md

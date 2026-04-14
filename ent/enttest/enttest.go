@@ -5,12 +5,12 @@ package enttest
 import (
 	"context"
 
-	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/shifty11/clockkeeper/ent"
 	// required by schema hooks.
-	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
+	_ "github.com/shifty11/clockkeeper/ent/runtime"
 
 	"entgo.io/ent/dialect/sql/schema"
-	"github.com/loomi-labs/clockkeeper/ent/migrate"
+	"github.com/shifty11/clockkeeper/ent/migrate"
 )
 
 type (

@@ -7,10 +7,10 @@ import (
 	"log/slog"
 
 	"connectrpc.com/connect"
-	"github.com/loomi-labs/clockkeeper/ent"
-	"github.com/loomi-labs/clockkeeper/ent/death"
-	"github.com/loomi-labs/clockkeeper/ent/game"
-	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
+	"github.com/shifty11/clockkeeper/ent"
+	"github.com/shifty11/clockkeeper/ent/death"
+	"github.com/shifty11/clockkeeper/ent/game"
+	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
 )
 
 func (h *ClockKeeperServiceHandler) RecordDeath(ctx context.Context, req *connect.Request[clockkeeperv1.RecordDeathRequest]) (*connect.Response[clockkeeperv1.RecordDeathResponse], error) {

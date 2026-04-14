@@ -5,7 +5,7 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/loomi-labs/clockkeeper/ent/schema/mixin"
+	"github.com/shifty11/clockkeeper/ent/schema/mixin"
 )
 
 // Death tracks when a role dies during a game phase.

@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
-	clockkeeper "github.com/loomi-labs/clockkeeper"
-	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
-	"github.com/loomi-labs/clockkeeper/internal/botc"
-	"github.com/loomi-labs/clockkeeper/internal/database"
+	clockkeeper "github.com/shifty11/clockkeeper"
+	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
+	"github.com/shifty11/clockkeeper/internal/botc"
+	"github.com/shifty11/clockkeeper/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

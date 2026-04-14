@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/loomi-labs/clockkeeper/ent/game"
-	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/shifty11/clockkeeper/ent/game"
+	"github.com/shifty11/clockkeeper/ent/phase"
 )
 
 // Phase is the model entity for the Phase schema.

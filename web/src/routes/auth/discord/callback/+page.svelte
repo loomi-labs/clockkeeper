@@ -3,7 +3,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { client } from "~/lib/api";
-  import { setToken, setAnonymous } from "~/lib/auth.svelte";
+  import { setToken, setAnonymous, validateOAuthState } from "~/lib/auth.svelte";
   import { getErrorMessage } from "~/lib/errors";
   import { initTheme } from "~/lib/theme";
 
@@ -11,6 +11,12 @@
 
   onMount(async () => {
     initTheme();
+
+    const state = page.url.searchParams.get("state");
+    if (!validateOAuthState(state)) {
+      error = "Invalid OAuth state. Please try logging in again.";
+      return;
+    }
 
     const code = page.url.searchParams.get("code");
     if (!code) {

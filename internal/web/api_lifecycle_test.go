@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
-	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
+	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

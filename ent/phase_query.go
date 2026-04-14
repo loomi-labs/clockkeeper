@@ -12,10 +12,10 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/loomi-labs/clockkeeper/ent/death"
-	"github.com/loomi-labs/clockkeeper/ent/game"
-	"github.com/loomi-labs/clockkeeper/ent/phase"
-	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/shifty11/clockkeeper/ent/death"
+	"github.com/shifty11/clockkeeper/ent/game"
+	"github.com/shifty11/clockkeeper/ent/phase"
+	"github.com/shifty11/clockkeeper/ent/predicate"
 )
 
 // PhaseQuery is the builder for querying Phase entities.

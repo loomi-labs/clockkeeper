@@ -1,4 +1,4 @@
-module github.com/loomi-labs/clockkeeper
+module github.com/shifty11/clockkeeper
 
 go 1.26.1
 

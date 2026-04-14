@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/loomi-labs/clockkeeper/ent"
-	"github.com/loomi-labs/clockkeeper/ent/game"
-	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
-	"github.com/loomi-labs/clockkeeper/ent/script"
-	"github.com/loomi-labs/clockkeeper/internal/database"
+	"github.com/shifty11/clockkeeper/ent"
+	"github.com/shifty11/clockkeeper/ent/game"
+	_ "github.com/shifty11/clockkeeper/ent/runtime"
+	"github.com/shifty11/clockkeeper/ent/script"
+	"github.com/shifty11/clockkeeper/internal/database"
 
 	_ "github.com/lib/pq"
 )

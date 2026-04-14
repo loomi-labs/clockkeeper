@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/loomi-labs/clockkeeper/ent/death"
-	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/shifty11/clockkeeper/ent/death"
+	"github.com/shifty11/clockkeeper/ent/predicate"
 )
 
 // DeathDelete is the builder for deleting a Death entity.

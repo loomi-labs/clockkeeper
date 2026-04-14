@@ -10,9 +10,9 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/loomi-labs/clockkeeper/ent/death"
-	"github.com/loomi-labs/clockkeeper/ent/game"
-	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/shifty11/clockkeeper/ent/death"
+	"github.com/shifty11/clockkeeper/ent/game"
+	"github.com/shifty11/clockkeeper/ent/phase"
 )
 
 // PhaseCreate is the builder for creating a Phase entity.

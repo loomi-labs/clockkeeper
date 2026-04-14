@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"connectrpc.com/connect"
-	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
-	"github.com/loomi-labs/clockkeeper/internal/botc"
+	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
+	"github.com/shifty11/clockkeeper/internal/botc"
 )
 
 func (h *ClockKeeperServiceHandler) GetCharacter(ctx context.Context, req *connect.Request[clockkeeperv1.GetCharacterRequest]) (*connect.Response[clockkeeperv1.GetCharacterResponse], error) {

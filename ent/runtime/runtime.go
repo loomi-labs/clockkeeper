@@ -2,7 +2,7 @@
 
 package runtime
 
-// The schema-stitching logic is generated in github.com/loomi-labs/clockkeeper/ent/runtime.go
+// The schema-stitching logic is generated in github.com/shifty11/clockkeeper/ent/runtime.go
 
 const (
 	Version = "v0.14.5"                                         // Version of ent codegen.

@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
-	"github.com/loomi-labs/clockkeeper/ent"
-	"github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1/clockkeeperv1connect"
-	"github.com/loomi-labs/clockkeeper/internal/botc"
+	"github.com/shifty11/clockkeeper/ent"
+	"github.com/shifty11/clockkeeper/gen/clockkeeper/v1/clockkeeperv1connect"
+	"github.com/shifty11/clockkeeper/internal/botc"
 )
 
 // Server is the HTTP server that serves the API and frontend.
@@ -60,8 +61,12 @@ func NewServer(config *Config, db *ent.Client, registry *botc.Registry, staticFi
 	return &Server{
 		config: config,
 		httpServer: &http.Server{
-			Addr:    config.Listen,
-			Handler: mux,
+			Addr:           config.Listen,
+			Handler:        securityHeaders(mux),
+			ReadTimeout:    30 * time.Second,
+			WriteTimeout:   60 * time.Second,
+			IdleTimeout:    120 * time.Second,
+			MaxHeaderBytes: 1 << 20, // 1 MB
 		},
 		cancelFunc:  cancel,
 		rateLimiter: rateLimiter,
@@ -79,6 +84,18 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.cancelFunc()      // Stop cleanup goroutine.
 	s.rateLimiter.Stop() // Stop rate limiter goroutine.
 	return s.httpServer.Shutdown(ctx)
+}
+
+// securityHeaders wraps a handler with standard security response headers.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // spaFileServer serves static files from the given filesystem, falling back to

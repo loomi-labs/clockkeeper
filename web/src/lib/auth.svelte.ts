@@ -40,15 +40,31 @@ export function initAuth() {
   auth.isAnonymous = localStorage.getItem(ANON_KEY) === "true";
 }
 
+const OAUTH_STATE_KEY = "discord_oauth_state";
+
+function generateOAuthState(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export function getDiscordOAuthURL(): string {
   const redirectUri = `${window.location.origin}/auth/discord/callback`;
+  const state = generateOAuthState();
+  sessionStorage.setItem(OAUTH_STATE_KEY, state);
   const params = new URLSearchParams({
     client_id: auth.discordClientId,
     redirect_uri: redirectUri,
     response_type: "code",
     scope: "identify",
+    state,
   });
   return `https://discord.com/oauth2/authorize?${params}`;
+}
+
+export function validateOAuthState(state: string | null): boolean {
+  const expected = sessionStorage.getItem(OAUTH_STATE_KEY);
+  sessionStorage.removeItem(OAUTH_STATE_KEY);
+  return !!state && !!expected && state === expected;
 }
 
 export function logout() {

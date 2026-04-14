@@ -1,12 +1,12 @@
 package web
 
 import (
-	"github.com/loomi-labs/clockkeeper/ent"
-	"github.com/loomi-labs/clockkeeper/ent/game"
-	"github.com/loomi-labs/clockkeeper/ent/phase"
-	"github.com/loomi-labs/clockkeeper/ent/schema"
-	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
-	"github.com/loomi-labs/clockkeeper/internal/botc"
+	"github.com/shifty11/clockkeeper/ent"
+	"github.com/shifty11/clockkeeper/ent/game"
+	"github.com/shifty11/clockkeeper/ent/phase"
+	"github.com/shifty11/clockkeeper/ent/schema"
+	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
+	"github.com/shifty11/clockkeeper/internal/botc"
 )
 
 var teamToProto = map[botc.Team]clockkeeperv1.Team{

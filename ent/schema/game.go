@@ -4,7 +4,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/loomi-labs/clockkeeper/ent/schema/mixin"
+	"github.com/shifty11/clockkeeper/ent/schema/mixin"
 )
 
 // TravellerAlignment represents the good/evil alignment of a traveller in a game.

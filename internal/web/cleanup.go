@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/loomi-labs/clockkeeper/ent"
-	"github.com/loomi-labs/clockkeeper/ent/death"
-	"github.com/loomi-labs/clockkeeper/ent/game"
-	"github.com/loomi-labs/clockkeeper/ent/phase"
-	"github.com/loomi-labs/clockkeeper/ent/script"
-	"github.com/loomi-labs/clockkeeper/ent/user"
+	"github.com/shifty11/clockkeeper/ent"
+	"github.com/shifty11/clockkeeper/ent/death"
+	"github.com/shifty11/clockkeeper/ent/game"
+	"github.com/shifty11/clockkeeper/ent/phase"
+	"github.com/shifty11/clockkeeper/ent/script"
+	"github.com/shifty11/clockkeeper/ent/user"
 )
 
 // startCleanup periodically deletes anonymous users that have been inactive

@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/loomi-labs/clockkeeper/ent/user"
+	"github.com/shifty11/clockkeeper/ent/user"
 )
 
 // User is the model entity for the User schema.

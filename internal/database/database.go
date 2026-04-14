@@ -6,8 +6,8 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"github.com/loomi-labs/clockkeeper/ent"
-	"github.com/loomi-labs/clockkeeper/internal/env"
+	"github.com/shifty11/clockkeeper/ent"
+	"github.com/shifty11/clockkeeper/internal/env"
 
 	_ "github.com/lib/pq"
 )

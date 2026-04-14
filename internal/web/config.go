@@ -3,12 +3,12 @@ package web
 import (
 	"time"
 
-	"github.com/loomi-labs/clockkeeper/internal/env"
+	"github.com/shifty11/clockkeeper/internal/env"
 )
 
 // DiscordConfigured returns true if Discord OAuth is set up.
 func (c *Config) DiscordConfigured() bool {
-	return c.DiscordClientID != "" && c.DiscordClientSecret != ""
+	return c.DiscordClientID != "" && c.DiscordClientSecret != "" && c.DiscordRedirectURI != ""
 }
 
 // Config holds web server configuration.

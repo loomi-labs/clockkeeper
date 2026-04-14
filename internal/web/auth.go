@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"strconv"
 	"time"
@@ -123,14 +125,28 @@ func (a *AuthInterceptor) IssueToken(userID int, anonymous bool) (string, error)
 	if anonymous {
 		expiry = 7 * 24 * time.Hour
 	}
+	jti, err := generateJTI()
+	if err != nil {
+		return "", err
+	}
 	claims := jwt.MapClaims{
 		"sub": strconv.Itoa(userID),
 		"exp": time.Now().Add(expiry).Unix(),
 		"iat": time.Now().Unix(),
+		"jti": jti,
 	}
 	if anonymous {
 		claims["anon"] = true
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(a.secretKey)
+}
+
+// generateJTI returns a random 16-byte hex string for use as a JWT ID.
+func generateJTI() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }

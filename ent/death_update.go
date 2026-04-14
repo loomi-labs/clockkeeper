@@ -11,9 +11,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/loomi-labs/clockkeeper/ent/death"
-	"github.com/loomi-labs/clockkeeper/ent/phase"
-	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/shifty11/clockkeeper/ent/death"
+	"github.com/shifty11/clockkeeper/ent/phase"
+	"github.com/shifty11/clockkeeper/ent/predicate"
 )
 
 // DeathUpdate is the builder for updating Death entities.

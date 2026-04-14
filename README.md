@@ -9,6 +9,11 @@
   Not a digital clone — a tool that makes the physical experience smoother for the Storyteller.
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0" /></a>
+  <a href="https://github.com/shifty11/clockkeeper/actions/workflows/main.yml"><img src="https://github.com/shifty11/clockkeeper/actions/workflows/main.yml/badge.svg" alt="CI" /></a>
+</p>
+
 ---
 
 ## Features
@@ -19,13 +24,33 @@
 
 ## Quick Start
 
+**Prerequisites:** Docker and Docker Compose
+
 ```bash
 # Download game data (characters, night order, jinxes, icons)
+# Requires: curl, gh (GitHub CLI), fish shell
 ./scripts/download-botc-data.fish
+
+# Copy and configure environment variables
+cp .env.example .env
 
 # Start the app
 docker-compose up
 ```
+
+The app will be available at `http://localhost:8080`.
+
+## Development
+
+```bash
+# Install dependencies
+pnpm install --dir web
+
+# Start full dev environment (Postgres + backend + frontend)
+task dev
+```
+
+See [docs/commands.md](docs/commands.md) for the full command reference.
 
 ## Tech Stack
 
@@ -42,6 +67,12 @@ See [docs/architecture.md](docs/architecture.md) for full details.
 
 - [Project Overview](docs/project-overview.md) — Vision, scope, MVP definition
 - [Architecture](docs/architecture.md) — Tech stack, system design, testing
+- [Development Guidelines](docs/development-guidelines.md) — Coding standards
+- [Commands](docs/commands.md) — Task runner reference
+
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
 
 ## Disclaimer
 

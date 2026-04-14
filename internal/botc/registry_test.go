@@ -3,7 +3,7 @@ package botc
 import (
 	"testing"
 
-	clockkeeper "github.com/loomi-labs/clockkeeper"
+	clockkeeper "github.com/shifty11/clockkeeper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

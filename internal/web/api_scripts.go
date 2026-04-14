@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/loomi-labs/clockkeeper/ent"
-	entscript "github.com/loomi-labs/clockkeeper/ent/script"
-	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
+	"github.com/shifty11/clockkeeper/ent"
+	entscript "github.com/shifty11/clockkeeper/ent/script"
+	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
 )
 
 func (h *ClockKeeperServiceHandler) ListScripts(ctx context.Context, req *connect.Request[clockkeeperv1.ListScriptsRequest]) (*connect.Response[clockkeeperv1.ListScriptsResponse], error) {

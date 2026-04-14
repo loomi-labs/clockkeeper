@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	clockkeeper "github.com/loomi-labs/clockkeeper"
-	"github.com/loomi-labs/clockkeeper/internal/botc"
-	"github.com/loomi-labs/clockkeeper/internal/database"
-	"github.com/loomi-labs/clockkeeper/internal/logger"
-	"github.com/loomi-labs/clockkeeper/internal/web"
+	clockkeeper "github.com/shifty11/clockkeeper"
+	"github.com/shifty11/clockkeeper/internal/botc"
+	"github.com/shifty11/clockkeeper/internal/database"
+	"github.com/shifty11/clockkeeper/internal/logger"
+	"github.com/shifty11/clockkeeper/internal/web"
 )
 
 // ServeCmd starts the Clock Keeper server.
@@ -42,6 +42,10 @@ func (s *ServeCmd) Run() error {
 	}
 	defer sqlDB.Close()
 	defer db.Close()
+
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	slog.Info("database connected")
 

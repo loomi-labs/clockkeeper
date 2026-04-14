@@ -7,7 +7,7 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
-	"github.com/loomi-labs/clockkeeper/ent/schema/mixin"
+	"github.com/shifty11/clockkeeper/ent/schema/mixin"
 )
 
 // User holds the schema definition for the User entity.

@@ -1,8 +1,8 @@
 package web
 
 import (
-	"github.com/loomi-labs/clockkeeper/ent"
-	"github.com/loomi-labs/clockkeeper/internal/botc"
+	"github.com/shifty11/clockkeeper/ent"
+	"github.com/shifty11/clockkeeper/internal/botc"
 )
 
 // ClockKeeperServiceHandler implements the ConnectRPC ClockKeeperService.

@@ -10,11 +10,11 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/loomi-labs/clockkeeper/ent/game"
-	"github.com/loomi-labs/clockkeeper/ent/phase"
-	"github.com/loomi-labs/clockkeeper/ent/schema"
-	"github.com/loomi-labs/clockkeeper/ent/script"
-	"github.com/loomi-labs/clockkeeper/ent/user"
+	"github.com/shifty11/clockkeeper/ent/game"
+	"github.com/shifty11/clockkeeper/ent/phase"
+	"github.com/shifty11/clockkeeper/ent/schema"
+	"github.com/shifty11/clockkeeper/ent/script"
+	"github.com/shifty11/clockkeeper/ent/user"
 )
 
 // GameCreate is the builder for creating a Game entity.

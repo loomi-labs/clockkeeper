@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
-	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
+	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
 )
 
 const (
