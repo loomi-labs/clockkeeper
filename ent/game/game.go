@@ -8,7 +8,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/shifty11/clockkeeper/ent/schema"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
 )
 
 const (

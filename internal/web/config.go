@@ -3,7 +3,7 @@ package web
 import (
 	"time"
 
-	"github.com/shifty11/clockkeeper/internal/env"
+	"github.com/loomi-labs/clockkeeper/internal/env"
 )
 
 // DiscordConfigured returns true if Discord OAuth is set up.

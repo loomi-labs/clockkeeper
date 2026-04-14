@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
-	clockkeeper "github.com/shifty11/clockkeeper"
-	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
-	"github.com/shifty11/clockkeeper/internal/botc"
-	"github.com/shifty11/clockkeeper/internal/database"
+	clockkeeper "github.com/loomi-labs/clockkeeper"
+	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
+	"github.com/loomi-labs/clockkeeper/internal/botc"
+	"github.com/loomi-labs/clockkeeper/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,7 +50,7 @@ func authedCtx(userID int) context.Context {
 }
 
 func TestListScripts_IncludesSystemScripts(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user and a user-owned script.
@@ -85,7 +85,7 @@ handler := testHandler(t)
 }
 
 func TestUpdateScript_BlocksSystemScript(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user for auth context.
@@ -114,7 +114,7 @@ handler := testHandler(t)
 }
 
 func TestDeleteScript_BlocksSystemScript(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user for auth context.
@@ -144,7 +144,7 @@ handler := testHandler(t)
 // --- Script ownership tests ---
 
 func TestUpdateScript_BlocksOtherUser(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create two users.
@@ -171,7 +171,7 @@ handler := testHandler(t)
 }
 
 func TestDeleteScript_BlocksOtherUser(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	userA, err := handler.db.User.Create().Save(ctx)
@@ -194,7 +194,7 @@ handler := testHandler(t)
 }
 
 func TestUpdateScript_OwnerSucceeds(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	userA, err := handler.db.User.Create().Save(ctx)
@@ -216,7 +216,7 @@ handler := testHandler(t)
 }
 
 func TestDeleteScript_OwnerSucceeds(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	userA, err := handler.db.User.Create().Save(ctx)
@@ -269,7 +269,7 @@ func createTestGame(t *testing.T, handler *ClockKeeperServiceHandler) (ownerID i
 }
 
 func TestCreateGame_SetsOwner(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ownerID, gameID := createTestGame(t, handler)
 
 	// Verify owner can access the game.
@@ -281,7 +281,7 @@ handler := testHandler(t)
 }
 
 func TestGetGame_BlocksOtherUser(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 	_, gameID := createTestGame(t, handler)
 
@@ -297,7 +297,7 @@ handler := testHandler(t)
 }
 
 func TestRandomizeRoles_BlocksOtherUser(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 	_, gameID := createTestGame(t, handler)
 
@@ -312,7 +312,7 @@ handler := testHandler(t)
 }
 
 func TestUpdateGameRoles_BlocksOtherUser(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 	_, gameID := createTestGame(t, handler)
 
@@ -328,7 +328,7 @@ handler := testHandler(t)
 }
 
 func TestRandomizeRoles_OwnerSucceeds(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ownerID, gameID := createTestGame(t, handler)
 
 	resp, err := handler.RandomizeRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
@@ -341,7 +341,7 @@ handler := testHandler(t)
 // --- Game handler tests ---
 
 func TestCreateGame_InvalidPlayerCount(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	u, err := handler.db.User.Create().Save(ctx)
@@ -368,7 +368,7 @@ handler := testHandler(t)
 }
 
 func TestCreateGame_InvalidScript(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	u, err := handler.db.User.Create().Save(ctx)
@@ -383,7 +383,7 @@ handler := testHandler(t)
 }
 
 func TestCreateGame_ReturnsDistribution(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	u, err := handler.db.User.Create().Save(ctx)
@@ -413,7 +413,7 @@ handler := testHandler(t)
 }
 
 func TestRandomizeRoles_ReturnsCorrectCount(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ownerID, gameID := createTestGame(t, handler)
 
 	resp, err := handler.RandomizeRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
@@ -424,7 +424,7 @@ handler := testHandler(t)
 }
 
 func TestUpdateGameRoles_Persists(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ownerID, gameID := createTestGame(t, handler)
 
 	roles := []string{"washerwoman", "imp"}
@@ -443,7 +443,7 @@ handler := testHandler(t)
 }
 
 func TestUpdateGameTravellers_Success(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ownerID, gameID := createTestGame(t, handler)
 
 	// Find a valid traveller ID via ListCharacters.
@@ -464,7 +464,7 @@ handler := testHandler(t)
 }
 
 func TestUpdateGameTravellers_RejectsNonTraveller(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ownerID, gameID := createTestGame(t, handler)
 
 	// "washerwoman" is a townsfolk, not a traveller.
@@ -701,7 +701,7 @@ func TestRandomizeRoles_ShufflesTravellers(t *testing.T) {
 }
 
 func TestGetSetupChecklist_ReturnsSteps(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ownerID, gameID := createTestGame(t, handler)
 
 	// Randomize roles first so the checklist has something to work with.
@@ -718,7 +718,7 @@ handler := testHandler(t)
 }
 
 func TestGetDistribution_Valid(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	u, err := handler.db.User.Create().Save(ctx)
@@ -736,7 +736,7 @@ handler := testHandler(t)
 }
 
 func TestGetDistribution_InvalidCount(t *testing.T) {
-handler := testHandler(t)
+	handler := testHandler(t)
 	ctx := context.Background()
 
 	u, err := handler.db.User.Create().Save(ctx)

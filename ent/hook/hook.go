@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/shifty11/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent"
 )
 
 // The DeathFunc type is an adapter to allow the use of ordinary

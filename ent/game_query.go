@@ -12,11 +12,11 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/shifty11/clockkeeper/ent/game"
-	"github.com/shifty11/clockkeeper/ent/phase"
-	"github.com/shifty11/clockkeeper/ent/predicate"
-	"github.com/shifty11/clockkeeper/ent/script"
-	"github.com/shifty11/clockkeeper/ent/user"
+	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
 // GameQuery is the builder for querying Game entities.

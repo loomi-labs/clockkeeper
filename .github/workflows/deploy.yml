@@ -11,7 +11,7 @@ on:
       image_tag:
         type: string
         required: true
-        description: 'Docker image tag to deploy (e.g., ghcr.io/shifty11/clockkeeper:sha-abc123)'
+        description: 'Docker image tag to deploy (e.g., ghcr.io/loomi-labs/clockkeeper:sha-abc123)'
 
 jobs:
   deploy:

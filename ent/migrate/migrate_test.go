@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shifty11/clockkeeper/ent"
-	"github.com/shifty11/clockkeeper/ent/game"
-	_ "github.com/shifty11/clockkeeper/ent/runtime"
-	"github.com/shifty11/clockkeeper/ent/script"
-	"github.com/shifty11/clockkeeper/internal/database"
+	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/game"
+	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
+	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/internal/database"
 
 	_ "github.com/lib/pq"
 )
@@ -23,28 +23,28 @@ import (
 // validation function. When a new migration is added without a corresponding
 // validator, TestMigrationCoverage fails — forcing you to write one.
 var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db *sql.DB, client *ent.Client){
-	"20260315162621_initial":                       validateInitialSchema,
-	"20260315175834_add_scripts_and_games":          validateScriptsAndGames,
-	"20260315191827_add_traveller_count":            validateTravellerCount,
-	"20260315195303_add_selected_travellers":        validateSelectedTravellers,
-	"20260316163815_add_system_scripts":              validateSystemScripts,
-	"20260316165946_add_script_soft_delete":          validateScriptSoftDelete,
+	"20260315162621_initial":                           validateInitialSchema,
+	"20260315175834_add_scripts_and_games":             validateScriptsAndGames,
+	"20260315191827_add_traveller_count":               validateTravellerCount,
+	"20260315195303_add_selected_travellers":           validateSelectedTravellers,
+	"20260316163815_add_system_scripts":                validateSystemScripts,
+	"20260316165946_add_script_soft_delete":            validateScriptSoftDelete,
 	"20260318105440_add_game_owner":                    validateGameOwner,
-	"20260318155946_add_script_owner_check":             validateScriptOwnerCheck,
-	"20260319100012_add_game_extra_characters":           validateGameExtraCharacters,
-	"20260321102851_add_phases_and_deaths":               validatePhasesAndDeaths,
-	"20260321112246_add_traveller_alignments":            validateTravellerAlignments,
-	"20260321131451_add_game_name":                       validateGameName,
-	"20260321133230_add_completed_actions":               validateCompletedActions,
-	"20260322103914_add_death_unique_index":              validateDeathUniqueIndex,
-	"20260323093114_add_grimoire_state":                  validateGrimoireState,
-	"20260323102548_add_grimoire_notes":                  validateGrimoireNotes,
-	"20260323131712_add_character_alignments":            validateCharacterAlignments,
-	"20260323135528_add_demon_bluffs":                   validateDemonBluffs,
-	"20260323161223_add_bag_substitutions":               validateBagSubstitutions,
-	"20260324183937_add_grimoire_reminder_attachments":   validateGrimoireReminderAttachments,
-	"20260406182402_add_player_presets":                  validatePlayerPresets,
-	"20260414094150_add_discord_and_anonymous":            validateDiscordAndAnonymous,
+	"20260318155946_add_script_owner_check":            validateScriptOwnerCheck,
+	"20260319100012_add_game_extra_characters":         validateGameExtraCharacters,
+	"20260321102851_add_phases_and_deaths":             validatePhasesAndDeaths,
+	"20260321112246_add_traveller_alignments":          validateTravellerAlignments,
+	"20260321131451_add_game_name":                     validateGameName,
+	"20260321133230_add_completed_actions":             validateCompletedActions,
+	"20260322103914_add_death_unique_index":            validateDeathUniqueIndex,
+	"20260323093114_add_grimoire_state":                validateGrimoireState,
+	"20260323102548_add_grimoire_notes":                validateGrimoireNotes,
+	"20260323131712_add_character_alignments":          validateCharacterAlignments,
+	"20260323135528_add_demon_bluffs":                  validateDemonBluffs,
+	"20260323161223_add_bag_substitutions":             validateBagSubstitutions,
+	"20260324183937_add_grimoire_reminder_attachments": validateGrimoireReminderAttachments,
+	"20260406182402_add_player_presets":                validatePlayerPresets,
+	"20260414094150_add_discord_and_anonymous":         validateDiscordAndAnonymous,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.

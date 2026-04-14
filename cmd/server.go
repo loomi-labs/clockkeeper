@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	clockkeeper "github.com/shifty11/clockkeeper"
-	"github.com/shifty11/clockkeeper/internal/botc"
-	"github.com/shifty11/clockkeeper/internal/database"
-	"github.com/shifty11/clockkeeper/internal/logger"
-	"github.com/shifty11/clockkeeper/internal/web"
+	clockkeeper "github.com/loomi-labs/clockkeeper"
+	"github.com/loomi-labs/clockkeeper/internal/botc"
+	"github.com/loomi-labs/clockkeeper/internal/database"
+	"github.com/loomi-labs/clockkeeper/internal/logger"
+	"github.com/loomi-labs/clockkeeper/internal/web"
 )
 
 // ServeCmd starts the Clock Keeper server.

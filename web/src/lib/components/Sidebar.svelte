@@ -242,7 +242,7 @@
 
   <div class="border-t border-border px-3 py-2">
     <a
-      href="https://github.com/shifty11/clockkeeper"
+      href="https://github.com/loomi-labs/clockkeeper"
       target="_blank"
       rel="noopener noreferrer"
       class="flex items-center gap-2 rounded-lg px-1 py-1 text-secondary transition-colors hover:text-primary {sidebar.expanded ? '' : 'justify-center'}"
@@ -335,7 +335,7 @@
       </nav>
       <div class="border-t border-border px-4 py-3">
         <a
-          href="https://github.com/shifty11/clockkeeper"
+          href="https://github.com/loomi-labs/clockkeeper"
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center gap-2 rounded-lg px-1 py-1 text-secondary transition-colors hover:text-primary"
