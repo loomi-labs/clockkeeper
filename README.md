@@ -6,7 +6,7 @@
 
 <p align="center">
   A digital companion for in-person <a href="https://bloodontheclocktower.com">Blood on the Clocktower</a> games.<br/>
-  Not a digital clone — a tool that makes the physical experience smoother for the Storyteller.
+  Not a digital clone - a tool that makes the physical experience smoother for the Storyteller.
 </p>
 
 <p align="center">
@@ -18,9 +18,9 @@
 
 ## Features
 
-- **Game Setup** — Select or create a script, set player count, randomize roles, follow the official setup checklist
-- **Night Management** — Step-by-step wake order, ability prompts, reminder token tracking, night action recording
-- **Note-Taking & Tracking** — Seating chart, alive/dead status, nominations, votes, executions, game state timeline
+- **Game Setup** - Select or create a script, set player count, randomize roles, follow the official setup checklist
+- **Night Management** - Step-by-step wake order, ability prompts, reminder token tracking, night action recording
+- **Note-Taking & Tracking** - Seating chart, alive/dead status, nominations, votes, executions, game state timeline
 
 ## Quick Start
 
@@ -65,10 +65,10 @@ See [docs/architecture.md](docs/architecture.md) for full details.
 
 ## Documentation
 
-- [Project Overview](docs/project-overview.md) — Vision, scope, MVP definition
-- [Architecture](docs/architecture.md) — Tech stack, system design, testing
-- [Development Guidelines](docs/development-guidelines.md) — Coding standards
-- [Commands](docs/commands.md) — Task runner reference
+- [Project Overview](docs/project-overview.md) - Vision, scope, MVP definition
+- [Architecture](docs/architecture.md) - Tech stack, system design, testing
+- [Development Guidelines](docs/development-guidelines.md) - Coding standards
+- [Commands](docs/commands.md) - Task runner reference
 
 ## License
 

@@ -2,20 +2,20 @@
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Go 1.26.1 |
-| Frontend | Svelte 5 + SvelteKit + Tailwind 4 |
-| API | ConnectRPC + Protocol Buffers |
-| ORM | Ent + Atlas migrations |
-| Database | PostgreSQL 18 |
-| Build | Docker multi-stage (frontend embedded into Go binary) |
-| Task runner | Taskfile |
-| Frontend pkg manager | pnpm |
-| Code gen | buf (proto → Go + TypeScript) |
-| Backend testing | Go `testing` + testify + testcontainers + enttest |
-| Frontend testing | Vitest |
-| E2E testing | Playwright |
+| Layer                | Technology                                            |
+|----------------------|-------------------------------------------------------|
+| Backend              | Go 1.26.1                                             |
+| Frontend             | Svelte 5 + SvelteKit + Tailwind 4                     |
+| API                  | ConnectRPC + Protocol Buffers                         |
+| ORM                  | Ent + Atlas migrations                                |
+| Database             | PostgreSQL 18                                         |
+| Build                | Docker multi-stage (frontend embedded into Go binary) |
+| Task runner          | Taskfile                                              |
+| Frontend pkg manager | pnpm                                                  |
+| Code gen             | buf (proto → Go + TypeScript)                         |
+| Backend testing      | Go `testing` + testify + testcontainers + enttest     |
+| Frontend testing     | Vitest                                                |
+| E2E testing          | Playwright                                            |
 
 ## System Design
 
@@ -56,22 +56,22 @@ Single `docker-compose up` to self-host.
 
 ## Key Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| Mirror plutus architecture | Proven pattern in existing projects, no new tooling to learn |
-| Embed frontend in Go binary | Single artifact deployment, simple ops |
-| ConnectRPC over REST | Type-safe API with generated Go + TypeScript clients from one proto source |
-| PostgreSQL (not SQLite) | Server-based app needs proper DB; enables future multi-device sync |
-| Offline PWA for core features | Storyteller can run night phases even with spotty connectivity |
+| Decision                      | Rationale                                                                  |
+|-------------------------------|----------------------------------------------------------------------------|
+| Mirror plutus architecture    | Proven pattern in existing projects, no new tooling to learn               |
+| Embed frontend in Go binary   | Single artifact deployment, simple ops                                     |
+| ConnectRPC over REST          | Type-safe API with generated Go + TypeScript clients from one proto source |
+| PostgreSQL (not SQLite)       | Server-based app needs proper DB; enables future multi-device sync         |
+| Offline PWA for core features | Storyteller can run night phases even with spotty connectivity             |
 
 ## Testing
 
-| Layer | Tool | Covers |
-|-------|------|--------|
-| Backend unit | Go `testing` + testify | Service logic, helpers, utilities |
-| Backend integration | testcontainers (PostgreSQL) + enttest | DB queries, migrations, API handlers against real DB |
-| Frontend unit | Vitest | Component logic, stores, utilities |
-| E2E (full stack) | Playwright | Real user flows against running app (server + DB + browser) |
+| Layer               | Tool                                  | Covers                                                      |
+|---------------------|---------------------------------------|-------------------------------------------------------------|
+| Backend unit        | Go `testing` + testify                | Service logic, helpers, utilities                           |
+| Backend integration | testcontainers (PostgreSQL) + enttest | DB queries, migrations, API handlers against real DB        |
+| Frontend unit       | Vitest                                | Component logic, stores, utilities                          |
+| E2E (full stack)    | Playwright                            | Real user flows against running app (server + DB + browser) |
 
 ### E2E approach
 
