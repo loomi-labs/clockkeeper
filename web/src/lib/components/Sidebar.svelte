@@ -22,9 +22,7 @@
   );
 
   const scriptsOpen = $derived(page.url.pathname.startsWith("/scripts"));
-  const gamesOpen = $derived(
-    page.url.pathname.startsWith("/games") || page.url.pathname === "/",
-  );
+  const gamesOpen = $derived(page.url.pathname.startsWith("/games"));
 
   function isItemActive(href: string): boolean {
     return page.url.pathname === href;
