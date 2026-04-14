@@ -170,10 +170,10 @@
 
   /* Override semantic colors for light-on-dark text */
   --color-primary: #f3f4f6;
-  --color-secondary: #9ca3af;
-  --color-muted: #6b7280;
+  --color-secondary: #d1cdc8;
+  --color-muted: #b0aaa3;
   --color-medium: #d1d5db;
-  --color-label: #9ca3af;
+  --color-label: #d1cdc8;
   --color-surface: rgba(255, 255, 255, 0.06);
   --color-surface-alt: rgba(255, 255, 255, 0.04);
   --color-border: rgba(255, 255, 255, 0.12);

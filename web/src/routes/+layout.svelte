@@ -60,9 +60,9 @@
   {@render children()}
 {:else if initialized && auth.isAuthenticated}
   <div class="min-h-dvh text-primary">
-    <nav class="nav-bar border-b border-border bg-surface">
+    <nav class="nav-bar relative z-40 border-b border-border bg-surface transition-[margin-left] duration-200 {sidebar.expanded ? 'md:ml-48' : 'md:ml-14'}">
       <div class="flex items-center justify-between px-4 py-3">
-        <div class="flex items-center gap-4">
+        <div class="flex min-w-0 flex-1 items-center gap-4">
           <button
             onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
             class="rounded-lg p-1.5 text-secondary transition-colors hover:bg-hover hover:text-primary md:hidden"
@@ -82,15 +82,15 @@
               />
             </svg>
           </button>
-          <a
-            href="/"
-            class="flex items-center gap-2 text-xl font-bold text-indigo-600 dark:text-indigo-400"
-          >
-            <img src="/logo.webp" alt="Clock Keeper" class="h-8 w-8 rounded" />
-            <span class="hidden sm:inline">Clock Keeper</span>
-          </a>
         </div>
-        <div class="flex items-center gap-2">
+        <a
+          href="/"
+          class="flex items-center gap-2 font-[Goudy_Stout] text-sm text-[#8b1520] dark:text-[#e04e5e]"
+        >
+          <img src="/logo.webp" alt="Clock Keeper" class="h-8 w-8 rounded" />
+          <span class="hidden sm:inline">Clock Keeper</span>
+        </a>
+        <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
           <ThemeSwitcher />
           {#if auth.isAnonymous}
             {#if auth.discordAvailable}

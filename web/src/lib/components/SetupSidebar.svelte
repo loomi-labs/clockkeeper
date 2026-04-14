@@ -198,9 +198,9 @@
 
 <!-- Wide screens: right sidebar in the gutter -->
 <div
-  class="card-slate fixed top-[57px] right-0 bottom-0 hidden w-72 flex-col border-l border-border bg-surface 2xl:flex"
+  class="card-slate fixed top-0 right-0 bottom-0 hidden w-72 flex-col border-l border-border bg-surface 2xl:flex"
 >
-  <div class="flex items-center gap-3 border-b border-border px-4 py-3">
+  <div class="flex items-center gap-3 border-b border-border px-4 py-3 pt-[72px]">
     <h2 class="text-lg font-semibold text-primary">Setup</h2>
     {#if hasSteps}
       <span class="text-sm text-secondary">{completed.size}/{steps.length}</span

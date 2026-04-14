@@ -233,7 +233,7 @@
 
 <!-- Desktop sidebar (md+) -->
 <aside
-  class="nav-sidebar card-slate fixed top-[57px] left-0 bottom-0 z-30 hidden flex-col border-r border-border bg-surface transition-[width] duration-200 md:flex
+  class="nav-sidebar card-slate fixed top-0 left-0 bottom-0 z-30 hidden flex-col border-r border-border bg-surface transition-[width] duration-200 md:flex
 		{sidebar.expanded ? 'w-48' : 'w-14'}"
 >
   <nav class="flex-1 space-y-1 overflow-y-auto p-2">
