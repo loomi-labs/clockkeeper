@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0" /></a>
-  <a href="https://github.com/shifty11/clockkeeper/actions/workflows/main.yml"><img src="https://github.com/shifty11/clockkeeper/actions/workflows/main.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/loomi-labs/clockkeeper/actions/workflows/main.yml"><img src="https://github.com/loomi-labs/clockkeeper/actions/workflows/main.yml/badge.svg" alt="CI" /></a>
 </p>
 
 ---

@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/shifty11/clockkeeper/ent"
-	"github.com/shifty11/clockkeeper/gen/clockkeeper/v1/clockkeeperv1connect"
-	"github.com/shifty11/clockkeeper/internal/botc"
+	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1/clockkeeperv1connect"
+	"github.com/loomi-labs/clockkeeper/internal/botc"
 )
 
 // Server is the HTTP server that serves the API and frontend.
@@ -81,7 +81,7 @@ func (s *Server) ListenAndServe() error {
 
 // Shutdown gracefully stops the server.
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.cancelFunc()      // Stop cleanup goroutine.
+	s.cancelFunc()       // Stop cleanup goroutine.
 	s.rateLimiter.Stop() // Stop rate limiter goroutine.
 	return s.httpServer.Shutdown(ctx)
 }

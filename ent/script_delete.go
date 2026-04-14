@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/shifty11/clockkeeper/ent/predicate"
-	"github.com/shifty11/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/script"
 )
 
 // ScriptDelete is the builder for deleting a Script entity.

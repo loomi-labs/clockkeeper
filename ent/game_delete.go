@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/shifty11/clockkeeper/ent/game"
-	"github.com/shifty11/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/predicate"
 )
 
 // GameDelete is the builder for deleting a Game entity.

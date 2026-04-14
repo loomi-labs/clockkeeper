@@ -4,7 +4,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/shifty11/clockkeeper/ent/schema/mixin"
+	"github.com/loomi-labs/clockkeeper/ent/schema/mixin"
 )
 
 // Script holds the schema definition for a saved BotC script.

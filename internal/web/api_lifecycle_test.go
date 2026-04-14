@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
-	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
+	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1679,8 +1679,8 @@ func TestUpdateGrimoireState_PersistsNotes(t *testing.T) {
 	roundNotes := map[string]string{"round1": "night 1 observation"}
 
 	_, err := handler.UpdateGrimoireState(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGrimoireStateRequest{
-		GameId:    gameID,
-		GameNotes: gameNotes,
+		GameId:     gameID,
+		GameNotes:  gameNotes,
 		RoundNotes: roundNotes,
 	}))
 	require.NoError(t, err)
@@ -1896,7 +1896,7 @@ func TestStartGame_SeedsTravellerAlignments(t *testing.T) {
 	// Manually add a traveller ("thief" is a Trouble Brewing traveller).
 	travellerID := "thief"
 	_, err = handler.UpdateGameTravellers(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.UpdateGameTravellersRequest{
-		GameId:              gameID,
+		GameId:               gameID,
 		SelectedTravellerIds: []string{travellerID},
 	}))
 	require.NoError(t, err)
@@ -1971,7 +1971,7 @@ func TestUpdateDemonBluffs_Success(t *testing.T) {
 
 	bluffs := []string{"washerwoman", "librarian"}
 	resp, err := handler.UpdateDemonBluffs(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
-		GameId:  gameID,
+		GameId:   gameID,
 		BluffIds: bluffs,
 	}))
 	require.NoError(t, err)
@@ -1991,7 +1991,7 @@ func TestUpdateDemonBluffs_FailsNotSetup(t *testing.T) {
 	ownerID, game := startedGame(t, handler)
 
 	_, err := handler.UpdateDemonBluffs(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
-		GameId:  game.Id,
+		GameId:   game.Id,
 		BluffIds: []string{"washerwoman"},
 	}))
 	require.Error(t, err)
@@ -2007,7 +2007,7 @@ func TestUpdateDemonBluffs_BlocksOtherUser(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = handler.UpdateDemonBluffs(authedCtx(attacker.ID), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
-		GameId:  gameID,
+		GameId:   gameID,
 		BluffIds: []string{"washerwoman"},
 	}))
 	require.Error(t, err)

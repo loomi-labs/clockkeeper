@@ -12,11 +12,11 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/shifty11/clockkeeper/ent/death"
-	"github.com/shifty11/clockkeeper/ent/game"
-	"github.com/shifty11/clockkeeper/ent/phase"
-	"github.com/shifty11/clockkeeper/ent/script"
-	"github.com/shifty11/clockkeeper/ent/user"
+	"github.com/loomi-labs/clockkeeper/ent/death"
+	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
 // ent aliases to avoid import conflicts in user's code.

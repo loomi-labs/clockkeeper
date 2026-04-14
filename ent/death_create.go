@@ -10,8 +10,8 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/shifty11/clockkeeper/ent/death"
-	"github.com/shifty11/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/death"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
 )
 
 // DeathCreate is the builder for creating a Death entity.

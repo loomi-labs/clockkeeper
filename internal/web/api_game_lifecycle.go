@@ -6,11 +6,11 @@ import (
 	"log/slog"
 
 	"connectrpc.com/connect"
-	"github.com/shifty11/clockkeeper/ent"
-	"github.com/shifty11/clockkeeper/ent/game"
-	"github.com/shifty11/clockkeeper/ent/phase"
-	"github.com/shifty11/clockkeeper/ent/schema"
-	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
+	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/schema"
+	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 )
 
 func (h *ClockKeeperServiceHandler) StartGame(ctx context.Context, req *connect.Request[clockkeeperv1.StartGameRequest]) (*connect.Response[clockkeeperv1.StartGameResponse], error) {

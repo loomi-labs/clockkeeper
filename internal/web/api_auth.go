@@ -6,9 +6,9 @@ import (
 	"log/slog"
 
 	"connectrpc.com/connect"
-	"github.com/shifty11/clockkeeper/ent"
-	"github.com/shifty11/clockkeeper/ent/user"
-	clockkeeperv1 "github.com/shifty11/clockkeeper/gen/clockkeeper/v1"
+	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/user"
+	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 )
 
 // LoginWithDiscord exchanges a Discord OAuth code for a ClockKeeper JWT.

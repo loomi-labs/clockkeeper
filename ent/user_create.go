@@ -10,9 +10,9 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/shifty11/clockkeeper/ent/game"
-	"github.com/shifty11/clockkeeper/ent/script"
-	"github.com/shifty11/clockkeeper/ent/user"
+	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
 // UserCreate is the builder for creating a User entity.

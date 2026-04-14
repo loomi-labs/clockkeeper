@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package clockkeeper.v1;
 
-option go_package = "github.com/shifty11/clockkeeper/gen/clockkeeper/v1;clockkeeperv1";
+option go_package = "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1;clockkeeperv1";
 
 service ClockKeeperService {
   // Auth
