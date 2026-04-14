@@ -13,6 +13,9 @@ tasks:
   dev:
     desc: Start full development environment (postgres + backend + frontend)
     cmds:
+      - pnpm --dir web install --frozen-lockfile
+      - task: gen
+      - task: frontend:build
       - docker compose up -d postgres
       - defer: docker compose stop postgres
       - |
@@ -34,6 +37,9 @@ tasks:
   dev:lan:
     desc: Start full dev environment exposed on LAN (for testing on phone)
     cmds:
+      - pnpm --dir web install --frozen-lockfile
+      - task: gen
+      - task: frontend:build
       - docker compose up -d postgres
       - defer: docker compose stop postgres
       - |
@@ -93,7 +99,7 @@ tasks:
   gen:proto:
     desc: Generate Protobuf + ConnectRPC code
     cmds:
-      - buf generate
+      - go tool buf generate
 
   check:
     desc: Run svelte-check for type errors

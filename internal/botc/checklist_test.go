@@ -13,7 +13,7 @@ func TestGenerateSetupChecklist_BasicSteps(t *testing.T) {
 		{ID: "imp", Name: "Imp", Team: TeamDemon},
 	}
 
-	steps := GenerateSetupChecklist(chars, nil, nil)
+	steps := GenerateSetupChecklist(chars, nil, nil, nil)
 	require.Greater(t, len(steps), 0)
 
 	stepIDs := make([]string, len(steps))
@@ -34,7 +34,7 @@ func TestGenerateSetupChecklist_WithReminders(t *testing.T) {
 		{ID: "imp", Name: "Imp", Team: TeamDemon, Reminders: []string{"Dead"}},
 	}
 
-	steps := GenerateSetupChecklist(chars, nil, nil)
+	steps := GenerateSetupChecklist(chars, nil, nil, nil)
 
 	stepIDs := make([]string, len(steps))
 	for i, s := range steps {
@@ -51,7 +51,7 @@ func TestGenerateSetupChecklist_SetupCharacterSteps(t *testing.T) {
 		{ID: "imp", Name: "Imp", Team: TeamDemon},
 	}
 
-	steps := GenerateSetupChecklist(chars, nil, nil)
+	steps := GenerateSetupChecklist(chars, nil, nil, nil)
 
 	stepIDs := make([]string, len(steps))
 	for i, s := range steps {
@@ -79,7 +79,7 @@ func TestGenerateSetupChecklist_WithBagSubstitutions(t *testing.T) {
 		{CausedByID: "drunk", CausedByName: "Drunk", Team: TeamTownsfolk, CharacterID: "chef", CharacterName: "Chef"},
 	}
 
-	steps := GenerateSetupChecklist(chars, nil, bagSubs)
+	steps := GenerateSetupChecklist(chars, nil, bagSubs, nil)
 
 	stepIDs := make([]string, len(steps))
 	for i, s := range steps {
@@ -110,7 +110,7 @@ func TestGenerateSetupChecklist_WithBagSubstitutions(t *testing.T) {
 }
 
 func TestGenerateSetupChecklist_Empty(t *testing.T) {
-	steps := GenerateSetupChecklist(nil, nil, nil)
+	steps := GenerateSetupChecklist(nil, nil, nil, nil)
 	require.Greater(t, len(steps), 0)
 
 	stepIDs := make([]string, len(steps))

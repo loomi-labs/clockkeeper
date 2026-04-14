@@ -214,4 +214,8 @@ func init() {
 	userDescPasswordHash := userFields[1].Descriptor()
 	// user.PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
 	user.PasswordHashValidator = userDescPasswordHash.Validators[0].(func(string) error)
+	// userDescPlayerPresets is the schema descriptor for player_presets field.
+	userDescPlayerPresets := userFields[2].Descriptor()
+	// user.DefaultPlayerPresets holds the default value on creation for the player_presets field.
+	user.DefaultPlayerPresets = userDescPlayerPresets.Default.([]string)
 }

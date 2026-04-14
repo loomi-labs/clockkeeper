@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
@@ -61,6 +62,24 @@ func (_u *UserUpdate) SetNillablePasswordHash(v *string) *UserUpdate {
 	if v != nil {
 		_u.SetPasswordHash(*v)
 	}
+	return _u
+}
+
+// SetPlayerPresets sets the "player_presets" field.
+func (_u *UserUpdate) SetPlayerPresets(v []string) *UserUpdate {
+	_u.mutation.SetPlayerPresets(v)
+	return _u
+}
+
+// AppendPlayerPresets appends value to the "player_presets" field.
+func (_u *UserUpdate) AppendPlayerPresets(v []string) *UserUpdate {
+	_u.mutation.AppendPlayerPresets(v)
+	return _u
+}
+
+// ClearPlayerPresets clears the value of the "player_presets" field.
+func (_u *UserUpdate) ClearPlayerPresets() *UserUpdate {
+	_u.mutation.ClearPlayerPresets()
 	return _u
 }
 
@@ -213,6 +232,17 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.PlayerPresets(); ok {
+		_spec.SetField(user.FieldPlayerPresets, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedPlayerPresets(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, user.FieldPlayerPresets, value)
+		})
+	}
+	if _u.mutation.PlayerPresetsCleared() {
+		_spec.ClearField(user.FieldPlayerPresets, field.TypeJSON)
+	}
 	if _u.mutation.ScriptsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -354,6 +384,24 @@ func (_u *UserUpdateOne) SetNillablePasswordHash(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetPasswordHash(*v)
 	}
+	return _u
+}
+
+// SetPlayerPresets sets the "player_presets" field.
+func (_u *UserUpdateOne) SetPlayerPresets(v []string) *UserUpdateOne {
+	_u.mutation.SetPlayerPresets(v)
+	return _u
+}
+
+// AppendPlayerPresets appends value to the "player_presets" field.
+func (_u *UserUpdateOne) AppendPlayerPresets(v []string) *UserUpdateOne {
+	_u.mutation.AppendPlayerPresets(v)
+	return _u
+}
+
+// ClearPlayerPresets clears the value of the "player_presets" field.
+func (_u *UserUpdateOne) ClearPlayerPresets() *UserUpdateOne {
+	_u.mutation.ClearPlayerPresets()
 	return _u
 }
 
@@ -535,6 +583,17 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlayerPresets(); ok {
+		_spec.SetField(user.FieldPlayerPresets, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedPlayerPresets(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, user.FieldPlayerPresets, value)
+		})
+	}
+	if _u.mutation.PlayerPresetsCleared() {
+		_spec.ClearField(user.FieldPlayerPresets, field.TypeJSON)
 	}
 	if _u.mutation.ScriptsCleared() {
 		edge := &sqlgraph.EdgeSpec{

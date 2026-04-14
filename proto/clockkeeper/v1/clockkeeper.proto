@@ -34,6 +34,7 @@ service ClockKeeperService {
   rpc UpdateGameExtraCharacters(UpdateGameExtraCharactersRequest) returns (UpdateGameExtraCharactersResponse) {}
   rpc UpdateTravellerAlignment(UpdateTravellerAlignmentRequest) returns (UpdateTravellerAlignmentResponse) {}
   rpc UpdateGameName(UpdateGameNameRequest) returns (UpdateGameNameResponse) {}
+  rpc UpdatePlayerCount(UpdatePlayerCountRequest) returns (UpdatePlayerCountResponse) {}
   rpc UpdateGrimoireState(UpdateGrimoireStateRequest) returns (UpdateGrimoireStateResponse) {}
   rpc UpdateDemonBluffs(UpdateDemonBluffsRequest) returns (UpdateDemonBluffsResponse) {}
   rpc UpdateBagSubstitutions(UpdateBagSubstitutionsRequest) returns (UpdateBagSubstitutionsResponse) {}
@@ -57,6 +58,10 @@ service ClockKeeperService {
 
   // Character alignment
   rpc UpdateCharacterAlignment(UpdateCharacterAlignmentRequest) returns (UpdateCharacterAlignmentResponse) {}
+
+  // Player presets
+  rpc GetPlayerPresets(GetPlayerPresetsRequest) returns (GetPlayerPresetsResponse) {}
+  rpc UpdatePlayerPresets(UpdatePlayerPresetsRequest) returns (UpdatePlayerPresetsResponse) {}
 }
 
 // --- Enums ---
@@ -503,6 +508,15 @@ message UpdateGameNameResponse {
   Game game = 1;
 }
 
+message UpdatePlayerCountRequest {
+  int64 game_id = 1;
+  int32 player_count = 2;
+}
+
+message UpdatePlayerCountResponse {
+  Game game = 1;
+}
+
 // --- Grimoire State ---
 
 message UpdateGrimoireStateRequest {
@@ -565,4 +579,20 @@ message UpdateCharacterAlignmentRequest {
 
 message UpdateCharacterAlignmentResponse {
   Game game = 1;
+}
+
+// --- Player Presets ---
+
+message GetPlayerPresetsRequest {}
+
+message GetPlayerPresetsResponse {
+  repeated string names = 1;
+}
+
+message UpdatePlayerPresetsRequest {
+  repeated string names = 1;
+}
+
+message UpdatePlayerPresetsResponse {
+  repeated string names = 1;
 }

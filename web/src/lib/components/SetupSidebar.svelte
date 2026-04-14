@@ -232,7 +232,7 @@
 
 <!-- Narrow screens: bottom bar -->
 <div
-  class="card-slate fixed bottom-0 left-0 right-0 border-t border-border bg-surface shadow-[0_-2px_8px_rgba(0,0,0,0.1)] 2xl:hidden"
+  class="card-slate fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-surface shadow-[0_-2px_8px_rgba(0,0,0,0.1)] 2xl:hidden"
 >
   <div class="flex w-full items-center justify-between px-4 py-3">
     <button

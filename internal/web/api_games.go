@@ -413,6 +413,32 @@ func (h *ClockKeeperServiceHandler) UpdateGameName(ctx context.Context, req *con
 	}), nil
 }
 
+func (h *ClockKeeperServiceHandler) UpdatePlayerCount(ctx context.Context, req *connect.Request[clockkeeperv1.UpdatePlayerCountRequest]) (*connect.Response[clockkeeperv1.UpdatePlayerCountResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	if g.State != game.StateSetup {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("can only change player count during setup"))
+	}
+
+	count := int(req.Msg.PlayerCount)
+	if count < 5 || count > 15 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("player count must be between 5 and 15, got %d", count))
+	}
+
+	g, err = g.Update().SetPlayerCount(count).Save(ctx)
+	if err != nil {
+		slog.Error("update player count failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	return connect.NewResponse(&clockkeeperv1.UpdatePlayerCountResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
+}
+
 func (h *ClockKeeperServiceHandler) UpdateGrimoireState(ctx context.Context, req *connect.Request[clockkeeperv1.UpdateGrimoireStateRequest]) (*connect.Response[clockkeeperv1.UpdateGrimoireStateResponse], error) {
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
@@ -604,7 +630,7 @@ func (h *ClockKeeperServiceHandler) GetSetupChecklist(ctx context.Context, req *
 		})
 	}
 
-	steps := botc.GenerateSetupChecklist(chars, h.registry, bagSubs)
+	steps := botc.GenerateSetupChecklist(chars, h.registry, bagSubs, g.SelectedBluffs)
 
 	protoSteps := make([]*clockkeeperv1.SetupStep, len(steps))
 	for i, s := range steps {

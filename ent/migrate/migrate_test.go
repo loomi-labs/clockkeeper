@@ -44,6 +44,7 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260323135528_add_demon_bluffs":                   validateDemonBluffs,
 	"20260323161223_add_bag_substitutions":               validateBagSubstitutions,
 	"20260324183937_add_grimoire_reminder_attachments":   validateGrimoireReminderAttachments,
+	"20260406182402_add_player_presets":                  validatePlayerPresets,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -542,6 +543,18 @@ func validateGrimoireReminderAttachments(t *testing.T, ctx context.Context, _ *s
 	}
 	if g.GrimoireReminderAttachments != nil && len(g.GrimoireReminderAttachments) != 0 {
 		t.Errorf("expected nil or empty grimoire_reminder_attachments, got %v", g.GrimoireReminderAttachments)
+	}
+}
+
+// validatePlayerPresets checks that the player_presets column exists on users.
+func validatePlayerPresets(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+	u, err := client.User.Query().Where(user.Username("admin")).Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query user: %v", err)
+	}
+	if u.PlayerPresets != nil && len(u.PlayerPresets) != 0 {
+		t.Errorf("expected nil or empty player_presets, got %v", u.PlayerPresets)
 	}
 }
 

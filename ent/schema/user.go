@@ -24,6 +24,7 @@ func (User) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("username").Unique().NotEmpty(),
 		field.String("password_hash").NotEmpty().Sensitive(),
+		field.JSON("player_presets", []string{}).Optional().Default([]string{}),
 	}
 }
 

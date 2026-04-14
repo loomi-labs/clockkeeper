@@ -17,7 +17,7 @@ type SetupStep struct {
 
 // GenerateSetupChecklist creates a dynamic setup checklist based on the selected characters.
 // bagSubs contains bag substitutions from randomization (e.g., Drunk → townsfolk token).
-func GenerateSetupChecklist(chars []*Character, registry *Registry, bagSubs []BagSubstitution) []SetupStep {
+func GenerateSetupChecklist(chars []*Character, registry *Registry, bagSubs []BagSubstitution, bluffIDs []string) []SetupStep {
 	var steps []SetupStep
 
 	// Build a set of bag substitution character IDs for token list adjustment.
@@ -164,6 +164,30 @@ func GenerateSetupChecklist(chars []*Character, registry *Registry, bagSubs []Ba
 		Description:    "Pass the bag around. Each player draws a token and looks at it secretly.",
 		RequiresAction: true,
 	})
+
+	// 7b. Demon bluffs — prepare the 3 not-in-play good tokens to show the Demon.
+	if len(bluffIDs) > 0 && registry != nil {
+		bluffChars := registry.Characters(bluffIDs)
+		// Only add bluff step if all IDs resolved — skip if stale data would
+		// show an incomplete/misleading bluff list to the storyteller.
+		if len(bluffChars) == len(bluffIDs) {
+			var bluffNames []string
+			var bluffCharIDs, bluffEditions []string
+			for _, c := range bluffChars {
+				bluffNames = append(bluffNames, c.Name)
+				bluffCharIDs = append(bluffCharIDs, c.ID)
+				bluffEditions = append(bluffEditions, c.Edition)
+			}
+			steps = append(steps, SetupStep{
+				ID:             "prepare_bluffs",
+				Title:          "Prepare demon bluff tokens",
+				Description:    fmt.Sprintf("Get out these tokens to show the Demon as not-in-play characters: %s", strings.Join(bluffNames, ", ")),
+				RequiresAction: true,
+				CharacterIDs:   bluffCharIDs,
+				Editions:       bluffEditions,
+			})
+		}
+	}
 
 	// 8. Collect tokens back (optional).
 	steps = append(steps, SetupStep{

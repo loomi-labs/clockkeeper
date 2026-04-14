@@ -47,7 +47,7 @@
     class="relative z-10 w-full max-w-sm rounded-xl border border-border bg-surface p-6 shadow-xl"
   >
     <h3 class="text-lg font-semibold text-primary">{title}</h3>
-    <p class="mt-2 text-sm text-secondary">{message}</p>
+    <p class="mt-2 text-sm text-secondary whitespace-pre-line">{message}</p>
     <div class="mt-5 flex gap-3 justify-end">
       <button
         type="button"

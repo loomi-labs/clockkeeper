@@ -4313,23 +4313,25 @@ func (m *ScriptMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *int
-	created_at     *time.Time
-	updated_at     *time.Time
-	username       *string
-	password_hash  *string
-	clearedFields  map[string]struct{}
-	scripts        map[int]struct{}
-	removedscripts map[int]struct{}
-	clearedscripts bool
-	games          map[int]struct{}
-	removedgames   map[int]struct{}
-	clearedgames   bool
-	done           bool
-	oldValue       func(context.Context) (*User, error)
-	predicates     []predicate.User
+	op                   Op
+	typ                  string
+	id                   *int
+	created_at           *time.Time
+	updated_at           *time.Time
+	username             *string
+	password_hash        *string
+	player_presets       *[]string
+	appendplayer_presets []string
+	clearedFields        map[string]struct{}
+	scripts              map[int]struct{}
+	removedscripts       map[int]struct{}
+	clearedscripts       bool
+	games                map[int]struct{}
+	removedgames         map[int]struct{}
+	clearedgames         bool
+	done                 bool
+	oldValue             func(context.Context) (*User, error)
+	predicates           []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -4574,6 +4576,71 @@ func (m *UserMutation) ResetPasswordHash() {
 	m.password_hash = nil
 }
 
+// SetPlayerPresets sets the "player_presets" field.
+func (m *UserMutation) SetPlayerPresets(s []string) {
+	m.player_presets = &s
+	m.appendplayer_presets = nil
+}
+
+// PlayerPresets returns the value of the "player_presets" field in the mutation.
+func (m *UserMutation) PlayerPresets() (r []string, exists bool) {
+	v := m.player_presets
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlayerPresets returns the old "player_presets" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldPlayerPresets(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlayerPresets is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlayerPresets requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlayerPresets: %w", err)
+	}
+	return oldValue.PlayerPresets, nil
+}
+
+// AppendPlayerPresets adds s to the "player_presets" field.
+func (m *UserMutation) AppendPlayerPresets(s []string) {
+	m.appendplayer_presets = append(m.appendplayer_presets, s...)
+}
+
+// AppendedPlayerPresets returns the list of values that were appended to the "player_presets" field in this mutation.
+func (m *UserMutation) AppendedPlayerPresets() ([]string, bool) {
+	if len(m.appendplayer_presets) == 0 {
+		return nil, false
+	}
+	return m.appendplayer_presets, true
+}
+
+// ClearPlayerPresets clears the value of the "player_presets" field.
+func (m *UserMutation) ClearPlayerPresets() {
+	m.player_presets = nil
+	m.appendplayer_presets = nil
+	m.clearedFields[user.FieldPlayerPresets] = struct{}{}
+}
+
+// PlayerPresetsCleared returns if the "player_presets" field was cleared in this mutation.
+func (m *UserMutation) PlayerPresetsCleared() bool {
+	_, ok := m.clearedFields[user.FieldPlayerPresets]
+	return ok
+}
+
+// ResetPlayerPresets resets all changes to the "player_presets" field.
+func (m *UserMutation) ResetPlayerPresets() {
+	m.player_presets = nil
+	m.appendplayer_presets = nil
+	delete(m.clearedFields, user.FieldPlayerPresets)
+}
+
 // AddScriptIDs adds the "scripts" edge to the Script entity by ids.
 func (m *UserMutation) AddScriptIDs(ids ...int) {
 	if m.scripts == nil {
@@ -4716,7 +4783,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -4728,6 +4795,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.password_hash != nil {
 		fields = append(fields, user.FieldPasswordHash)
+	}
+	if m.player_presets != nil {
+		fields = append(fields, user.FieldPlayerPresets)
 	}
 	return fields
 }
@@ -4745,6 +4815,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Username()
 	case user.FieldPasswordHash:
 		return m.PasswordHash()
+	case user.FieldPlayerPresets:
+		return m.PlayerPresets()
 	}
 	return nil, false
 }
@@ -4762,6 +4834,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldUsername(ctx)
 	case user.FieldPasswordHash:
 		return m.OldPasswordHash(ctx)
+	case user.FieldPlayerPresets:
+		return m.OldPlayerPresets(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -4799,6 +4873,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPasswordHash(v)
 		return nil
+	case user.FieldPlayerPresets:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlayerPresets(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
 }
@@ -4828,7 +4909,11 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *UserMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(user.FieldPlayerPresets) {
+		fields = append(fields, user.FieldPlayerPresets)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -4841,6 +4926,11 @@ func (m *UserMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *UserMutation) ClearField(name string) error {
+	switch name {
+	case user.FieldPlayerPresets:
+		m.ClearPlayerPresets()
+		return nil
+	}
 	return fmt.Errorf("unknown User nullable field %s", name)
 }
 
@@ -4859,6 +4949,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldPasswordHash:
 		m.ResetPasswordHash()
+		return nil
+	case user.FieldPlayerPresets:
+		m.ResetPlayerPresets()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
