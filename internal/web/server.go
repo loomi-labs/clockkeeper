@@ -17,13 +17,16 @@ import (
 
 // Server is the HTTP server that serves the API and frontend.
 type Server struct {
-	config     *Config
-	httpServer *http.Server
+	config      *Config
+	httpServer  *http.Server
+	cancelFunc  context.CancelFunc
+	rateLimiter *RateLimitInterceptor
 }
 
 // NewServer creates a new web server with all services wired.
 func NewServer(config *Config, db *ent.Client, registry *botc.Registry, staticFiles fs.FS, characterIcons fs.FS) *Server {
 	auth := NewAuthInterceptor(config.JWTSecretKey)
+	rateLimiter := NewRateLimitInterceptor(config.RateLimitAnon, config.RateLimitAuth)
 
 	handler := &ClockKeeperServiceHandler{
 		config:   config,
@@ -34,10 +37,10 @@ func NewServer(config *Config, db *ent.Client, registry *botc.Registry, staticFi
 
 	mux := http.NewServeMux()
 
-	// ConnectRPC API with auth interceptor.
+	// ConnectRPC API with auth and rate limit interceptors.
 	rpcPath, rpcHandler := clockkeeperv1connect.NewClockKeeperServiceHandler(
 		handler,
-		connect.WithInterceptors(auth),
+		connect.WithInterceptors(auth, rateLimiter),
 	)
 	mux.Handle(rpcPath, rpcHandler)
 
@@ -51,12 +54,17 @@ func NewServer(config *Config, db *ent.Client, registry *botc.Registry, staticFi
 		mux.Handle("/", spaFileServer(staticFiles))
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	go startCleanup(ctx, db, config.AnonymousMaxAge)
+
 	return &Server{
 		config: config,
 		httpServer: &http.Server{
 			Addr:    config.Listen,
 			Handler: mux,
 		},
+		cancelFunc:  cancel,
+		rateLimiter: rateLimiter,
 	}
 }
 
@@ -68,6 +76,8 @@ func (s *Server) ListenAndServe() error {
 
 // Shutdown gracefully stops the server.
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.cancelFunc()      // Stop cleanup goroutine.
+	s.rateLimiter.Stop() // Stop rate limiter goroutine.
 	return s.httpServer.Shutdown(ctx)
 }
 

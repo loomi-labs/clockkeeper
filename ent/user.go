@@ -22,10 +22,18 @@ type User struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// Username holds the value of the "username" field.
-	Username string `json:"username,omitempty"`
-	// PasswordHash holds the value of the "password_hash" field.
-	PasswordHash string `json:"-"`
+	// UUID holds the value of the "uuid" field.
+	UUID string `json:"uuid,omitempty"`
+	// DiscordID holds the value of the "discord_id" field.
+	DiscordID *string `json:"discord_id,omitempty"`
+	// DiscordUsername holds the value of the "discord_username" field.
+	DiscordUsername *string `json:"discord_username,omitempty"`
+	// DiscordAvatar holds the value of the "discord_avatar" field.
+	DiscordAvatar *string `json:"discord_avatar,omitempty"`
+	// IsAnonymous holds the value of the "is_anonymous" field.
+	IsAnonymous bool `json:"is_anonymous,omitempty"`
+	// LastActiveAt holds the value of the "last_active_at" field.
+	LastActiveAt time.Time `json:"last_active_at,omitempty"`
 	// PlayerPresets holds the value of the "player_presets" field.
 	PlayerPresets []string `json:"player_presets,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -70,11 +78,13 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case user.FieldPlayerPresets:
 			values[i] = new([]byte)
+		case user.FieldIsAnonymous:
+			values[i] = new(sql.NullBool)
 		case user.FieldID:
 			values[i] = new(sql.NullInt64)
-		case user.FieldUsername, user.FieldPasswordHash:
+		case user.FieldUUID, user.FieldDiscordID, user.FieldDiscordUsername, user.FieldDiscordAvatar:
 			values[i] = new(sql.NullString)
-		case user.FieldCreatedAt, user.FieldUpdatedAt:
+		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldLastActiveAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -109,17 +119,44 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
 			}
-		case user.FieldUsername:
+		case user.FieldUUID:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field username", values[i])
+				return fmt.Errorf("unexpected type %T for field uuid", values[i])
 			} else if value.Valid {
-				_m.Username = value.String
+				_m.UUID = value.String
 			}
-		case user.FieldPasswordHash:
+		case user.FieldDiscordID:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field password_hash", values[i])
+				return fmt.Errorf("unexpected type %T for field discord_id", values[i])
 			} else if value.Valid {
-				_m.PasswordHash = value.String
+				_m.DiscordID = new(string)
+				*_m.DiscordID = value.String
+			}
+		case user.FieldDiscordUsername:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field discord_username", values[i])
+			} else if value.Valid {
+				_m.DiscordUsername = new(string)
+				*_m.DiscordUsername = value.String
+			}
+		case user.FieldDiscordAvatar:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field discord_avatar", values[i])
+			} else if value.Valid {
+				_m.DiscordAvatar = new(string)
+				*_m.DiscordAvatar = value.String
+			}
+		case user.FieldIsAnonymous:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_anonymous", values[i])
+			} else if value.Valid {
+				_m.IsAnonymous = value.Bool
+			}
+		case user.FieldLastActiveAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field last_active_at", values[i])
+			} else if value.Valid {
+				_m.LastActiveAt = value.Time
 			}
 		case user.FieldPlayerPresets:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -181,10 +218,29 @@ func (_m *User) String() string {
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("username=")
-	builder.WriteString(_m.Username)
+	builder.WriteString("uuid=")
+	builder.WriteString(_m.UUID)
 	builder.WriteString(", ")
-	builder.WriteString("password_hash=<sensitive>")
+	if v := _m.DiscordID; v != nil {
+		builder.WriteString("discord_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.DiscordUsername; v != nil {
+		builder.WriteString("discord_username=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.DiscordAvatar; v != nil {
+		builder.WriteString("discord_avatar=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("is_anonymous=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IsAnonymous))
+	builder.WriteString(", ")
+	builder.WriteString("last_active_at=")
+	builder.WriteString(_m.LastActiveAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("player_presets=")
 	builder.WriteString(fmt.Sprintf("%v", _m.PlayerPresets))

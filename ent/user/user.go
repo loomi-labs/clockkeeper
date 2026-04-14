@@ -18,10 +18,18 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// FieldUsername holds the string denoting the username field in the database.
-	FieldUsername = "username"
-	// FieldPasswordHash holds the string denoting the password_hash field in the database.
-	FieldPasswordHash = "password_hash"
+	// FieldUUID holds the string denoting the uuid field in the database.
+	FieldUUID = "uuid"
+	// FieldDiscordID holds the string denoting the discord_id field in the database.
+	FieldDiscordID = "discord_id"
+	// FieldDiscordUsername holds the string denoting the discord_username field in the database.
+	FieldDiscordUsername = "discord_username"
+	// FieldDiscordAvatar holds the string denoting the discord_avatar field in the database.
+	FieldDiscordAvatar = "discord_avatar"
+	// FieldIsAnonymous holds the string denoting the is_anonymous field in the database.
+	FieldIsAnonymous = "is_anonymous"
+	// FieldLastActiveAt holds the string denoting the last_active_at field in the database.
+	FieldLastActiveAt = "last_active_at"
 	// FieldPlayerPresets holds the string denoting the player_presets field in the database.
 	FieldPlayerPresets = "player_presets"
 	// EdgeScripts holds the string denoting the scripts edge name in mutations.
@@ -51,8 +59,12 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
-	FieldUsername,
-	FieldPasswordHash,
+	FieldUUID,
+	FieldDiscordID,
+	FieldDiscordUsername,
+	FieldDiscordAvatar,
+	FieldIsAnonymous,
+	FieldLastActiveAt,
 	FieldPlayerPresets,
 }
 
@@ -73,10 +85,14 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
-	// UsernameValidator is a validator for the "username" field. It is called by the builders before save.
-	UsernameValidator func(string) error
-	// PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
-	PasswordHashValidator func(string) error
+	// DefaultUUID holds the default value on creation for the "uuid" field.
+	DefaultUUID func() string
+	// UUIDValidator is a validator for the "uuid" field. It is called by the builders before save.
+	UUIDValidator func(string) error
+	// DefaultIsAnonymous holds the default value on creation for the "is_anonymous" field.
+	DefaultIsAnonymous bool
+	// DefaultLastActiveAt holds the default value on creation for the "last_active_at" field.
+	DefaultLastActiveAt func() time.Time
 	// DefaultPlayerPresets holds the default value on creation for the "player_presets" field.
 	DefaultPlayerPresets []string
 )
@@ -99,14 +115,34 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
-// ByUsername orders the results by the username field.
-func ByUsername(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUsername, opts...).ToFunc()
+// ByUUID orders the results by the uuid field.
+func ByUUID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUUID, opts...).ToFunc()
 }
 
-// ByPasswordHash orders the results by the password_hash field.
-func ByPasswordHash(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPasswordHash, opts...).ToFunc()
+// ByDiscordID orders the results by the discord_id field.
+func ByDiscordID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDiscordID, opts...).ToFunc()
+}
+
+// ByDiscordUsername orders the results by the discord_username field.
+func ByDiscordUsername(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDiscordUsername, opts...).ToFunc()
+}
+
+// ByDiscordAvatar orders the results by the discord_avatar field.
+func ByDiscordAvatar(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDiscordAvatar, opts...).ToFunc()
+}
+
+// ByIsAnonymous orders the results by the is_anonymous field.
+func ByIsAnonymous(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsAnonymous, opts...).ToFunc()
+}
+
+// ByLastActiveAt orders the results by the last_active_at field.
+func ByLastActiveAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastActiveAt, opts...).ToFunc()
 }
 
 // ByScriptsCount orders the results by scripts count.

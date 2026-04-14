@@ -43,67 +43,10 @@ func testHandler(t *testing.T) *ClockKeeperServiceHandler {
 	}
 }
 
-func TestLogin_Success(t *testing.T) {
-handler := testHandler(t)
-	ctx := context.Background()
-
-	// Create a user.
-	hash, err := HashPassword("password123")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().
-		SetUsername("testuser").
-		SetPasswordHash(hash).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// Login.
-	resp, err := handler.Login(ctx, connect.NewRequest(&clockkeeperv1.LoginRequest{
-		Username: "testuser",
-		Password: "password123",
-	}))
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp.Msg.Token)
-
-	// Verify returned token is valid.
-	_, err = handler.auth.validate("Bearer " + resp.Msg.Token)
-	assert.NoError(t, err)
-}
-
-func TestLogin_WrongPassword(t *testing.T) {
-handler := testHandler(t)
-	ctx := context.Background()
-
-	hash, err := HashPassword("correct")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().
-		SetUsername("testuser").
-		SetPasswordHash(hash).
-		Save(ctx)
-	require.NoError(t, err)
-
-	_, err = handler.Login(ctx, connect.NewRequest(&clockkeeperv1.LoginRequest{
-		Username: "testuser",
-		Password: "wrong",
-	}))
-	require.Error(t, err)
-	assert.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
-}
-
-func TestLogin_NonexistentUser(t *testing.T) {
-handler := testHandler(t)
-	ctx := context.Background()
-
-	_, err := handler.Login(ctx, connect.NewRequest(&clockkeeperv1.LoginRequest{
-		Username: "nobody",
-		Password: "password",
-	}))
-	require.Error(t, err)
-	assert.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
-}
-
-// authedCtx returns a context with the given username set for auth.
-func authedCtx(username string) context.Context {
-	return context.WithValue(context.Background(), usernameKey, username)
+// authedCtx returns a context with the given user ID set for auth.
+func authedCtx(userID int) context.Context {
+	ctx := context.WithValue(context.Background(), userIDKey, userID)
+	return context.WithValue(ctx, isAnonymousKey, false)
 }
 
 func TestListScripts_IncludesSystemScripts(t *testing.T) {
@@ -111,12 +54,7 @@ handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user and a user-owned script.
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	u, err := handler.db.User.Create().
-		SetUsername("testuser").
-		SetPasswordHash(hash).
-		Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	_, err = handler.db.Script.Create().
@@ -127,7 +65,7 @@ handler := testHandler(t)
 	require.NoError(t, err)
 
 	// List scripts as this user.
-	resp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	resp, err := handler.ListScripts(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
 	require.NoError(t, err)
 
 	// Should include 3 system scripts + 1 user script.
@@ -151,16 +89,11 @@ handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user for auth context.
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().
-		SetUsername("testuser").
-		SetPasswordHash(hash).
-		Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Find a system script via listing.
-	resp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	resp, err := handler.ListScripts(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
 	require.NoError(t, err)
 
 	var systemID int64
@@ -172,7 +105,7 @@ handler := testHandler(t)
 	}
 	require.NotZero(t, systemID, "expected at least one system script")
 
-	_, err = handler.UpdateScript(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.UpdateScriptRequest{
+	_, err = handler.UpdateScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.UpdateScriptRequest{
 		Id:   systemID,
 		Name: "Hacked",
 	}))
@@ -185,16 +118,11 @@ handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create a user for auth context.
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().
-		SetUsername("testuser").
-		SetPasswordHash(hash).
-		Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Find a system script via listing.
-	resp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	resp, err := handler.ListScripts(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
 	require.NoError(t, err)
 
 	var systemID int64
@@ -206,7 +134,7 @@ handler := testHandler(t)
 	}
 	require.NotZero(t, systemID, "expected at least one system script")
 
-	_, err = handler.DeleteScript(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.DeleteScriptRequest{
+	_, err = handler.DeleteScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.DeleteScriptRequest{
 		Id: systemID,
 	}))
 	require.Error(t, err)
@@ -220,11 +148,9 @@ handler := testHandler(t)
 	ctx := context.Background()
 
 	// Create two users.
-	hash, err := HashPassword("pass")
+	userA, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
-	userA, err := handler.db.User.Create().SetUsername("userA").SetPasswordHash(hash).Save(ctx)
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("userB").SetPasswordHash(hash).Save(ctx)
+	userB, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// User A creates a script.
@@ -236,7 +162,7 @@ handler := testHandler(t)
 	require.NoError(t, err)
 
 	// User B tries to update it.
-	_, err = handler.UpdateScript(authedCtx("userB"), connect.NewRequest(&clockkeeperv1.UpdateScriptRequest{
+	_, err = handler.UpdateScript(authedCtx(userB.ID), connect.NewRequest(&clockkeeperv1.UpdateScriptRequest{
 		Id:   int64(script.ID),
 		Name: "Hacked",
 	}))
@@ -248,11 +174,9 @@ func TestDeleteScript_BlocksOtherUser(t *testing.T) {
 handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
+	userA, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
-	userA, err := handler.db.User.Create().SetUsername("userA").SetPasswordHash(hash).Save(ctx)
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("userB").SetPasswordHash(hash).Save(ctx)
+	userB, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	script, err := handler.db.Script.Create().
@@ -262,7 +186,7 @@ handler := testHandler(t)
 		Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.DeleteScript(authedCtx("userB"), connect.NewRequest(&clockkeeperv1.DeleteScriptRequest{
+	_, err = handler.DeleteScript(authedCtx(userB.ID), connect.NewRequest(&clockkeeperv1.DeleteScriptRequest{
 		Id: int64(script.ID),
 	}))
 	require.Error(t, err)
@@ -273,9 +197,7 @@ func TestUpdateScript_OwnerSucceeds(t *testing.T) {
 handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	userA, err := handler.db.User.Create().SetUsername("userA").SetPasswordHash(hash).Save(ctx)
+	userA, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	script, err := handler.db.Script.Create().
@@ -285,7 +207,7 @@ handler := testHandler(t)
 		Save(ctx)
 	require.NoError(t, err)
 
-	resp, err := handler.UpdateScript(authedCtx("userA"), connect.NewRequest(&clockkeeperv1.UpdateScriptRequest{
+	resp, err := handler.UpdateScript(authedCtx(userA.ID), connect.NewRequest(&clockkeeperv1.UpdateScriptRequest{
 		Id:   int64(script.ID),
 		Name: "Renamed",
 	}))
@@ -297,9 +219,7 @@ func TestDeleteScript_OwnerSucceeds(t *testing.T) {
 handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	userA, err := handler.db.User.Create().SetUsername("userA").SetPasswordHash(hash).Save(ctx)
+	userA, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	script, err := handler.db.Script.Create().
@@ -309,7 +229,7 @@ handler := testHandler(t)
 		Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.DeleteScript(authedCtx("userA"), connect.NewRequest(&clockkeeperv1.DeleteScriptRequest{
+	_, err = handler.DeleteScript(authedCtx(userA.ID), connect.NewRequest(&clockkeeperv1.DeleteScriptRequest{
 		Id: int64(script.ID),
 	}))
 	require.NoError(t, err)
@@ -318,17 +238,15 @@ handler := testHandler(t)
 // --- Game ownership tests ---
 
 // createTestGame is a helper that creates a user, a script, and a game owned by that user.
-func createTestGame(t *testing.T, handler *ClockKeeperServiceHandler) (ownerUsername string, gameID int64) {
+func createTestGame(t *testing.T, handler *ClockKeeperServiceHandler) (ownerID int, gameID int64) {
 	t.Helper()
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("owner").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Create a script via the handler (uses system script).
-	scriptsResp, err := handler.ListScripts(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	scriptsResp, err := handler.ListScripts(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
 	require.NoError(t, err)
 	require.NotEmpty(t, scriptsResp.Msg.Scripts)
 
@@ -341,21 +259,21 @@ func createTestGame(t *testing.T, handler *ClockKeeperServiceHandler) (ownerUser
 	}
 	require.NotZero(t, scriptID)
 
-	gameResp, err := handler.CreateGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	gameResp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:    scriptID,
 		PlayerCount: 7,
 	}))
 	require.NoError(t, err)
 
-	return "owner", gameResp.Msg.Game.Id
+	return u.ID, gameResp.Msg.Game.Id
 }
 
 func TestCreateGame_SetsOwner(t *testing.T) {
 handler := testHandler(t)
-	_, gameID := createTestGame(t, handler)
+	ownerID, gameID := createTestGame(t, handler)
 
 	// Verify owner can access the game.
-	resp, err := handler.GetGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.GetGameRequest{
+	resp, err := handler.GetGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.GetGameRequest{
 		Id: gameID,
 	}))
 	require.NoError(t, err)
@@ -368,12 +286,10 @@ handler := testHandler(t)
 	_, gameID := createTestGame(t, handler)
 
 	// Create another user.
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("attacker").SetPasswordHash(hash).Save(ctx)
+	attacker, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.GetGame(authedCtx("attacker"), connect.NewRequest(&clockkeeperv1.GetGameRequest{
+	_, err = handler.GetGame(authedCtx(attacker.ID), connect.NewRequest(&clockkeeperv1.GetGameRequest{
 		Id: gameID,
 	}))
 	require.Error(t, err)
@@ -385,12 +301,10 @@ handler := testHandler(t)
 	ctx := context.Background()
 	_, gameID := createTestGame(t, handler)
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("attacker").SetPasswordHash(hash).Save(ctx)
+	attacker, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.RandomizeRoles(authedCtx("attacker"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+	_, err = handler.RandomizeRoles(authedCtx(attacker.ID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
 		GameId: gameID,
 	}))
 	require.Error(t, err)
@@ -402,12 +316,10 @@ handler := testHandler(t)
 	ctx := context.Background()
 	_, gameID := createTestGame(t, handler)
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("attacker").SetPasswordHash(hash).Save(ctx)
+	attacker, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.UpdateGameRoles(authedCtx("attacker"), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+	_, err = handler.UpdateGameRoles(authedCtx(attacker.ID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
 		GameId:          gameID,
 		SelectedRoleIds: []string{"washerwoman"},
 	}))
@@ -417,9 +329,9 @@ handler := testHandler(t)
 
 func TestRandomizeRoles_OwnerSucceeds(t *testing.T) {
 handler := testHandler(t)
-	_, gameID := createTestGame(t, handler)
+	ownerID, gameID := createTestGame(t, handler)
 
-	resp, err := handler.RandomizeRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+	resp, err := handler.RandomizeRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
 		GameId: gameID,
 	}))
 	require.NoError(t, err)
@@ -432,13 +344,11 @@ func TestCreateGame_InvalidPlayerCount(t *testing.T) {
 handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Find a system script.
-	scriptsResp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	scriptsResp, err := handler.ListScripts(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
 	require.NoError(t, err)
 	var scriptID int64
 	for _, s := range scriptsResp.Msg.Scripts {
@@ -449,7 +359,7 @@ handler := testHandler(t)
 	}
 	require.NotZero(t, scriptID)
 
-	_, err = handler.CreateGame(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	_, err = handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:    scriptID,
 		PlayerCount: 3,
 	}))
@@ -461,12 +371,10 @@ func TestCreateGame_InvalidScript(t *testing.T) {
 handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.CreateGame(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	_, err = handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:    99999,
 		PlayerCount: 7,
 	}))
@@ -478,12 +386,10 @@ func TestCreateGame_ReturnsDistribution(t *testing.T) {
 handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
-	scriptsResp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	scriptsResp, err := handler.ListScripts(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
 	require.NoError(t, err)
 	var scriptID int64
 	for _, s := range scriptsResp.Msg.Scripts {
@@ -494,7 +400,7 @@ handler := testHandler(t)
 	}
 	require.NotZero(t, scriptID)
 
-	resp, err := handler.CreateGame(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	resp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:    scriptID,
 		PlayerCount: 7,
 	}))
@@ -508,9 +414,9 @@ handler := testHandler(t)
 
 func TestRandomizeRoles_ReturnsCorrectCount(t *testing.T) {
 handler := testHandler(t)
-	_, gameID := createTestGame(t, handler)
+	ownerID, gameID := createTestGame(t, handler)
 
-	resp, err := handler.RandomizeRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+	resp, err := handler.RandomizeRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
 		GameId: gameID,
 	}))
 	require.NoError(t, err)
@@ -519,17 +425,17 @@ handler := testHandler(t)
 
 func TestUpdateGameRoles_Persists(t *testing.T) {
 handler := testHandler(t)
-	_, gameID := createTestGame(t, handler)
+	ownerID, gameID := createTestGame(t, handler)
 
 	roles := []string{"washerwoman", "imp"}
-	_, err := handler.UpdateGameRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+	_, err := handler.UpdateGameRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
 		GameId:          gameID,
 		SelectedRoleIds: roles,
 	}))
 	require.NoError(t, err)
 
 	// Get the game again and verify roles persisted.
-	getResp, err := handler.GetGame(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.GetGameRequest{
+	getResp, err := handler.GetGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.GetGameRequest{
 		Id: gameID,
 	}))
 	require.NoError(t, err)
@@ -538,10 +444,10 @@ handler := testHandler(t)
 
 func TestUpdateGameTravellers_Success(t *testing.T) {
 handler := testHandler(t)
-	_, gameID := createTestGame(t, handler)
+	ownerID, gameID := createTestGame(t, handler)
 
 	// Find a valid traveller ID via ListCharacters.
-	charsResp, err := handler.ListCharacters(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.ListCharactersRequest{
+	charsResp, err := handler.ListCharacters(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.ListCharactersRequest{
 		Team: clockkeeperv1.Team_TEAM_TRAVELLER,
 	}))
 	require.NoError(t, err)
@@ -549,7 +455,7 @@ handler := testHandler(t)
 
 	travellerID := charsResp.Msg.Characters[0].Id
 
-	resp, err := handler.UpdateGameTravellers(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGameTravellersRequest{
+	resp, err := handler.UpdateGameTravellers(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameTravellersRequest{
 		GameId:               gameID,
 		SelectedTravellerIds: []string{travellerID},
 	}))
@@ -559,10 +465,10 @@ handler := testHandler(t)
 
 func TestUpdateGameTravellers_RejectsNonTraveller(t *testing.T) {
 handler := testHandler(t)
-	_, gameID := createTestGame(t, handler)
+	ownerID, gameID := createTestGame(t, handler)
 
 	// "washerwoman" is a townsfolk, not a traveller.
-	_, err := handler.UpdateGameTravellers(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.UpdateGameTravellersRequest{
+	_, err := handler.UpdateGameTravellers(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameTravellersRequest{
 		GameId:               gameID,
 		SelectedTravellerIds: []string{"washerwoman"},
 	}))
@@ -574,13 +480,11 @@ func TestCreateGame_AutoSelectsTravellersFromScript(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("owner2").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Create a custom script with TB roles + 2 travellers.
-	scriptResp, err := handler.CreateScript(authedCtx("owner2"), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
+	scriptResp, err := handler.CreateScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
 		Name: "TB with Travellers",
 		CharacterIds: []string{
 			"washerwoman", "librarian", "investigator", "chef", "empath",
@@ -594,7 +498,7 @@ func TestCreateGame_AutoSelectsTravellersFromScript(t *testing.T) {
 	scriptID := scriptResp.Msg.Script.Id
 
 	// Create a game with 2 travellers — should select 2 from the script's 2 travellers.
-	gameResp, err := handler.CreateGame(authedCtx("owner2"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	gameResp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:       scriptID,
 		PlayerCount:    7,
 		TravellerCount: 2,
@@ -616,13 +520,11 @@ func TestCreateGame_ZeroTravellersIgnoresScriptTravellers(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("owner2b").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Create a script with travellers.
-	scriptResp, err := handler.CreateScript(authedCtx("owner2b"), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
+	scriptResp, err := handler.CreateScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
 		Name: "TB with Travellers (zero test)",
 		CharacterIds: []string{
 			"washerwoman", "librarian", "investigator", "chef", "empath",
@@ -635,7 +537,7 @@ func TestCreateGame_ZeroTravellersIgnoresScriptTravellers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create game with 0 travellers — none should be selected despite script having them.
-	gameResp, err := handler.CreateGame(authedCtx("owner2b"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	gameResp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:       scriptResp.Msg.Script.Id,
 		PlayerCount:    7,
 		TravellerCount: 0,
@@ -648,13 +550,11 @@ func TestCreateGame_AutoPopulatesFabledFromScript(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("owner3").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Create a custom script with TB roles + a fabled character.
-	scriptResp, err := handler.CreateScript(authedCtx("owner3"), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
+	scriptResp, err := handler.CreateScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
 		Name: "TB with Fabled",
 		CharacterIds: []string{
 			"washerwoman", "librarian", "investigator", "chef", "empath",
@@ -668,7 +568,7 @@ func TestCreateGame_AutoPopulatesFabledFromScript(t *testing.T) {
 	scriptID := scriptResp.Msg.Script.Id
 
 	// Create a game — fabled should appear in extra characters.
-	gameResp, err := handler.CreateGame(authedCtx("owner3"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	gameResp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:    scriptID,
 		PlayerCount: 7,
 	}))
@@ -682,13 +582,11 @@ func TestRandomizeRoles_IncludesTravellersFromScript(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("owner4").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Create a custom script with TB roles + travellers.
-	scriptResp, err := handler.CreateScript(authedCtx("owner4"), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
+	scriptResp, err := handler.CreateScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
 		Name: "TB with Travellers for Randomize",
 		CharacterIds: []string{
 			"washerwoman", "librarian", "investigator", "chef", "empath",
@@ -702,14 +600,14 @@ func TestRandomizeRoles_IncludesTravellersFromScript(t *testing.T) {
 	scriptID := scriptResp.Msg.Script.Id
 
 	// Create game with 2 travellers and randomize roles.
-	gameResp, err := handler.CreateGame(authedCtx("owner4"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	gameResp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:       scriptID,
 		PlayerCount:    7,
 		TravellerCount: 2,
 	}))
 	require.NoError(t, err)
 
-	resp, err := handler.RandomizeRoles(authedCtx("owner4"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+	resp, err := handler.RandomizeRoles(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
 		GameId: gameResp.Msg.Game.Id,
 	}))
 	require.NoError(t, err)
@@ -724,13 +622,11 @@ func TestRandomizeRoles_RespectsExistingTravellerCount(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("owner5").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Create a script with 3 travellers (thief, bureaucrat, gunslinger are all TB travellers).
-	scriptResp, err := handler.CreateScript(authedCtx("owner5"), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
+	scriptResp, err := handler.CreateScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
 		Name: "TB 3 Travellers",
 		CharacterIds: []string{
 			"washerwoman", "librarian", "investigator", "chef", "empath",
@@ -743,7 +639,7 @@ func TestRandomizeRoles_RespectsExistingTravellerCount(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create game with only 1 traveller.
-	gameResp, err := handler.CreateGame(authedCtx("owner5"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	gameResp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:       scriptResp.Msg.Script.Id,
 		PlayerCount:    8,
 		TravellerCount: 1,
@@ -752,7 +648,7 @@ func TestRandomizeRoles_RespectsExistingTravellerCount(t *testing.T) {
 	assert.Len(t, gameResp.Msg.Game.SelectedTravellerIds, 1, "expected 1 traveller at creation")
 
 	// Randomize — should still have only 1 traveller, not 3.
-	resp, err := handler.RandomizeRoles(authedCtx("owner5"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+	resp, err := handler.RandomizeRoles(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
 		GameId: gameResp.Msg.Game.Id,
 	}))
 	require.NoError(t, err)
@@ -766,13 +662,11 @@ func TestRandomizeRoles_ShufflesTravellers(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("owner6").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Script with 5 TB travellers, picking 1 — should not always be the same.
-	scriptResp, err := handler.CreateScript(authedCtx("owner6"), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
+	scriptResp, err := handler.CreateScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
 		Name: "TB 5 Travellers shuffle test",
 		CharacterIds: []string{
 			"washerwoman", "librarian", "investigator", "chef", "empath",
@@ -784,7 +678,7 @@ func TestRandomizeRoles_ShufflesTravellers(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	gameResp, err := handler.CreateGame(authedCtx("owner6"), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+	gameResp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
 		ScriptId:       scriptResp.Msg.Script.Id,
 		PlayerCount:    7,
 		TravellerCount: 1,
@@ -795,7 +689,7 @@ func TestRandomizeRoles_ShufflesTravellers(t *testing.T) {
 	// Randomize 20 times and collect the selected traveller each time.
 	seen := make(map[string]bool)
 	for range 20 {
-		resp, err := handler.RandomizeRoles(authedCtx("owner6"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+		resp, err := handler.RandomizeRoles(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
 			GameId: gameID,
 		}))
 		require.NoError(t, err)
@@ -808,15 +702,15 @@ func TestRandomizeRoles_ShufflesTravellers(t *testing.T) {
 
 func TestGetSetupChecklist_ReturnsSteps(t *testing.T) {
 handler := testHandler(t)
-	_, gameID := createTestGame(t, handler)
+	ownerID, gameID := createTestGame(t, handler)
 
 	// Randomize roles first so the checklist has something to work with.
-	_, err := handler.RandomizeRoles(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+	_, err := handler.RandomizeRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
 		GameId: gameID,
 	}))
 	require.NoError(t, err)
 
-	resp, err := handler.GetSetupChecklist(authedCtx("owner"), connect.NewRequest(&clockkeeperv1.GetSetupChecklistRequest{
+	resp, err := handler.GetSetupChecklist(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.GetSetupChecklistRequest{
 		GameId: gameID,
 	}))
 	require.NoError(t, err)
@@ -827,12 +721,10 @@ func TestGetDistribution_Valid(t *testing.T) {
 handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
-	resp, err := handler.GetDistribution(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.GetDistributionRequest{
+	resp, err := handler.GetDistribution(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.GetDistributionRequest{
 		PlayerCount: 7,
 	}))
 	require.NoError(t, err)
@@ -847,12 +739,10 @@ func TestGetDistribution_InvalidCount(t *testing.T) {
 handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.GetDistribution(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.GetDistributionRequest{
+	_, err = handler.GetDistribution(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.GetDistributionRequest{
 		PlayerCount: 3,
 	}))
 	require.Error(t, err)
@@ -863,11 +753,9 @@ func TestGetScript_BlocksOtherUser(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
+	userA, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
-	userA, err := handler.db.User.Create().SetUsername("userA").SetPasswordHash(hash).Save(ctx)
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("userB").SetPasswordHash(hash).Save(ctx)
+	userB, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// User A creates a script.
@@ -879,7 +767,7 @@ func TestGetScript_BlocksOtherUser(t *testing.T) {
 	require.NoError(t, err)
 
 	// User B tries to read it.
-	_, err = handler.GetScript(authedCtx("userB"), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
+	_, err = handler.GetScript(authedCtx(userB.ID), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
 		Id: int64(script.ID),
 	}))
 	require.Error(t, err)
@@ -890,9 +778,7 @@ func TestGetScript_OwnerSucceeds(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	userA, err := handler.db.User.Create().SetUsername("userA").SetPasswordHash(hash).Save(ctx)
+	userA, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	script, err := handler.db.Script.Create().
@@ -902,7 +788,7 @@ func TestGetScript_OwnerSucceeds(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	resp, err := handler.GetScript(authedCtx("userA"), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
+	resp, err := handler.GetScript(authedCtx(userA.ID), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
 		Id: int64(script.ID),
 	}))
 	require.NoError(t, err)
@@ -913,13 +799,11 @@ func TestGetScript_SystemScriptAccessible(t *testing.T) {
 	handler := testHandler(t)
 	ctx := context.Background()
 
-	hash, err := HashPassword("pass")
-	require.NoError(t, err)
-	_, err = handler.db.User.Create().SetUsername("testuser").SetPasswordHash(hash).Save(ctx)
+	u, err := handler.db.User.Create().Save(ctx)
 	require.NoError(t, err)
 
 	// Find a system script.
-	listResp, err := handler.ListScripts(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
+	listResp, err := handler.ListScripts(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.ListScriptsRequest{}))
 	require.NoError(t, err)
 
 	var systemID int64
@@ -931,7 +815,7 @@ func TestGetScript_SystemScriptAccessible(t *testing.T) {
 	}
 	require.NotZero(t, systemID)
 
-	resp, err := handler.GetScript(authedCtx("testuser"), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
+	resp, err := handler.GetScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.GetScriptRequest{
 		Id: systemID,
 	}))
 	require.NoError(t, err)
@@ -940,9 +824,9 @@ func TestGetScript_SystemScriptAccessible(t *testing.T) {
 
 func TestUpdateGameRoles_RejectsUnknownCharacter(t *testing.T) {
 	handler := testHandler(t)
-	ownerName, gameID := createTestGame(t, handler)
+	ownerID, gameID := createTestGame(t, handler)
 
-	_, err := handler.UpdateGameRoles(authedCtx(ownerName), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+	_, err := handler.UpdateGameRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
 		GameId:          gameID,
 		SelectedRoleIds: []string{"washerwoman", "nonexistent_character"},
 	}))

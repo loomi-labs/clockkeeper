@@ -50,15 +50,87 @@ func (_c *UserCreate) SetNillableUpdatedAt(v *time.Time) *UserCreate {
 	return _c
 }
 
-// SetUsername sets the "username" field.
-func (_c *UserCreate) SetUsername(v string) *UserCreate {
-	_c.mutation.SetUsername(v)
+// SetUUID sets the "uuid" field.
+func (_c *UserCreate) SetUUID(v string) *UserCreate {
+	_c.mutation.SetUUID(v)
 	return _c
 }
 
-// SetPasswordHash sets the "password_hash" field.
-func (_c *UserCreate) SetPasswordHash(v string) *UserCreate {
-	_c.mutation.SetPasswordHash(v)
+// SetNillableUUID sets the "uuid" field if the given value is not nil.
+func (_c *UserCreate) SetNillableUUID(v *string) *UserCreate {
+	if v != nil {
+		_c.SetUUID(*v)
+	}
+	return _c
+}
+
+// SetDiscordID sets the "discord_id" field.
+func (_c *UserCreate) SetDiscordID(v string) *UserCreate {
+	_c.mutation.SetDiscordID(v)
+	return _c
+}
+
+// SetNillableDiscordID sets the "discord_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableDiscordID(v *string) *UserCreate {
+	if v != nil {
+		_c.SetDiscordID(*v)
+	}
+	return _c
+}
+
+// SetDiscordUsername sets the "discord_username" field.
+func (_c *UserCreate) SetDiscordUsername(v string) *UserCreate {
+	_c.mutation.SetDiscordUsername(v)
+	return _c
+}
+
+// SetNillableDiscordUsername sets the "discord_username" field if the given value is not nil.
+func (_c *UserCreate) SetNillableDiscordUsername(v *string) *UserCreate {
+	if v != nil {
+		_c.SetDiscordUsername(*v)
+	}
+	return _c
+}
+
+// SetDiscordAvatar sets the "discord_avatar" field.
+func (_c *UserCreate) SetDiscordAvatar(v string) *UserCreate {
+	_c.mutation.SetDiscordAvatar(v)
+	return _c
+}
+
+// SetNillableDiscordAvatar sets the "discord_avatar" field if the given value is not nil.
+func (_c *UserCreate) SetNillableDiscordAvatar(v *string) *UserCreate {
+	if v != nil {
+		_c.SetDiscordAvatar(*v)
+	}
+	return _c
+}
+
+// SetIsAnonymous sets the "is_anonymous" field.
+func (_c *UserCreate) SetIsAnonymous(v bool) *UserCreate {
+	_c.mutation.SetIsAnonymous(v)
+	return _c
+}
+
+// SetNillableIsAnonymous sets the "is_anonymous" field if the given value is not nil.
+func (_c *UserCreate) SetNillableIsAnonymous(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetIsAnonymous(*v)
+	}
+	return _c
+}
+
+// SetLastActiveAt sets the "last_active_at" field.
+func (_c *UserCreate) SetLastActiveAt(v time.Time) *UserCreate {
+	_c.mutation.SetLastActiveAt(v)
+	return _c
+}
+
+// SetNillableLastActiveAt sets the "last_active_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillableLastActiveAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetLastActiveAt(*v)
+	}
 	return _c
 }
 
@@ -141,6 +213,18 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.UUID(); !ok {
+		v := user.DefaultUUID()
+		_c.mutation.SetUUID(v)
+	}
+	if _, ok := _c.mutation.IsAnonymous(); !ok {
+		v := user.DefaultIsAnonymous
+		_c.mutation.SetIsAnonymous(v)
+	}
+	if _, ok := _c.mutation.LastActiveAt(); !ok {
+		v := user.DefaultLastActiveAt()
+		_c.mutation.SetLastActiveAt(v)
+	}
 	if _, ok := _c.mutation.PlayerPresets(); !ok {
 		v := user.DefaultPlayerPresets
 		_c.mutation.SetPlayerPresets(v)
@@ -155,21 +239,19 @@ func (_c *UserCreate) check() error {
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "User.updated_at"`)}
 	}
-	if _, ok := _c.mutation.Username(); !ok {
-		return &ValidationError{Name: "username", err: errors.New(`ent: missing required field "User.username"`)}
+	if _, ok := _c.mutation.UUID(); !ok {
+		return &ValidationError{Name: "uuid", err: errors.New(`ent: missing required field "User.uuid"`)}
 	}
-	if v, ok := _c.mutation.Username(); ok {
-		if err := user.UsernameValidator(v); err != nil {
-			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
+	if v, ok := _c.mutation.UUID(); ok {
+		if err := user.UUIDValidator(v); err != nil {
+			return &ValidationError{Name: "uuid", err: fmt.Errorf(`ent: validator failed for field "User.uuid": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.PasswordHash(); !ok {
-		return &ValidationError{Name: "password_hash", err: errors.New(`ent: missing required field "User.password_hash"`)}
+	if _, ok := _c.mutation.IsAnonymous(); !ok {
+		return &ValidationError{Name: "is_anonymous", err: errors.New(`ent: missing required field "User.is_anonymous"`)}
 	}
-	if v, ok := _c.mutation.PasswordHash(); ok {
-		if err := user.PasswordHashValidator(v); err != nil {
-			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "User.password_hash": %w`, err)}
-		}
+	if _, ok := _c.mutation.LastActiveAt(); !ok {
+		return &ValidationError{Name: "last_active_at", err: errors.New(`ent: missing required field "User.last_active_at"`)}
 	}
 	return nil
 }
@@ -205,13 +287,29 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := _c.mutation.Username(); ok {
-		_spec.SetField(user.FieldUsername, field.TypeString, value)
-		_node.Username = value
+	if value, ok := _c.mutation.UUID(); ok {
+		_spec.SetField(user.FieldUUID, field.TypeString, value)
+		_node.UUID = value
 	}
-	if value, ok := _c.mutation.PasswordHash(); ok {
-		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
-		_node.PasswordHash = value
+	if value, ok := _c.mutation.DiscordID(); ok {
+		_spec.SetField(user.FieldDiscordID, field.TypeString, value)
+		_node.DiscordID = &value
+	}
+	if value, ok := _c.mutation.DiscordUsername(); ok {
+		_spec.SetField(user.FieldDiscordUsername, field.TypeString, value)
+		_node.DiscordUsername = &value
+	}
+	if value, ok := _c.mutation.DiscordAvatar(); ok {
+		_spec.SetField(user.FieldDiscordAvatar, field.TypeString, value)
+		_node.DiscordAvatar = &value
+	}
+	if value, ok := _c.mutation.IsAnonymous(); ok {
+		_spec.SetField(user.FieldIsAnonymous, field.TypeBool, value)
+		_node.IsAnonymous = value
+	}
+	if value, ok := _c.mutation.LastActiveAt(); ok {
+		_spec.SetField(user.FieldLastActiveAt, field.TypeTime, value)
+		_node.LastActiveAt = value
 	}
 	if value, ok := _c.mutation.PlayerPresets(); ok {
 		_spec.SetField(user.FieldPlayerPresets, field.TypeJSON, value)

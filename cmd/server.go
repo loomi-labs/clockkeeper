@@ -32,6 +32,10 @@ func (s *ServeCmd) Run() error {
 		return fmt.Errorf("JWT_SECRET_KEY or JWT_SECRET_KEY_FILE must be set")
 	}
 
+	if !webConfig.DiscordConfigured() {
+		slog.Warn("DISCORD_CLIENT_ID or DISCORD_CLIENT_SECRET not set — Discord login unavailable, anonymous-only mode")
+	}
+
 	db, sqlDB, err := database.NewClient(dbConfig)
 	if err != nil {
 		return err

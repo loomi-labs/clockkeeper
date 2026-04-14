@@ -206,16 +206,22 @@ func init() {
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	user.UpdateDefaultUpdatedAt = userDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// userDescUsername is the schema descriptor for username field.
-	userDescUsername := userFields[0].Descriptor()
-	// user.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
-	user.UsernameValidator = userDescUsername.Validators[0].(func(string) error)
-	// userDescPasswordHash is the schema descriptor for password_hash field.
-	userDescPasswordHash := userFields[1].Descriptor()
-	// user.PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
-	user.PasswordHashValidator = userDescPasswordHash.Validators[0].(func(string) error)
+	// userDescUUID is the schema descriptor for uuid field.
+	userDescUUID := userFields[0].Descriptor()
+	// user.DefaultUUID holds the default value on creation for the uuid field.
+	user.DefaultUUID = userDescUUID.Default.(func() string)
+	// user.UUIDValidator is a validator for the "uuid" field. It is called by the builders before save.
+	user.UUIDValidator = userDescUUID.Validators[0].(func(string) error)
+	// userDescIsAnonymous is the schema descriptor for is_anonymous field.
+	userDescIsAnonymous := userFields[4].Descriptor()
+	// user.DefaultIsAnonymous holds the default value on creation for the is_anonymous field.
+	user.DefaultIsAnonymous = userDescIsAnonymous.Default.(bool)
+	// userDescLastActiveAt is the schema descriptor for last_active_at field.
+	userDescLastActiveAt := userFields[5].Descriptor()
+	// user.DefaultLastActiveAt holds the default value on creation for the last_active_at field.
+	user.DefaultLastActiveAt = userDescLastActiveAt.Default.(func() time.Time)
 	// userDescPlayerPresets is the schema descriptor for player_presets field.
-	userDescPlayerPresets := userFields[2].Descriptor()
+	userDescPlayerPresets := userFields[6].Descriptor()
 	// user.DefaultPlayerPresets holds the default value on creation for the player_presets field.
 	user.DefaultPlayerPresets = userDescPlayerPresets.Default.([]string)
 }

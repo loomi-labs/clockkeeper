@@ -3,23 +3,32 @@ package web
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type contextKey string
 
-const usernameKey contextKey = "username"
+const (
+	userIDKey      contextKey = "user_id"
+	isAnonymousKey contextKey = "is_anonymous"
+)
 
-// UsernameFromContext returns the authenticated username from the context.
-func UsernameFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(usernameKey).(string); ok {
+// UserIDFromContext returns the authenticated user ID from the context.
+func UserIDFromContext(ctx context.Context) int {
+	if v, ok := ctx.Value(userIDKey).(int); ok {
 		return v
 	}
-	return ""
+	return 0
+}
+
+// IsAnonymousFromContext returns whether the authenticated user is anonymous.
+func IsAnonymousFromContext(ctx context.Context) bool {
+	v, _ := ctx.Value(isAnonymousKey).(bool)
+	return v
 }
 
 // AuthInterceptor validates JWT tokens on ConnectRPC requests.
@@ -34,7 +43,9 @@ func NewAuthInterceptor(secretKey string) *AuthInterceptor {
 
 // skipAuth lists procedures that don't require authentication.
 var skipAuth = map[string]bool{
-	"/clockkeeper.v1.ClockKeeperService/Login": true,
+	"/clockkeeper.v1.ClockKeeperService/LoginWithDiscord":       true,
+	"/clockkeeper.v1.ClockKeeperService/CreateAnonymousSession": true,
+	"/clockkeeper.v1.ClockKeeperService/GetAuthConfig":          true,
 }
 
 func (a *AuthInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
@@ -42,11 +53,12 @@ func (a *AuthInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		if skipAuth[req.Spec().Procedure] {
 			return next(ctx, req)
 		}
-		username, err := a.validate(req.Header().Get("Authorization"))
+		userID, isAnon, err := a.validate(req.Header().Get("Authorization"))
 		if err != nil {
 			return nil, connect.NewError(connect.CodeUnauthenticated, err)
 		}
-		ctx = context.WithValue(ctx, usernameKey, username)
+		ctx = context.WithValue(ctx, userIDKey, userID)
+		ctx = context.WithValue(ctx, isAnonymousKey, isAnon)
 		return next(ctx, req)
 	}
 }
@@ -60,18 +72,19 @@ func (a *AuthInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc
 		if skipAuth[conn.Spec().Procedure] {
 			return next(ctx, conn)
 		}
-		username, err := a.validate(conn.RequestHeader().Get("Authorization"))
+		userID, isAnon, err := a.validate(conn.RequestHeader().Get("Authorization"))
 		if err != nil {
 			return connect.NewError(connect.CodeUnauthenticated, err)
 		}
-		ctx = context.WithValue(ctx, usernameKey, username)
+		ctx = context.WithValue(ctx, userIDKey, userID)
+		ctx = context.WithValue(ctx, isAnonymousKey, isAnon)
 		return next(ctx, conn)
 	}
 }
 
-func (a *AuthInterceptor) validate(authHeader string) (string, error) {
+func (a *AuthInterceptor) validate(authHeader string) (int, bool, error) {
 	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		return "", errors.New("missing or invalid authorization header")
+		return 0, false, errors.New("missing or invalid authorization header")
 	}
 	tokenStr := authHeader[7:]
 
@@ -82,41 +95,42 @@ func (a *AuthInterceptor) validate(authHeader string) (string, error) {
 		return a.secretKey, nil
 	})
 	if err != nil || !token.Valid {
-		return "", errors.New("invalid token")
+		return 0, false, errors.New("invalid token")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return "", errors.New("invalid token claims")
+		return 0, false, errors.New("invalid token claims")
 	}
 	sub, _ := claims.GetSubject()
 	if sub == "" {
-		return "", errors.New("missing subject in token")
+		return 0, false, errors.New("missing subject in token")
 	}
-	return sub, nil
+	userID, err := strconv.Atoi(sub)
+	if err != nil {
+		return 0, false, errors.New("invalid subject in token")
+	}
+
+	isAnon, _ := claims["anon"].(bool)
+
+	return userID, isAnon, nil
 }
 
-// IssueToken creates a signed JWT with 30-day expiry.
-func (a *AuthInterceptor) IssueToken(username string) (string, error) {
+// IssueToken creates a signed JWT for the given user.
+// Anonymous users get a 7-day expiry, authenticated users get 30 days.
+func (a *AuthInterceptor) IssueToken(userID int, anonymous bool) (string, error) {
+	expiry := 30 * 24 * time.Hour
+	if anonymous {
+		expiry = 7 * 24 * time.Hour
+	}
 	claims := jwt.MapClaims{
-		"sub": username,
-		"exp": time.Now().Add(30 * 24 * time.Hour).Unix(),
+		"sub": strconv.Itoa(userID),
+		"exp": time.Now().Add(expiry).Unix(),
 		"iat": time.Now().Unix(),
+	}
+	if anonymous {
+		claims["anon"] = true
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(a.secretKey)
-}
-
-// HashPassword hashes a plaintext password using bcrypt.
-func HashPassword(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hash), nil
-}
-
-// CheckPassword compares a plaintext password against a bcrypt hash.
-func CheckPassword(password, hash string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }

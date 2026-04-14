@@ -1,9 +1,12 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"github.com/google/uuid"
 	"github.com/loomi-labs/clockkeeper/ent/schema/mixin"
 )
 
@@ -22,8 +25,12 @@ func (User) Mixin() []ent.Mixin {
 // Fields of the User.
 func (User) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("username").Unique().NotEmpty(),
-		field.String("password_hash").NotEmpty().Sensitive(),
+		field.String("uuid").Unique().NotEmpty().DefaultFunc(uuid.NewString),
+		field.String("discord_id").Optional().Nillable().Unique(),
+		field.String("discord_username").Optional().Nillable(),
+		field.String("discord_avatar").Optional().Nillable(),
+		field.Bool("is_anonymous").Default(false),
+		field.Time("last_active_at").Default(time.Now),
 		field.JSON("player_presets", []string{}).Optional().Default([]string{}),
 	}
 }

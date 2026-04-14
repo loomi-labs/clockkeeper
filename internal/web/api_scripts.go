@@ -10,7 +10,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/loomi-labs/clockkeeper/ent"
 	entscript "github.com/loomi-labs/clockkeeper/ent/script"
-	"github.com/loomi-labs/clockkeeper/ent/user"
 	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 )
 
@@ -279,17 +278,21 @@ func (h *ClockKeeperServiceHandler) ImportScript(ctx context.Context, req *conne
 
 // currentUser looks up the authenticated user from the context.
 func (h *ClockKeeperServiceHandler) currentUser(ctx context.Context) (*ent.User, error) {
-	username := UsernameFromContext(ctx)
-	if username == "" {
+	userID := UserIDFromContext(ctx)
+	if userID == 0 {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("not authenticated"))
 	}
 
-	u, err := h.db.User.Query().
-		Where(user.Username(username)).
-		Only(ctx)
+	u, err := h.db.User.Get(ctx, userID)
 	if err != nil {
-		slog.Error("user lookup failed", "username", username, "err", err)
+		slog.Error("user lookup failed", "user_id", userID, "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+
+	// Bump last_active_at for anonymous cleanup tracking.
+	if err := h.db.User.UpdateOneID(u.ID).SetLastActiveAt(time.Now()).Exec(ctx); err != nil {
+		slog.Warn("failed to update last_active_at", "user_id", u.ID, "err", err)
+	}
+
 	return u, nil
 }

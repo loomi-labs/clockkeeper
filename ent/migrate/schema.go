@@ -138,8 +138,12 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "username", Type: field.TypeString, Unique: true},
-		{Name: "password_hash", Type: field.TypeString},
+		{Name: "uuid", Type: field.TypeString, Unique: true},
+		{Name: "discord_id", Type: field.TypeString, Unique: true, Nullable: true},
+		{Name: "discord_username", Type: field.TypeString, Nullable: true},
+		{Name: "discord_avatar", Type: field.TypeString, Nullable: true},
+		{Name: "is_anonymous", Type: field.TypeBool, Default: false},
+		{Name: "last_active_at", Type: field.TypeTime},
 		{Name: "player_presets", Type: field.TypeJSON, Nullable: true},
 	}
 	// UsersTable holds the schema information for the "users" table.

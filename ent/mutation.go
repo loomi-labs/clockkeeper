@@ -4318,8 +4318,12 @@ type UserMutation struct {
 	id                   *int
 	created_at           *time.Time
 	updated_at           *time.Time
-	username             *string
-	password_hash        *string
+	uuid                 *string
+	discord_id           *string
+	discord_username     *string
+	discord_avatar       *string
+	is_anonymous         *bool
+	last_active_at       *time.Time
 	player_presets       *[]string
 	appendplayer_presets []string
 	clearedFields        map[string]struct{}
@@ -4504,76 +4508,259 @@ func (m *UserMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// SetUsername sets the "username" field.
-func (m *UserMutation) SetUsername(s string) {
-	m.username = &s
+// SetUUID sets the "uuid" field.
+func (m *UserMutation) SetUUID(s string) {
+	m.uuid = &s
 }
 
-// Username returns the value of the "username" field in the mutation.
-func (m *UserMutation) Username() (r string, exists bool) {
-	v := m.username
+// UUID returns the value of the "uuid" field in the mutation.
+func (m *UserMutation) UUID() (r string, exists bool) {
+	v := m.uuid
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldUsername returns the old "username" field's value of the User entity.
+// OldUUID returns the old "uuid" field's value of the User entity.
 // If the User object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldUsername(ctx context.Context) (v string, err error) {
+func (m *UserMutation) OldUUID(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldUsername is only allowed on UpdateOne operations")
+		return v, errors.New("OldUUID is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldUsername requires an ID field in the mutation")
+		return v, errors.New("OldUUID requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldUsername: %w", err)
+		return v, fmt.Errorf("querying old value for OldUUID: %w", err)
 	}
-	return oldValue.Username, nil
+	return oldValue.UUID, nil
 }
 
-// ResetUsername resets all changes to the "username" field.
-func (m *UserMutation) ResetUsername() {
-	m.username = nil
+// ResetUUID resets all changes to the "uuid" field.
+func (m *UserMutation) ResetUUID() {
+	m.uuid = nil
 }
 
-// SetPasswordHash sets the "password_hash" field.
-func (m *UserMutation) SetPasswordHash(s string) {
-	m.password_hash = &s
+// SetDiscordID sets the "discord_id" field.
+func (m *UserMutation) SetDiscordID(s string) {
+	m.discord_id = &s
 }
 
-// PasswordHash returns the value of the "password_hash" field in the mutation.
-func (m *UserMutation) PasswordHash() (r string, exists bool) {
-	v := m.password_hash
+// DiscordID returns the value of the "discord_id" field in the mutation.
+func (m *UserMutation) DiscordID() (r string, exists bool) {
+	v := m.discord_id
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldPasswordHash returns the old "password_hash" field's value of the User entity.
+// OldDiscordID returns the old "discord_id" field's value of the User entity.
 // If the User object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldPasswordHash(ctx context.Context) (v string, err error) {
+func (m *UserMutation) OldDiscordID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPasswordHash is only allowed on UpdateOne operations")
+		return v, errors.New("OldDiscordID is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPasswordHash requires an ID field in the mutation")
+		return v, errors.New("OldDiscordID requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPasswordHash: %w", err)
+		return v, fmt.Errorf("querying old value for OldDiscordID: %w", err)
 	}
-	return oldValue.PasswordHash, nil
+	return oldValue.DiscordID, nil
 }
 
-// ResetPasswordHash resets all changes to the "password_hash" field.
-func (m *UserMutation) ResetPasswordHash() {
-	m.password_hash = nil
+// ClearDiscordID clears the value of the "discord_id" field.
+func (m *UserMutation) ClearDiscordID() {
+	m.discord_id = nil
+	m.clearedFields[user.FieldDiscordID] = struct{}{}
+}
+
+// DiscordIDCleared returns if the "discord_id" field was cleared in this mutation.
+func (m *UserMutation) DiscordIDCleared() bool {
+	_, ok := m.clearedFields[user.FieldDiscordID]
+	return ok
+}
+
+// ResetDiscordID resets all changes to the "discord_id" field.
+func (m *UserMutation) ResetDiscordID() {
+	m.discord_id = nil
+	delete(m.clearedFields, user.FieldDiscordID)
+}
+
+// SetDiscordUsername sets the "discord_username" field.
+func (m *UserMutation) SetDiscordUsername(s string) {
+	m.discord_username = &s
+}
+
+// DiscordUsername returns the value of the "discord_username" field in the mutation.
+func (m *UserMutation) DiscordUsername() (r string, exists bool) {
+	v := m.discord_username
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDiscordUsername returns the old "discord_username" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldDiscordUsername(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDiscordUsername is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDiscordUsername requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDiscordUsername: %w", err)
+	}
+	return oldValue.DiscordUsername, nil
+}
+
+// ClearDiscordUsername clears the value of the "discord_username" field.
+func (m *UserMutation) ClearDiscordUsername() {
+	m.discord_username = nil
+	m.clearedFields[user.FieldDiscordUsername] = struct{}{}
+}
+
+// DiscordUsernameCleared returns if the "discord_username" field was cleared in this mutation.
+func (m *UserMutation) DiscordUsernameCleared() bool {
+	_, ok := m.clearedFields[user.FieldDiscordUsername]
+	return ok
+}
+
+// ResetDiscordUsername resets all changes to the "discord_username" field.
+func (m *UserMutation) ResetDiscordUsername() {
+	m.discord_username = nil
+	delete(m.clearedFields, user.FieldDiscordUsername)
+}
+
+// SetDiscordAvatar sets the "discord_avatar" field.
+func (m *UserMutation) SetDiscordAvatar(s string) {
+	m.discord_avatar = &s
+}
+
+// DiscordAvatar returns the value of the "discord_avatar" field in the mutation.
+func (m *UserMutation) DiscordAvatar() (r string, exists bool) {
+	v := m.discord_avatar
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDiscordAvatar returns the old "discord_avatar" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldDiscordAvatar(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDiscordAvatar is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDiscordAvatar requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDiscordAvatar: %w", err)
+	}
+	return oldValue.DiscordAvatar, nil
+}
+
+// ClearDiscordAvatar clears the value of the "discord_avatar" field.
+func (m *UserMutation) ClearDiscordAvatar() {
+	m.discord_avatar = nil
+	m.clearedFields[user.FieldDiscordAvatar] = struct{}{}
+}
+
+// DiscordAvatarCleared returns if the "discord_avatar" field was cleared in this mutation.
+func (m *UserMutation) DiscordAvatarCleared() bool {
+	_, ok := m.clearedFields[user.FieldDiscordAvatar]
+	return ok
+}
+
+// ResetDiscordAvatar resets all changes to the "discord_avatar" field.
+func (m *UserMutation) ResetDiscordAvatar() {
+	m.discord_avatar = nil
+	delete(m.clearedFields, user.FieldDiscordAvatar)
+}
+
+// SetIsAnonymous sets the "is_anonymous" field.
+func (m *UserMutation) SetIsAnonymous(b bool) {
+	m.is_anonymous = &b
+}
+
+// IsAnonymous returns the value of the "is_anonymous" field in the mutation.
+func (m *UserMutation) IsAnonymous() (r bool, exists bool) {
+	v := m.is_anonymous
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsAnonymous returns the old "is_anonymous" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldIsAnonymous(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsAnonymous is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsAnonymous requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsAnonymous: %w", err)
+	}
+	return oldValue.IsAnonymous, nil
+}
+
+// ResetIsAnonymous resets all changes to the "is_anonymous" field.
+func (m *UserMutation) ResetIsAnonymous() {
+	m.is_anonymous = nil
+}
+
+// SetLastActiveAt sets the "last_active_at" field.
+func (m *UserMutation) SetLastActiveAt(t time.Time) {
+	m.last_active_at = &t
+}
+
+// LastActiveAt returns the value of the "last_active_at" field in the mutation.
+func (m *UserMutation) LastActiveAt() (r time.Time, exists bool) {
+	v := m.last_active_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastActiveAt returns the old "last_active_at" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldLastActiveAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastActiveAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastActiveAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastActiveAt: %w", err)
+	}
+	return oldValue.LastActiveAt, nil
+}
+
+// ResetLastActiveAt resets all changes to the "last_active_at" field.
+func (m *UserMutation) ResetLastActiveAt() {
+	m.last_active_at = nil
 }
 
 // SetPlayerPresets sets the "player_presets" field.
@@ -4783,18 +4970,30 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 9)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
 	if m.updated_at != nil {
 		fields = append(fields, user.FieldUpdatedAt)
 	}
-	if m.username != nil {
-		fields = append(fields, user.FieldUsername)
+	if m.uuid != nil {
+		fields = append(fields, user.FieldUUID)
 	}
-	if m.password_hash != nil {
-		fields = append(fields, user.FieldPasswordHash)
+	if m.discord_id != nil {
+		fields = append(fields, user.FieldDiscordID)
+	}
+	if m.discord_username != nil {
+		fields = append(fields, user.FieldDiscordUsername)
+	}
+	if m.discord_avatar != nil {
+		fields = append(fields, user.FieldDiscordAvatar)
+	}
+	if m.is_anonymous != nil {
+		fields = append(fields, user.FieldIsAnonymous)
+	}
+	if m.last_active_at != nil {
+		fields = append(fields, user.FieldLastActiveAt)
 	}
 	if m.player_presets != nil {
 		fields = append(fields, user.FieldPlayerPresets)
@@ -4811,10 +5010,18 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case user.FieldUpdatedAt:
 		return m.UpdatedAt()
-	case user.FieldUsername:
-		return m.Username()
-	case user.FieldPasswordHash:
-		return m.PasswordHash()
+	case user.FieldUUID:
+		return m.UUID()
+	case user.FieldDiscordID:
+		return m.DiscordID()
+	case user.FieldDiscordUsername:
+		return m.DiscordUsername()
+	case user.FieldDiscordAvatar:
+		return m.DiscordAvatar()
+	case user.FieldIsAnonymous:
+		return m.IsAnonymous()
+	case user.FieldLastActiveAt:
+		return m.LastActiveAt()
 	case user.FieldPlayerPresets:
 		return m.PlayerPresets()
 	}
@@ -4830,10 +5037,18 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldCreatedAt(ctx)
 	case user.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
-	case user.FieldUsername:
-		return m.OldUsername(ctx)
-	case user.FieldPasswordHash:
-		return m.OldPasswordHash(ctx)
+	case user.FieldUUID:
+		return m.OldUUID(ctx)
+	case user.FieldDiscordID:
+		return m.OldDiscordID(ctx)
+	case user.FieldDiscordUsername:
+		return m.OldDiscordUsername(ctx)
+	case user.FieldDiscordAvatar:
+		return m.OldDiscordAvatar(ctx)
+	case user.FieldIsAnonymous:
+		return m.OldIsAnonymous(ctx)
+	case user.FieldLastActiveAt:
+		return m.OldLastActiveAt(ctx)
 	case user.FieldPlayerPresets:
 		return m.OldPlayerPresets(ctx)
 	}
@@ -4859,19 +5074,47 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUpdatedAt(v)
 		return nil
-	case user.FieldUsername:
+	case user.FieldUUID:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetUsername(v)
+		m.SetUUID(v)
 		return nil
-	case user.FieldPasswordHash:
+	case user.FieldDiscordID:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetPasswordHash(v)
+		m.SetDiscordID(v)
+		return nil
+	case user.FieldDiscordUsername:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDiscordUsername(v)
+		return nil
+	case user.FieldDiscordAvatar:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDiscordAvatar(v)
+		return nil
+	case user.FieldIsAnonymous:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsAnonymous(v)
+		return nil
+	case user.FieldLastActiveAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastActiveAt(v)
 		return nil
 	case user.FieldPlayerPresets:
 		v, ok := value.([]string)
@@ -4910,6 +5153,15 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *UserMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(user.FieldDiscordID) {
+		fields = append(fields, user.FieldDiscordID)
+	}
+	if m.FieldCleared(user.FieldDiscordUsername) {
+		fields = append(fields, user.FieldDiscordUsername)
+	}
+	if m.FieldCleared(user.FieldDiscordAvatar) {
+		fields = append(fields, user.FieldDiscordAvatar)
+	}
 	if m.FieldCleared(user.FieldPlayerPresets) {
 		fields = append(fields, user.FieldPlayerPresets)
 	}
@@ -4927,6 +5179,15 @@ func (m *UserMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *UserMutation) ClearField(name string) error {
 	switch name {
+	case user.FieldDiscordID:
+		m.ClearDiscordID()
+		return nil
+	case user.FieldDiscordUsername:
+		m.ClearDiscordUsername()
+		return nil
+	case user.FieldDiscordAvatar:
+		m.ClearDiscordAvatar()
+		return nil
 	case user.FieldPlayerPresets:
 		m.ClearPlayerPresets()
 		return nil
@@ -4944,11 +5205,23 @@ func (m *UserMutation) ResetField(name string) error {
 	case user.FieldUpdatedAt:
 		m.ResetUpdatedAt()
 		return nil
-	case user.FieldUsername:
-		m.ResetUsername()
+	case user.FieldUUID:
+		m.ResetUUID()
 		return nil
-	case user.FieldPasswordHash:
-		m.ResetPasswordHash()
+	case user.FieldDiscordID:
+		m.ResetDiscordID()
+		return nil
+	case user.FieldDiscordUsername:
+		m.ResetDiscordUsername()
+		return nil
+	case user.FieldDiscordAvatar:
+		m.ResetDiscordAvatar()
+		return nil
+	case user.FieldIsAnonymous:
+		m.ResetIsAnonymous()
+		return nil
+	case user.FieldLastActiveAt:
+		m.ResetLastActiveAt()
 		return nil
 	case user.FieldPlayerPresets:
 		m.ResetPlayerPresets()

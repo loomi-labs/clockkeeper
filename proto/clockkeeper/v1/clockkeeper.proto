@@ -6,7 +6,9 @@ option go_package = "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1;clockk
 
 service ClockKeeperService {
   // Auth
-  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc LoginWithDiscord(LoginWithDiscordRequest) returns (LoginWithDiscordResponse) {}
+  rpc CreateAnonymousSession(CreateAnonymousSessionRequest) returns (CreateAnonymousSessionResponse) {}
+  rpc GetAuthConfig(GetAuthConfigRequest) returns (GetAuthConfigResponse) {}
 
   // Characters (read-only, from embedded data)
   rpc ListCharacters(ListCharactersRequest) returns (ListCharactersResponse) {}
@@ -98,13 +100,27 @@ enum PhaseType {
 
 // --- Auth ---
 
-message LoginRequest {
-  string username = 1;
-  string password = 2;
+message LoginWithDiscordRequest {
+  string code = 1;
+  string redirect_uri = 2;
 }
 
-message LoginResponse {
+message LoginWithDiscordResponse {
   string token = 1;
+  bool is_new_user = 2;
+}
+
+message CreateAnonymousSessionRequest {}
+
+message CreateAnonymousSessionResponse {
+  string token = 1;
+}
+
+message GetAuthConfigRequest {}
+
+message GetAuthConfigResponse {
+  string discord_client_id = 1;
+  bool anonymous_enabled = 2;
 }
 
 // --- Characters ---

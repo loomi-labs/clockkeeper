@@ -37,30 +37,104 @@ func (_u *UserUpdate) SetUpdatedAt(v time.Time) *UserUpdate {
 	return _u
 }
 
-// SetUsername sets the "username" field.
-func (_u *UserUpdate) SetUsername(v string) *UserUpdate {
-	_u.mutation.SetUsername(v)
+// SetUUID sets the "uuid" field.
+func (_u *UserUpdate) SetUUID(v string) *UserUpdate {
+	_u.mutation.SetUUID(v)
 	return _u
 }
 
-// SetNillableUsername sets the "username" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableUsername(v *string) *UserUpdate {
+// SetNillableUUID sets the "uuid" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableUUID(v *string) *UserUpdate {
 	if v != nil {
-		_u.SetUsername(*v)
+		_u.SetUUID(*v)
 	}
 	return _u
 }
 
-// SetPasswordHash sets the "password_hash" field.
-func (_u *UserUpdate) SetPasswordHash(v string) *UserUpdate {
-	_u.mutation.SetPasswordHash(v)
+// SetDiscordID sets the "discord_id" field.
+func (_u *UserUpdate) SetDiscordID(v string) *UserUpdate {
+	_u.mutation.SetDiscordID(v)
 	return _u
 }
 
-// SetNillablePasswordHash sets the "password_hash" field if the given value is not nil.
-func (_u *UserUpdate) SetNillablePasswordHash(v *string) *UserUpdate {
+// SetNillableDiscordID sets the "discord_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableDiscordID(v *string) *UserUpdate {
 	if v != nil {
-		_u.SetPasswordHash(*v)
+		_u.SetDiscordID(*v)
+	}
+	return _u
+}
+
+// ClearDiscordID clears the value of the "discord_id" field.
+func (_u *UserUpdate) ClearDiscordID() *UserUpdate {
+	_u.mutation.ClearDiscordID()
+	return _u
+}
+
+// SetDiscordUsername sets the "discord_username" field.
+func (_u *UserUpdate) SetDiscordUsername(v string) *UserUpdate {
+	_u.mutation.SetDiscordUsername(v)
+	return _u
+}
+
+// SetNillableDiscordUsername sets the "discord_username" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableDiscordUsername(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetDiscordUsername(*v)
+	}
+	return _u
+}
+
+// ClearDiscordUsername clears the value of the "discord_username" field.
+func (_u *UserUpdate) ClearDiscordUsername() *UserUpdate {
+	_u.mutation.ClearDiscordUsername()
+	return _u
+}
+
+// SetDiscordAvatar sets the "discord_avatar" field.
+func (_u *UserUpdate) SetDiscordAvatar(v string) *UserUpdate {
+	_u.mutation.SetDiscordAvatar(v)
+	return _u
+}
+
+// SetNillableDiscordAvatar sets the "discord_avatar" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableDiscordAvatar(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetDiscordAvatar(*v)
+	}
+	return _u
+}
+
+// ClearDiscordAvatar clears the value of the "discord_avatar" field.
+func (_u *UserUpdate) ClearDiscordAvatar() *UserUpdate {
+	_u.mutation.ClearDiscordAvatar()
+	return _u
+}
+
+// SetIsAnonymous sets the "is_anonymous" field.
+func (_u *UserUpdate) SetIsAnonymous(v bool) *UserUpdate {
+	_u.mutation.SetIsAnonymous(v)
+	return _u
+}
+
+// SetNillableIsAnonymous sets the "is_anonymous" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableIsAnonymous(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetIsAnonymous(*v)
+	}
+	return _u
+}
+
+// SetLastActiveAt sets the "last_active_at" field.
+func (_u *UserUpdate) SetLastActiveAt(v time.Time) *UserUpdate {
+	_u.mutation.SetLastActiveAt(v)
+	return _u
+}
+
+// SetNillableLastActiveAt sets the "last_active_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableLastActiveAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetLastActiveAt(*v)
 	}
 	return _u
 }
@@ -198,14 +272,9 @@ func (_u *UserUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdate) check() error {
-	if v, ok := _u.mutation.Username(); ok {
-		if err := user.UsernameValidator(v); err != nil {
-			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.PasswordHash(); ok {
-		if err := user.PasswordHashValidator(v); err != nil {
-			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "User.password_hash": %w`, err)}
+	if v, ok := _u.mutation.UUID(); ok {
+		if err := user.UUIDValidator(v); err != nil {
+			return &ValidationError{Name: "uuid", err: fmt.Errorf(`ent: validator failed for field "User.uuid": %w`, err)}
 		}
 	}
 	return nil
@@ -226,11 +295,32 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.Username(); ok {
-		_spec.SetField(user.FieldUsername, field.TypeString, value)
+	if value, ok := _u.mutation.UUID(); ok {
+		_spec.SetField(user.FieldUUID, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.PasswordHash(); ok {
-		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
+	if value, ok := _u.mutation.DiscordID(); ok {
+		_spec.SetField(user.FieldDiscordID, field.TypeString, value)
+	}
+	if _u.mutation.DiscordIDCleared() {
+		_spec.ClearField(user.FieldDiscordID, field.TypeString)
+	}
+	if value, ok := _u.mutation.DiscordUsername(); ok {
+		_spec.SetField(user.FieldDiscordUsername, field.TypeString, value)
+	}
+	if _u.mutation.DiscordUsernameCleared() {
+		_spec.ClearField(user.FieldDiscordUsername, field.TypeString)
+	}
+	if value, ok := _u.mutation.DiscordAvatar(); ok {
+		_spec.SetField(user.FieldDiscordAvatar, field.TypeString, value)
+	}
+	if _u.mutation.DiscordAvatarCleared() {
+		_spec.ClearField(user.FieldDiscordAvatar, field.TypeString)
+	}
+	if value, ok := _u.mutation.IsAnonymous(); ok {
+		_spec.SetField(user.FieldIsAnonymous, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.LastActiveAt(); ok {
+		_spec.SetField(user.FieldLastActiveAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.PlayerPresets(); ok {
 		_spec.SetField(user.FieldPlayerPresets, field.TypeJSON, value)
@@ -359,30 +449,104 @@ func (_u *UserUpdateOne) SetUpdatedAt(v time.Time) *UserUpdateOne {
 	return _u
 }
 
-// SetUsername sets the "username" field.
-func (_u *UserUpdateOne) SetUsername(v string) *UserUpdateOne {
-	_u.mutation.SetUsername(v)
+// SetUUID sets the "uuid" field.
+func (_u *UserUpdateOne) SetUUID(v string) *UserUpdateOne {
+	_u.mutation.SetUUID(v)
 	return _u
 }
 
-// SetNillableUsername sets the "username" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableUsername(v *string) *UserUpdateOne {
+// SetNillableUUID sets the "uuid" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableUUID(v *string) *UserUpdateOne {
 	if v != nil {
-		_u.SetUsername(*v)
+		_u.SetUUID(*v)
 	}
 	return _u
 }
 
-// SetPasswordHash sets the "password_hash" field.
-func (_u *UserUpdateOne) SetPasswordHash(v string) *UserUpdateOne {
-	_u.mutation.SetPasswordHash(v)
+// SetDiscordID sets the "discord_id" field.
+func (_u *UserUpdateOne) SetDiscordID(v string) *UserUpdateOne {
+	_u.mutation.SetDiscordID(v)
 	return _u
 }
 
-// SetNillablePasswordHash sets the "password_hash" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillablePasswordHash(v *string) *UserUpdateOne {
+// SetNillableDiscordID sets the "discord_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableDiscordID(v *string) *UserUpdateOne {
 	if v != nil {
-		_u.SetPasswordHash(*v)
+		_u.SetDiscordID(*v)
+	}
+	return _u
+}
+
+// ClearDiscordID clears the value of the "discord_id" field.
+func (_u *UserUpdateOne) ClearDiscordID() *UserUpdateOne {
+	_u.mutation.ClearDiscordID()
+	return _u
+}
+
+// SetDiscordUsername sets the "discord_username" field.
+func (_u *UserUpdateOne) SetDiscordUsername(v string) *UserUpdateOne {
+	_u.mutation.SetDiscordUsername(v)
+	return _u
+}
+
+// SetNillableDiscordUsername sets the "discord_username" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableDiscordUsername(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetDiscordUsername(*v)
+	}
+	return _u
+}
+
+// ClearDiscordUsername clears the value of the "discord_username" field.
+func (_u *UserUpdateOne) ClearDiscordUsername() *UserUpdateOne {
+	_u.mutation.ClearDiscordUsername()
+	return _u
+}
+
+// SetDiscordAvatar sets the "discord_avatar" field.
+func (_u *UserUpdateOne) SetDiscordAvatar(v string) *UserUpdateOne {
+	_u.mutation.SetDiscordAvatar(v)
+	return _u
+}
+
+// SetNillableDiscordAvatar sets the "discord_avatar" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableDiscordAvatar(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetDiscordAvatar(*v)
+	}
+	return _u
+}
+
+// ClearDiscordAvatar clears the value of the "discord_avatar" field.
+func (_u *UserUpdateOne) ClearDiscordAvatar() *UserUpdateOne {
+	_u.mutation.ClearDiscordAvatar()
+	return _u
+}
+
+// SetIsAnonymous sets the "is_anonymous" field.
+func (_u *UserUpdateOne) SetIsAnonymous(v bool) *UserUpdateOne {
+	_u.mutation.SetIsAnonymous(v)
+	return _u
+}
+
+// SetNillableIsAnonymous sets the "is_anonymous" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableIsAnonymous(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetIsAnonymous(*v)
+	}
+	return _u
+}
+
+// SetLastActiveAt sets the "last_active_at" field.
+func (_u *UserUpdateOne) SetLastActiveAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetLastActiveAt(v)
+	return _u
+}
+
+// SetNillableLastActiveAt sets the "last_active_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableLastActiveAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetLastActiveAt(*v)
 	}
 	return _u
 }
@@ -533,14 +697,9 @@ func (_u *UserUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdateOne) check() error {
-	if v, ok := _u.mutation.Username(); ok {
-		if err := user.UsernameValidator(v); err != nil {
-			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.PasswordHash(); ok {
-		if err := user.PasswordHashValidator(v); err != nil {
-			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "User.password_hash": %w`, err)}
+	if v, ok := _u.mutation.UUID(); ok {
+		if err := user.UUIDValidator(v); err != nil {
+			return &ValidationError{Name: "uuid", err: fmt.Errorf(`ent: validator failed for field "User.uuid": %w`, err)}
 		}
 	}
 	return nil
@@ -578,11 +737,32 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.Username(); ok {
-		_spec.SetField(user.FieldUsername, field.TypeString, value)
+	if value, ok := _u.mutation.UUID(); ok {
+		_spec.SetField(user.FieldUUID, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.PasswordHash(); ok {
-		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
+	if value, ok := _u.mutation.DiscordID(); ok {
+		_spec.SetField(user.FieldDiscordID, field.TypeString, value)
+	}
+	if _u.mutation.DiscordIDCleared() {
+		_spec.ClearField(user.FieldDiscordID, field.TypeString)
+	}
+	if value, ok := _u.mutation.DiscordUsername(); ok {
+		_spec.SetField(user.FieldDiscordUsername, field.TypeString, value)
+	}
+	if _u.mutation.DiscordUsernameCleared() {
+		_spec.ClearField(user.FieldDiscordUsername, field.TypeString)
+	}
+	if value, ok := _u.mutation.DiscordAvatar(); ok {
+		_spec.SetField(user.FieldDiscordAvatar, field.TypeString, value)
+	}
+	if _u.mutation.DiscordAvatarCleared() {
+		_spec.ClearField(user.FieldDiscordAvatar, field.TypeString)
+	}
+	if value, ok := _u.mutation.IsAnonymous(); ok {
+		_spec.SetField(user.FieldIsAnonymous, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.LastActiveAt(); ok {
+		_spec.SetField(user.FieldLastActiveAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.PlayerPresets(); ok {
 		_spec.SetField(user.FieldPlayerPresets, field.TypeJSON, value)

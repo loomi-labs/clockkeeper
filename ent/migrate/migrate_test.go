@@ -14,7 +14,6 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
 	"github.com/loomi-labs/clockkeeper/ent/script"
-	"github.com/loomi-labs/clockkeeper/ent/user"
 	"github.com/loomi-labs/clockkeeper/internal/database"
 
 	_ "github.com/lib/pq"
@@ -45,6 +44,7 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260323161223_add_bag_substitutions":               validateBagSubstitutions,
 	"20260324183937_add_grimoire_reminder_attachments":   validateGrimoireReminderAttachments,
 	"20260406182402_add_player_presets":                  validatePlayerPresets,
+	"20260414094150_add_discord_and_anonymous":            validateDiscordAndAnonymous,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -220,18 +220,15 @@ func TestMigrationDataIntegrity(t *testing.T) {
 
 // --- validators ---
 
-// validateInitialSchema checks that the users table exists and data is preserved.
+// validateInitialSchema checks that the users table exists.
+// Note: the add_discord_and_anonymous migration deletes all seed users,
+// so we just verify the table is queryable.
 func validateInitialSchema(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
 	t.Helper()
 
-	adminUser, err := client.User.Query().
-		Where(user.Username("admin")).
-		Only(ctx)
+	_, err := client.User.Query().Count(ctx)
 	if err != nil {
-		t.Fatalf("failed to query admin user: %v", err)
-	}
-	if adminUser.PasswordHash == "" {
-		t.Error("user password_hash is empty")
+		t.Fatalf("failed to query users table: %v", err)
 	}
 }
 
@@ -243,6 +240,9 @@ func validateScriptsAndGames(t *testing.T, ctx context.Context, _ *sql.DB, clien
 		Where(script.Name("My TB Script")).
 		Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query seeded script: %v", err)
 	}
 	if s.Edition != "tb" {
@@ -253,6 +253,9 @@ func validateScriptsAndGames(t *testing.T, ctx context.Context, _ *sql.DB, clien
 		Where(game.StateEQ(game.StateSetup)).
 		Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query seeded game: %v", err)
 	}
 	if g.PlayerCount != 7 {
@@ -266,6 +269,9 @@ func validateTravellerCount(t *testing.T, ctx context.Context, _ *sql.DB, client
 
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.TravellerCount != 0 {
@@ -279,6 +285,9 @@ func validateSelectedTravellers(t *testing.T, ctx context.Context, _ *sql.DB, cl
 
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if len(g.SelectedTravellers) != 0 {
@@ -322,9 +331,12 @@ func validateSystemScripts(t *testing.T, ctx context.Context, _ *sql.DB, client 
 		Where(script.IsSystem(false)).
 		Only(ctx)
 	if err != nil {
-		t.Fatalf("failed to query user script: %v", err)
-	}
-	if userScript.UserID == nil {
+		if ent.IsNotFound(err) {
+			t.Log("user-owned script was cleaned up by a later migration, skipping check")
+		} else {
+			t.Fatalf("failed to query user script: %v", err)
+		}
+	} else if userScript.UserID == nil {
 		t.Error("user script should have a user_id")
 	}
 }
@@ -351,6 +363,9 @@ func validateGameOwner(t *testing.T, ctx context.Context, _ *sql.DB, client *ent
 
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.UserID == 0 {
@@ -372,6 +387,9 @@ func validateGameExtraCharacters(t *testing.T, ctx context.Context, _ *sql.DB, c
 
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.ExtraCharacters != nil && len(g.ExtraCharacters) != 0 {
@@ -403,6 +421,9 @@ func validateTravellerAlignments(t *testing.T, ctx context.Context, _ *sql.DB, c
 
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.TravellerAlignments != nil && len(g.TravellerAlignments) != 0 {
@@ -416,6 +437,9 @@ func validateGameName(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.
 
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.Name != "" {
@@ -466,6 +490,9 @@ func validateGrimoireState(t *testing.T, ctx context.Context, _ *sql.DB, client 
 
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.GrimoirePositions != nil && len(g.GrimoirePositions) != 0 {
@@ -482,6 +509,9 @@ func validateGrimoireNotes(t *testing.T, ctx context.Context, _ *sql.DB, client 
 
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.GrimoireGameNotes != nil && len(g.GrimoireGameNotes) != 0 {
@@ -497,6 +527,9 @@ func validateDemonBluffs(t *testing.T, ctx context.Context, _ *sql.DB, client *e
 	t.Helper()
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.SelectedBluffs != nil && len(g.SelectedBluffs) != 0 {
@@ -527,6 +560,9 @@ func validateBagSubstitutions(t *testing.T, ctx context.Context, _ *sql.DB, clie
 	t.Helper()
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.BagSubstitutions != nil && len(g.BagSubstitutions) != 0 {
@@ -539,6 +575,9 @@ func validateGrimoireReminderAttachments(t *testing.T, ctx context.Context, _ *s
 	t.Helper()
 	g, err := client.Game.Query().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
 		t.Fatalf("failed to query game: %v", err)
 	}
 	if g.GrimoireReminderAttachments != nil && len(g.GrimoireReminderAttachments) != 0 {
@@ -547,14 +586,55 @@ func validateGrimoireReminderAttachments(t *testing.T, ctx context.Context, _ *s
 }
 
 // validatePlayerPresets checks that the player_presets column exists on users.
+// Note: seed users were deleted by the add_discord_and_anonymous migration,
+// so we create a fresh user and verify the column works.
 func validatePlayerPresets(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
 	t.Helper()
-	u, err := client.User.Query().Where(user.Username("admin")).Only(ctx)
+
+	u, err := client.User.Create().Save(ctx)
 	if err != nil {
-		t.Fatalf("failed to query user: %v", err)
+		t.Fatalf("failed to create user: %v", err)
 	}
 	if u.PlayerPresets != nil && len(u.PlayerPresets) != 0 {
 		t.Errorf("expected nil or empty player_presets, got %v", u.PlayerPresets)
+	}
+}
+
+// validateDiscordAndAnonymous checks the new user schema fields work.
+func validateDiscordAndAnonymous(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	// Create an anonymous user (no Discord fields).
+	anonUser, err := client.User.Create().
+		SetIsAnonymous(true).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create anonymous user: %v", err)
+	}
+	if anonUser.UUID == "" {
+		t.Error("anonymous user UUID is empty")
+	}
+	if !anonUser.IsAnonymous {
+		t.Error("expected is_anonymous to be true")
+	}
+	if anonUser.LastActiveAt.IsZero() {
+		t.Error("last_active_at should be set by default")
+	}
+
+	// Create a Discord-linked user.
+	discordUser, err := client.User.Create().
+		SetDiscordID("123456").
+		SetDiscordUsername("testuser").
+		SetDiscordAvatar("abc123").
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create discord user: %v", err)
+	}
+	if discordUser.DiscordID == nil || *discordUser.DiscordID != "123456" {
+		t.Error("discord_id not set correctly")
+	}
+	if discordUser.IsAnonymous {
+		t.Error("discord user should not be anonymous")
 	}
 }
 
