@@ -1,10 +1,12 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { onMount } from "svelte";
   import type {
     Character,
     Game,
     BagSubstitution,
   } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
+  import SwipeGuide from "./SwipeGuide.svelte";
   import { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import { formatReminder } from "~/lib/format";
   import {
@@ -59,6 +61,55 @@
   const HORIZONTAL_LOCK_THRESHOLD = 8;
   const NON_INTERACTIVE_SPECIALS = new Set(["dusk", "dawn"]);
   const SNAP_BACK_TRANSITION = "transform 250ms cubic-bezier(0.2, 0, 0, 1)";
+
+  const GUIDE_STORAGE_KEY = "clockkeeper_guide_nightsheet";
+  let showSwipeGuide = $state(false);
+  // Guide steps: 0=swipe right, 1=undo right, 2=swipe left, 3=undo left, 4=done
+  let guideStep = $state(0);
+  let guideVisualDone = $state(false);
+  let guideVisualDead = $state(false);
+
+  onMount(() => {
+    if (
+      typeof localStorage !== "undefined" &&
+      localStorage.getItem(GUIDE_STORAGE_KEY) !== "seen"
+    ) {
+      showSwipeGuide = true;
+    }
+  });
+
+  function dismissGuide() {
+    showSwipeGuide = false;
+    guideStep = 0;
+    guideVisualDone = false;
+    guideVisualDead = false;
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(GUIDE_STORAGE_KEY, "seen");
+    }
+  }
+
+  function advanceGuide(direction: "right" | "left"): boolean {
+    if (guideStep === 0 && direction === "right") {
+      guideVisualDone = true;
+      guideStep = 1;
+      return true;
+    } else if (guideStep === 1 && direction === "right") {
+      guideVisualDone = false;
+      guideStep = 2;
+      return true;
+    } else if (guideStep === 2 && direction === "left") {
+      guideVisualDead = true;
+      guideStep = 3;
+      return true;
+    } else if (guideStep === 3 && direction === "left") {
+      guideVisualDead = false;
+      guideStep = 4;
+      // Guide complete
+      dismissGuide();
+      return true;
+    }
+    return false;
+  }
 
   // Direct DOM manipulation during swipes avoids Svelte re-renders that can
   // interfere with active pointer/touch events on mobile.
@@ -183,9 +234,15 @@
           }
 
           let dx = e.detail.event.clientX - activeDrag.startX;
-          if (!ontoggle) dx = Math.min(0, dx);
-          if (!isCharEntry || (!ondeath && !onundodeath))
-            dx = Math.max(0, dx);
+          // During guide, restrict to expected direction
+          if (entryId === guideTargetId) {
+            if (guideStep <= 1) dx = Math.max(0, dx); // right only
+            else dx = Math.min(0, dx); // left only
+          } else {
+            if (!ontoggle) dx = Math.min(0, dx);
+            if (!isCharEntry || (!ondeath && !onundodeath))
+              dx = Math.max(0, dx);
+          }
 
           activeDrag.dx = dx;
 
@@ -211,15 +268,24 @@
           // Clean up touchmove handler
           removeTouchHandler?.();
 
-          if (dx > SWIPE_THRESHOLD) {
-            const isDone = completedActions?.has(entryId) ?? false;
-            ontoggle?.(entryId, !isDone);
-          } else if (dx < -SWIPE_THRESHOLD && isCharEntry) {
-            const isDead = deadRoleIds?.has(entryId) ?? false;
-            if (isDead) {
-              onundodeath?.(entryId);
-            } else {
-              ondeath?.(entryId);
+          // During guide: visual-only, no real callbacks
+          if (entryId === guideTargetId) {
+            if (dx > SWIPE_THRESHOLD) {
+              advanceGuide("right");
+            } else if (dx < -SWIPE_THRESHOLD) {
+              advanceGuide("left");
+            }
+          } else {
+            if (dx > SWIPE_THRESHOLD) {
+              const isDone = completedActions?.has(entryId) ?? false;
+              ontoggle?.(entryId, !isDone);
+            } else if (dx < -SWIPE_THRESHOLD && isCharEntry) {
+              const isDead = deadRoleIds?.has(entryId) ?? false;
+              if (isDead) {
+                onundodeath?.(entryId);
+              } else {
+                ondeath?.(entryId);
+              }
             }
           }
 
@@ -395,6 +461,11 @@
   );
   const activeOrder = $derived(
     activeNight === "first" ? firstNightOrder : otherNightOrder,
+  );
+  const guideTargetId = $derived(
+    showSwipeGuide && ontoggle && ondeath
+      ? activeOrder.find((e) => !e.isSpecial)?.id ?? null
+      : null,
   );
   const specialIcons: Record<string, string> = {
     dusk: "/night-dusk.webp",
@@ -605,11 +676,14 @@
       </p>
     {:else}
       {#each activeOrder as entry, i (entry.id)}
-        {@const isDone = completedActions?.has(entry.id) ?? false}
+        {@const isGuideTarget = entry.id === guideTargetId}
+        {@const isDone = isGuideTarget ? guideVisualDone : (completedActions?.has(entry.id) ?? false)}
+        {@const entryIsDead = isGuideTarget ? guideVisualDead : entry.isDead}
         {#if entry.isSpecial}
           {@const isInteractive = !NON_INTERACTIVE_SPECIALS.has(entry.id)}
           <div class="overflow-hidden rounded-lg" data-entry={entry.id}>
             <div
+              draggable="false"
               {...isInteractive ? panProps(entry.id) : {}}
               class="relative flex items-center gap-2 bg-element/50 px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5 {isInteractive &&
               isDone
@@ -619,6 +693,7 @@
               <img
                 src={specialIcons[entry.id]}
                 alt=""
+                draggable="false"
                 class="h-12 w-12 shrink-0 object-contain sm:h-20 sm:w-20"
                 onerror={(e: Event) =>
                   ((e.target as HTMLImageElement).style.display = "none")}
@@ -693,12 +768,12 @@
           </div>
         {:else}
           {@const leftSwipeAction = ondeath
-            ? entry.isDead
+            ? entryIsDead
               ? () => onundodeath?.(entry.id)
               : () => ondeath?.(entry.id)
             : undefined}
           <div
-            class="relative overflow-hidden rounded-lg"
+            class="relative overflow-hidden rounded-lg {entry.id === guideTargetId ? 'z-50' : ''}"
             data-entry={entry.id}
           >
             <!-- Swipe overlays: always in DOM, toggled via direct DOM manipulation -->
@@ -726,7 +801,7 @@
                 >
               </div>
               <!-- Left swipe: kill (or revive) -->
-              {#if entry.isDead}
+              {#if entryIsDead}
                 <div
                   data-dir="left"
                   class="hidden absolute inset-0 flex items-center justify-end rounded-lg bg-green-500/20 pr-4"
@@ -760,11 +835,42 @@
                 </div>
               {/if}
             </div>
+            <!-- Guide: animated swipe hint overlay -->
+            {#if isGuideTarget}
+              <div
+                class="pointer-events-none absolute inset-0 z-10 flex items-center rounded-lg [&_*]:pointer-events-none {guideStep <= 1 ? 'guide-hint-right' : 'guide-hint-left'}"
+              >
+                <div class="guide-hint-chevrons flex items-center gap-1 {guideStep <= 1 ? 'text-green-500' : 'text-red-500'}">
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    {#if guideStep <= 1}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                    {:else}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                    {/if}
+                  </svg>
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    {#if guideStep <= 1}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                    {:else}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                    {/if}
+                  </svg>
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    {#if guideStep <= 1}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                    {:else}
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                    {/if}
+                  </svg>
+                </div>
+              </div>
+            {/if}
             <div
+              draggable="false"
               {...panProps(entry.id, leftSwipeAction)}
               class="card-slate relative flex items-center gap-2 border px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5 {isDone
                 ? 'opacity-50 border-l-4 border-l-green-500'
-                : ''} {entry.isDead
+                : ''} {entryIsDead
                 ? (unselectedColors[effectiveTeam(entry.id, entry.team ?? 0)] ??
                     'border-border/50') + ' opacity-40 border-dashed'
                 : entry.inPlay
@@ -783,7 +889,8 @@
                   entry.team ?? 0,
                 )}.webp"
                 alt=""
-                class="h-12 w-12 shrink-0 rounded-full sm:h-20 sm:w-20 {entry.isDead
+                draggable="false"
+                class="h-12 w-12 shrink-0 rounded-full sm:h-20 sm:w-20 {entryIsDead
                   ? 'grayscale'
                   : ''}"
                 onerror={(e: Event) =>
@@ -793,13 +900,13 @@
                 <span
                   class="text-sm font-medium sm:text-base {isDone
                     ? 'line-through '
-                    : ''}{entry.isDead
+                    : ''}{entryIsDead
                     ? 'line-through text-muted'
                     : (teamNameColors[
                         effectiveTeam(entry.id, entry.team ?? 0)
                       ] ?? 'text-primary')}">{entry.name}{#if playerNames?.get(entry.id)}<span class="ml-1.5 text-xs font-normal text-muted">&mdash; {playerNames.get(entry.id)}</span>{/if}</span
                 >
-                {#if entry.isDead}<span
+                {#if entryIsDead}<span
                     class="ml-2 text-xs text-red-500 dark:text-red-400"
                     >Dead</span
                   >{/if}
@@ -815,7 +922,7 @@
                   </span>
                 {/if}
                 <p
-                  class="text-xs sm:text-sm {entry.isDead
+                  class="text-xs sm:text-sm {entryIsDead
                     ? 'text-muted'
                     : 'text-secondary'}"
                 >
@@ -948,7 +1055,7 @@
               <div
                 class="no-print hidden shrink-0 items-center gap-1 sm:flex"
               >
-                {#if ondeath && !entry.isDead}
+                {#if ondeath && !entryIsDead}
                   <button
                     onclick={() => ondeath?.(entry.id)}
                     class="rounded p-1 text-muted transition-colors hover:bg-hover hover:text-red-500"
@@ -961,7 +1068,7 @@
                       /></svg
                     >
                   </button>
-                {:else if onundodeath && entry.isDead}
+                {:else if onundodeath && entryIsDead}
                   <button
                     onclick={() => onundodeath?.(entry.id)}
                     class="rounded p-1 text-red-400 transition-colors hover:bg-hover hover:text-green-500"
@@ -1123,6 +1230,9 @@
               >
             </div>
           </div>
+          {#if entry.id === guideTargetId}
+            <SwipeGuide step={guideStep} ondismiss={dismissGuide} />
+          {/if}
         {/if}
       {/each}
     {/if}
@@ -1205,3 +1315,51 @@
     </a>
   </div>
 {/if}
+
+<style>
+  /* Guide hint: chevrons slide in the swipe direction */
+  .guide-hint-right {
+    justify-content: flex-start;
+    padding-left: 0.5rem;
+  }
+  .guide-hint-left {
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+  }
+  .guide-hint-right .guide-hint-chevrons {
+    animation: slide-right 1.5s ease-in-out infinite;
+  }
+  .guide-hint-left .guide-hint-chevrons {
+    animation: slide-left 1.5s ease-in-out infinite;
+  }
+
+  @keyframes slide-right {
+    0% {
+      opacity: 0.3;
+      transform: translateX(0);
+    }
+    50% {
+      opacity: 0.8;
+      transform: translateX(40px);
+    }
+    100% {
+      opacity: 0.3;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slide-left {
+    0% {
+      opacity: 0.3;
+      transform: translateX(0);
+    }
+    50% {
+      opacity: 0.8;
+      transform: translateX(-40px);
+    }
+    100% {
+      opacity: 0.3;
+      transform: translateX(0);
+    }
+  }
+</style>
