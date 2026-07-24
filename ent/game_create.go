@@ -164,6 +164,12 @@ func (_c *GameCreate) SetGrimoireReminderAttachments(v map[string]string) *GameC
 	return _c
 }
 
+// SetRolePromotions sets the "role_promotions" field.
+func (_c *GameCreate) SetRolePromotions(v []schema.GameRolePromotion) *GameCreate {
+	_c.mutation.SetRolePromotions(v)
+	return _c
+}
+
 // SetState sets the "state" field.
 func (_c *GameCreate) SetState(v game.State) *GameCreate {
 	_c.mutation.SetState(v)
@@ -295,6 +301,10 @@ func (_c *GameCreate) defaults() {
 	if _, ok := _c.mutation.GrimoireReminderAttachments(); !ok {
 		v := game.DefaultGrimoireReminderAttachments
 		_c.mutation.SetGrimoireReminderAttachments(v)
+	}
+	if _, ok := _c.mutation.RolePromotions(); !ok {
+		v := game.DefaultRolePromotions
+		_c.mutation.SetRolePromotions(v)
 	}
 	if _, ok := _c.mutation.State(); !ok {
 		v := game.DefaultState
@@ -444,6 +454,10 @@ func (_c *GameCreate) createSpec() (*Game, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GrimoireReminderAttachments(); ok {
 		_spec.SetField(game.FieldGrimoireReminderAttachments, field.TypeJSON, value)
 		_node.GrimoireReminderAttachments = value
+	}
+	if value, ok := _c.mutation.RolePromotions(); ok {
+		_spec.SetField(game.FieldRolePromotions, field.TypeJSON, value)
+		_node.RolePromotions = value
 	}
 	if value, ok := _c.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)

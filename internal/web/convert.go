@@ -137,6 +137,20 @@ func bagSubstitutionsToProto(subs []schema.GameBagSubstitution) []*clockkeeperv1
 	return result
 }
 
+func rolePromotionsToProto(promos []schema.GameRolePromotion) []*clockkeeperv1.RolePromotion {
+	if len(promos) == 0 {
+		return nil
+	}
+	result := make([]*clockkeeperv1.RolePromotion, len(promos))
+	for i, p := range promos {
+		result[i] = &clockkeeperv1.RolePromotion{
+			RoleId:       p.RoleID,
+			ActsAsRoleId: p.ActsAsRoleID,
+		}
+	}
+	return result
+}
+
 func charactersToProto(chars []*botc.Character) []*clockkeeperv1.Character {
 	result := make([]*clockkeeperv1.Character, len(chars))
 	for i, c := range chars {
@@ -276,6 +290,7 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 		SelectedBluffIds:            g.SelectedBluffs,
 		SelectedBluffCharacters:     charactersToProto(bluffChars),
 		BagSubstitutions:            bagSubstitutionsToProto(g.BagSubstitutions),
+		RolePromotions:              rolePromotionsToProto(g.RolePromotions),
 	}
 
 	// Populate traveller alignments.

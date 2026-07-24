@@ -13,6 +13,7 @@
     onrecord,
     onremove,
     onuseghostvote,
+    onmove,
     readonly = false,
   }: {
     game: Game;
@@ -20,6 +21,8 @@
     onrecord: (roleId: string) => void;
     onremove: (deathId: bigint) => void;
     onuseghostvote: (deathId: bigint) => void;
+    // Move a death to the sibling phase of the same round (Night N <-> Day N).
+    onmove?: (death: Death) => void;
     readonly?: boolean;
   } = $props();
 
@@ -96,6 +99,37 @@
     return phase.type === PhaseType.NIGHT
       ? `Night ${phase.roundNumber}`
       : `Day ${phase.roundNumber}`;
+  }
+
+  // Deaths propagate Night -> Day, so a day-phase row may just be the carried
+  // copy of a night kill. The round's night row (when present) is the ORIGIN —
+  // labels and moves must operate on it, not on the copy.
+  function originDeath(death: Death): Death {
+    const cur = phaseById.get(death.phaseId);
+    if (!cur || cur.type === PhaseType.NIGHT) return death;
+    const night = phases.find(
+      (p) => p.roundNumber === cur.roundNumber && p.type === PhaseType.NIGHT,
+    );
+    return (
+      (night?.deaths ?? []).find((d) => d.roleId === death.roleId) ?? death
+    );
+  }
+
+  // The sibling phase of a death's ORIGIN phase in the same round (a night kill
+  // can move to that round's Day and vice versa). Returns its label, or
+  // undefined when the round has no sibling phase yet (nothing to move to).
+  function siblingPhaseLabel(death: Death): string | undefined {
+    const cur = phaseById.get(originDeath(death).phaseId);
+    if (!cur) return undefined;
+    const siblingType =
+      cur.type === PhaseType.NIGHT ? PhaseType.DAY : PhaseType.NIGHT;
+    const exists = phases.some(
+      (p) => p.roundNumber === cur.roundNumber && p.type === siblingType,
+    );
+    if (!exists) return undefined;
+    return siblingType === PhaseType.NIGHT
+      ? `Night ${cur.roundNumber}`
+      : `Day ${cur.roundNumber}`;
   }
 
   function handleRecord(roleId: string) {
@@ -226,7 +260,7 @@
               >{char?.name ?? death.roleId}</span
             >
             <span class="ml-2 text-xs text-muted"
-              >{phaseLabel(death.phaseId)}</span
+              >{phaseLabel(originDeath(death).phaseId)}</span
             >
           </div>
           <!-- Ghost vote indicator -->
@@ -265,6 +299,19 @@
               {/if}
             </svg>
           </button>
+          {#if !readonly && onmove}
+            {@const moveLabel = siblingPhaseLabel(death)}
+            {#if moveLabel}
+              <button
+                onclick={() => onmove?.(originDeath(death))}
+                class="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs font-medium text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                title="Move death to {moveLabel}"
+                aria-label="Move death to {moveLabel}"
+              >
+                &rarr; {moveLabel}
+              </button>
+            {/if}
+          {/if}
           {#if !readonly}
             <button
               onclick={() => onremove(death.id)}

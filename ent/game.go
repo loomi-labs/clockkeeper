@@ -57,6 +57,8 @@ type Game struct {
 	BagSubstitutions []schema.GameBagSubstitution `json:"bag_substitutions,omitempty"`
 	// GrimoireReminderAttachments holds the value of the "grimoire_reminder_attachments" field.
 	GrimoireReminderAttachments map[string]string `json:"grimoire_reminder_attachments,omitempty"`
+	// RolePromotions holds the value of the "role_promotions" field.
+	RolePromotions []schema.GameRolePromotion `json:"role_promotions,omitempty"`
 	// State holds the value of the "state" field.
 	State game.State `json:"state,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -114,7 +116,7 @@ func (*Game) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case game.FieldSelectedRoles, game.FieldSelectedTravellers, game.FieldExtraCharacters, game.FieldSelectedBluffs, game.FieldTravellerAlignments, game.FieldGrimoirePositions, game.FieldGrimoirePlayerNames, game.FieldGrimoireGameNotes, game.FieldGrimoireRoundNotes, game.FieldBagSubstitutions, game.FieldGrimoireReminderAttachments:
+		case game.FieldSelectedRoles, game.FieldSelectedTravellers, game.FieldExtraCharacters, game.FieldSelectedBluffs, game.FieldTravellerAlignments, game.FieldGrimoirePositions, game.FieldGrimoirePlayerNames, game.FieldGrimoireGameNotes, game.FieldGrimoireRoundNotes, game.FieldBagSubstitutions, game.FieldGrimoireReminderAttachments, game.FieldRolePromotions:
 			values[i] = new([]byte)
 		case game.FieldID, game.FieldUserID, game.FieldScriptID, game.FieldPlayerCount, game.FieldTravellerCount:
 			values[i] = new(sql.NullInt64)
@@ -273,6 +275,14 @@ func (_m *Game) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field grimoire_reminder_attachments: %w", err)
 				}
 			}
+		case game.FieldRolePromotions:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field role_promotions", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.RolePromotions); err != nil {
+					return fmt.Errorf("unmarshal field role_promotions: %w", err)
+				}
+			}
 		case game.FieldState:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field state", values[i])
@@ -383,6 +393,9 @@ func (_m *Game) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("grimoire_reminder_attachments=")
 	builder.WriteString(fmt.Sprintf("%v", _m.GrimoireReminderAttachments))
+	builder.WriteString(", ")
+	builder.WriteString("role_promotions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RolePromotions))
 	builder.WriteString(", ")
 	builder.WriteString("state=")
 	builder.WriteString(fmt.Sprintf("%v", _m.State))

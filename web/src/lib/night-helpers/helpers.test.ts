@@ -16,6 +16,8 @@ import {
   chefRangeCauses,
   classifyRegistration,
   findExecutedToday,
+  newDeathsTonight,
+  scarletWomanPromotionAlert,
   type HelperPlayer,
 } from "./helpers";
 
@@ -656,5 +658,117 @@ describe("findExecutedToday", () => {
     expect(
       findExecutedToday({ night: phase([death("empath")]), day: phase([]) }),
     ).toBeUndefined();
+  });
+});
+
+describe("newDeathsTonight", () => {
+  it("detects a fresh death not present in the previous day", () => {
+    const fresh = newDeathsTonight(
+      [{ roleId: "empath" }],
+      [{ roleId: "saint" }],
+    );
+    expect(fresh).toEqual(new Set(["empath"]));
+  });
+
+  it("excludes a death carried forward from the previous day", () => {
+    // The Imp died a prior night and still shows in every later phase.
+    const fresh = newDeathsTonight(
+      [{ roleId: "imp" }, { roleId: "empath" }],
+      [{ roleId: "imp" }],
+    );
+    expect(fresh).toEqual(new Set(["empath"]));
+  });
+
+  it("treats every night death as fresh on the first night (empty prev)", () => {
+    const fresh = newDeathsTonight([{ roleId: "empath" }], []);
+    expect(fresh).toEqual(new Set(["empath"]));
+  });
+});
+
+describe("scarletWomanPromotionAlert", () => {
+  const sw = (overrides: Partial<HelperPlayer> = {}) =>
+    player("scarletwoman", {
+      team: Team.MINION,
+      alignment: "evil",
+      ...overrides,
+    });
+  const demon = (overrides: Partial<HelperPlayer> = {}) =>
+    player("imp", { team: Team.DEMON, alignment: "evil", ...overrides });
+  const town = (id: string) => player(id, { alignment: "good" });
+
+  it("is false while the Demon is alive", () => {
+    const players = playerMap([demon(), sw(), town("a"), town("b"), town("c")]);
+    expect(scarletWomanPromotionAlert(players)).toBe(false);
+  });
+
+  it("is false when there is no Scarlet Woman", () => {
+    const players = playerMap([
+      demon({ isDead: true }),
+      town("a"),
+      town("b"),
+      town("c"),
+      town("d"),
+    ]);
+    expect(scarletWomanPromotionAlert(players)).toBe(false);
+  });
+
+  it("is false when the Scarlet Woman is dead", () => {
+    const players = playerMap([
+      demon({ isDead: true }),
+      sw({ isDead: true }),
+      town("a"),
+      town("b"),
+      town("c"),
+      town("d"),
+    ]);
+    expect(scarletWomanPromotionAlert(players)).toBe(false);
+  });
+
+  it("is false when the Scarlet Woman is already promoted (reads as Demon)", () => {
+    // A promoted SW seat has team Demon; being alive it fails the all-demons-
+    // dead gate, so no further alert.
+    const players = playerMap([
+      sw({ team: Team.DEMON }),
+      town("a"),
+      town("b"),
+      town("c"),
+      town("d"),
+    ]);
+    expect(scarletWomanPromotionAlert(players)).toBe(false);
+  });
+
+  it("is false with only 3 non-traveller seats alive", () => {
+    const players = playerMap([
+      demon({ isDead: true }),
+      sw(),
+      town("a"),
+      town("b"),
+    ]);
+    // alive non-travellers: sw, a, b -> 3.
+    expect(scarletWomanPromotionAlert(players)).toBe(false);
+  });
+
+  it("is true with 4 non-traveller seats alive after the Demon dies", () => {
+    const players = playerMap([
+      demon({ isDead: true }),
+      sw(),
+      town("a"),
+      town("b"),
+      town("c"),
+    ]);
+    // alive non-travellers: sw, a, b, c -> 4 (5+ were alive when the Demon died).
+    expect(scarletWomanPromotionAlert(players)).toBe(true);
+  });
+
+  it("excludes travellers from the alive count", () => {
+    const players = playerMap([
+      demon({ isDead: true }),
+      sw(),
+      town("a"),
+      town("b"),
+      player("beggar", { team: Team.TRAVELLER, alignment: "good" }),
+    ]);
+    // Travellers do not count: sw, a, b -> 3 -> false.
+    expect(scarletWomanPromotionAlert(players)).toBe(false);
   });
 });

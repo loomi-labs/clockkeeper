@@ -720,6 +720,8 @@ type GameMutation struct {
 	bag_substitutions             *[]schema.GameBagSubstitution
 	appendbag_substitutions       []schema.GameBagSubstitution
 	grimoire_reminder_attachments *map[string]string
+	role_promotions               *[]schema.GameRolePromotion
+	appendrole_promotions         []schema.GameRolePromotion
 	state                         *game.State
 	clearedFields                 map[string]struct{}
 	owner                         *int
@@ -1715,6 +1717,71 @@ func (m *GameMutation) ResetGrimoireReminderAttachments() {
 	delete(m.clearedFields, game.FieldGrimoireReminderAttachments)
 }
 
+// SetRolePromotions sets the "role_promotions" field.
+func (m *GameMutation) SetRolePromotions(srp []schema.GameRolePromotion) {
+	m.role_promotions = &srp
+	m.appendrole_promotions = nil
+}
+
+// RolePromotions returns the value of the "role_promotions" field in the mutation.
+func (m *GameMutation) RolePromotions() (r []schema.GameRolePromotion, exists bool) {
+	v := m.role_promotions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRolePromotions returns the old "role_promotions" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldRolePromotions(ctx context.Context) (v []schema.GameRolePromotion, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRolePromotions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRolePromotions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRolePromotions: %w", err)
+	}
+	return oldValue.RolePromotions, nil
+}
+
+// AppendRolePromotions adds srp to the "role_promotions" field.
+func (m *GameMutation) AppendRolePromotions(srp []schema.GameRolePromotion) {
+	m.appendrole_promotions = append(m.appendrole_promotions, srp...)
+}
+
+// AppendedRolePromotions returns the list of values that were appended to the "role_promotions" field in this mutation.
+func (m *GameMutation) AppendedRolePromotions() ([]schema.GameRolePromotion, bool) {
+	if len(m.appendrole_promotions) == 0 {
+		return nil, false
+	}
+	return m.appendrole_promotions, true
+}
+
+// ClearRolePromotions clears the value of the "role_promotions" field.
+func (m *GameMutation) ClearRolePromotions() {
+	m.role_promotions = nil
+	m.appendrole_promotions = nil
+	m.clearedFields[game.FieldRolePromotions] = struct{}{}
+}
+
+// RolePromotionsCleared returns if the "role_promotions" field was cleared in this mutation.
+func (m *GameMutation) RolePromotionsCleared() bool {
+	_, ok := m.clearedFields[game.FieldRolePromotions]
+	return ok
+}
+
+// ResetRolePromotions resets all changes to the "role_promotions" field.
+func (m *GameMutation) ResetRolePromotions() {
+	m.role_promotions = nil
+	m.appendrole_promotions = nil
+	delete(m.clearedFields, game.FieldRolePromotions)
+}
+
 // SetState sets the "state" field.
 func (m *GameMutation) SetState(ga game.State) {
 	m.state = &ga
@@ -1906,7 +1973,7 @@ func (m *GameMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GameMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 20)
 	if m.created_at != nil {
 		fields = append(fields, game.FieldCreatedAt)
 	}
@@ -1961,6 +2028,9 @@ func (m *GameMutation) Fields() []string {
 	if m.grimoire_reminder_attachments != nil {
 		fields = append(fields, game.FieldGrimoireReminderAttachments)
 	}
+	if m.role_promotions != nil {
+		fields = append(fields, game.FieldRolePromotions)
+	}
 	if m.state != nil {
 		fields = append(fields, game.FieldState)
 	}
@@ -2008,6 +2078,8 @@ func (m *GameMutation) Field(name string) (ent.Value, bool) {
 		return m.BagSubstitutions()
 	case game.FieldGrimoireReminderAttachments:
 		return m.GrimoireReminderAttachments()
+	case game.FieldRolePromotions:
+		return m.RolePromotions()
 	case game.FieldState:
 		return m.State()
 	}
@@ -2055,6 +2127,8 @@ func (m *GameMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldBagSubstitutions(ctx)
 	case game.FieldGrimoireReminderAttachments:
 		return m.OldGrimoireReminderAttachments(ctx)
+	case game.FieldRolePromotions:
+		return m.OldRolePromotions(ctx)
 	case game.FieldState:
 		return m.OldState(ctx)
 	}
@@ -2192,6 +2266,13 @@ func (m *GameMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGrimoireReminderAttachments(v)
 		return nil
+	case game.FieldRolePromotions:
+		v, ok := value.([]schema.GameRolePromotion)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRolePromotions(v)
+		return nil
 	case game.FieldState:
 		v, ok := value.(game.State)
 		if !ok {
@@ -2283,6 +2364,9 @@ func (m *GameMutation) ClearedFields() []string {
 	if m.FieldCleared(game.FieldGrimoireReminderAttachments) {
 		fields = append(fields, game.FieldGrimoireReminderAttachments)
 	}
+	if m.FieldCleared(game.FieldRolePromotions) {
+		fields = append(fields, game.FieldRolePromotions)
+	}
 	return fields
 }
 
@@ -2323,6 +2407,9 @@ func (m *GameMutation) ClearField(name string) error {
 		return nil
 	case game.FieldGrimoireReminderAttachments:
 		m.ClearGrimoireReminderAttachments()
+		return nil
+	case game.FieldRolePromotions:
+		m.ClearRolePromotions()
 		return nil
 	}
 	return fmt.Errorf("unknown Game nullable field %s", name)
@@ -2385,6 +2472,9 @@ func (m *GameMutation) ResetField(name string) error {
 		return nil
 	case game.FieldGrimoireReminderAttachments:
 		m.ResetGrimoireReminderAttachments()
+		return nil
+	case game.FieldRolePromotions:
+		m.ResetRolePromotions()
 		return nil
 	case game.FieldState:
 		m.ResetState()

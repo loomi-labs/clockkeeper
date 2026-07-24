@@ -445,6 +445,16 @@ func GrimoireReminderAttachmentsNotNil() predicate.Game {
 	return predicate.Game(sql.FieldNotNull(FieldGrimoireReminderAttachments))
 }
 
+// RolePromotionsIsNil applies the IsNil predicate on the "role_promotions" field.
+func RolePromotionsIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldRolePromotions))
+}
+
+// RolePromotionsNotNil applies the NotNil predicate on the "role_promotions" field.
+func RolePromotionsNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldRolePromotions))
+}
+
 // StateEQ applies the EQ predicate on the "state" field.
 func StateEQ(v State) predicate.Game {
 	return predicate.Game(sql.FieldEQ(FieldState, v))

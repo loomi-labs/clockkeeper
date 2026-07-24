@@ -45,6 +45,8 @@
     helperContext,
     ondemonkill,
     onstarpass,
+    promotions,
+    onundostarpass,
   }: {
     game: Game;
     scriptCharacters?: Character[];
@@ -69,6 +71,18 @@
     helperContext?: NightHelperContext;
     ondemonkill?: (demonRoleId: string, victimRoleId: string) => void;
     onstarpass?: () => void;
+    // Role-promotion overlay keyed by the ORIGINAL role id (e.g. baron -> Imp).
+    promotions?: ReadonlyMap<
+      string,
+      {
+        actsAsId: string;
+        actsAsName: string;
+        actsAsEdition: string;
+        actsAsTeam: number;
+        label: string;
+      }
+    >;
+    onundostarpass?: (roleId: string) => void;
   } = $props();
 
   import { onDestroy } from "svelte";
@@ -347,6 +361,12 @@
     isSpecial: boolean;
     inPlay: boolean;
     isDead: boolean;
+    // Set on the MAIN row of a promoted seat — the acts-as role id (e.g. "imp").
+    // The row keeps its REAL role id in `id` so deaths/statuses/notes still work.
+    actsAsId?: string;
+    // Set on a GHOST row: the original (pre-promotion) character, greyed out with
+    // an undo affordance. `seatId` is the real role id to undo/revert.
+    ghost?: { hint: string; seatId: string };
   }
 
   const SPECIAL_ENTRIES: Record<
@@ -429,9 +449,49 @@
     const reminderField =
       night === "first" ? "firstNightReminder" : "otherNightReminder";
     const source = showAll ? allScriptChars : allSelectedChars;
-    const charEntries: (NightEntry & { pos: number })[] = source
-      .filter((c) => c[reminderField])
-      .map((c) => ({
+    const charEntries: (NightEntry & { pos: number })[] = [];
+    for (const c of source) {
+      const promo = promotions?.get(c.id);
+      if (promo) {
+        // MAIN row: built from the acts-as character's night data (reminder,
+        // position, edition) but keeping the REAL role id so deaths/statuses/
+        // notes/completed-actions all keep resolving to this seat. Skipped when
+        // the acts-as character has no reminder this night (same rule as normal).
+        const actsAsChar = allScriptChars.find((x) => x.id === promo.actsAsId);
+        if (actsAsChar && actsAsChar[reminderField]) {
+          charEntries.push({
+            id: c.id,
+            name: promo.label,
+            reminder: actsAsChar[reminderField],
+            team: promo.actsAsTeam,
+            edition: promo.actsAsEdition,
+            isSpecial: false,
+            inPlay: selectedIdSet.has(c.id),
+            isDead: deadRoleIds?.has(c.id) ?? false,
+            actsAsId: promo.actsAsId,
+            pos: actsAsChar[posField] || 500,
+          });
+        }
+        // GHOST row: only when the ORIGINAL character has a reminder this night —
+        // greyed out with an undo affordance, keeps its position in the order.
+        if (c[reminderField]) {
+          charEntries.push({
+            id: `promoted-orig:${c.id}`,
+            name: c.name,
+            reminder: c[reminderField],
+            team: c.team,
+            edition: c.edition,
+            isSpecial: false,
+            inPlay: true,
+            isDead: false,
+            ghost: { hint: `now the ${promo.actsAsName}`, seatId: c.id },
+            pos: c[posField] || 500,
+          });
+        }
+        continue;
+      }
+      if (!c[reminderField]) continue;
+      charEntries.push({
         id: c.id,
         name: c.name,
         reminder: c[reminderField],
@@ -441,7 +501,8 @@
         inPlay: selectedIdSet.has(c.id),
         isDead: deadRoleIds?.has(c.id) ?? false,
         pos: c[posField] || 500,
-      }));
+      });
+    }
     // Add bag substitution characters (e.g., Drunk's townsfolk token) to the night order.
     if (bagSubstitutions) {
       const existingIds = new Set(charEntries.map((e) => e.id));
@@ -498,7 +559,7 @@
   );
   const guideTargetId = $derived(
     showSwipeGuide && ontoggle && ondeath
-      ? (activeOrder.find((e) => !e.isSpecial)?.id ?? null)
+      ? (activeOrder.find((e) => !e.isSpecial && !e.ghost)?.id ?? null)
       : null,
   );
   const specialIcons: Record<string, string> = {
@@ -518,6 +579,7 @@
     entryTeam: number;
     entryIsDead: boolean;
     entryInPlay: boolean;
+    entryActsAsId?: string;
     top: number;
     right: number;
   } | null>(null);
@@ -534,6 +596,7 @@
       entryTeam: entry.team ?? 0,
       entryIsDead: entry.isDead,
       entryInPlay: entry.inPlay,
+      entryActsAsId: entry.actsAsId,
       top: rect.bottom + 4,
       right: window.innerWidth - rect.right,
     };
@@ -685,19 +748,35 @@
   const demonKillExclude = $derived.by(() => {
     if (!demonKillFor) return new Set<string>();
     // The Imp killing itself is legal — it's the Star Pass trigger — so keep the
-    // Imp's own seat pickable. Any other demon can't target its own seat.
-    if (demonKillFor.entryId === "imp") return new Set<string>();
+    // Imp's own seat pickable. Any other demon can't target its own seat. A
+    // promoted seat acting as the Imp (e.g. a Baron) counts as the Imp here.
+    const actsAs =
+      promotions?.get(demonKillFor.entryId)?.actsAsId ?? demonKillFor.entryId;
+    if (actsAs === "imp") return new Set<string>();
     const seat =
       helperContext?.playerIdForEntry(demonKillFor.entryId) ??
       demonKillFor.entryId;
     return new Set<string>([seat]);
   });
 
-  // Whether the given entry is the in-play Imp — surfaces a manual "Star pass"
-  // affordance so the flow is reachable outside the kill button.
+  // Whether any seat currently acts as the Imp via a promotion.
+  const impPromoted = $derived(
+    [...(promotions?.values() ?? [])].some((p) => p.actsAsId === "imp"),
+  );
+
+  // Whether the given entry is the in-play Imp (a real Imp, or a promoted seat
+  // acting as the Imp) — surfaces a manual "Star pass" affordance so the flow is
+  // reachable outside the kill button. The DEAD original Imp keeps the button
+  // only while no promotion exists (the normal manual path: the Imp died and
+  // the ST promotes afterwards); once a seat acts as the Imp, only that living
+  // seat may pass again — a corpse must not start a second promotion.
   function isStarPassImp(entry: NightEntry): boolean {
     return (
-      !!onstarpass && !entry.isSpecial && entry.id === "imp" && entry.inPlay
+      !!onstarpass &&
+      !entry.isSpecial &&
+      (entry.actsAsId ?? entry.id) === "imp" &&
+      entry.inPlay &&
+      (!entry.isDead || !impPromoted)
     );
   }
 
@@ -880,6 +959,14 @@
                 </p>
                 {#if entry.id === "demoninfo"}
                   <div class="mt-2 flex flex-wrap items-center gap-2">
+                    {#if onshowcard}
+                      <button
+                        onclick={() => onshowcard?.("std:minions")}
+                        class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                      >
+                        Show card: Your Minions
+                      </button>
+                    {/if}
                     {#if bluffs && bluffs.length > 0}
                       <span class="text-xs font-semibold text-secondary"
                         >Bluffs:</span
@@ -950,14 +1037,6 @@
                         Add bluffs
                       </button>
                     {/if}
-                    {#if onshowcard}
-                      <button
-                        onclick={() => onshowcard?.("std:minions")}
-                        class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                      >
-                        Show card: Your Minions
-                      </button>
-                    {/if}
                   </div>
                 {:else if entry.id === "minioninfo" && onshowcard}
                   <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -1005,6 +1084,55 @@
               {/if}
               <span
                 class="w-6 shrink-0 text-center text-xs font-bold text-muted"
+                >{i + 1}</span
+              >
+            </div>
+          </div>
+        {:else if entry.ghost}
+          {@const g = entry.ghost}
+          <!-- Ghost row: the pre-promotion character, greyed out like a dead row
+               (no swipe/pan, no helper, no kill, no notes) with an inline undo. -->
+          <div class="overflow-hidden rounded-lg" data-entry={entry.id}>
+            <div
+              class="relative flex items-center gap-2 rounded-lg border border-dashed border-border/50 bg-element/30 px-2 py-2 opacity-70 sm:gap-3 sm:px-3 sm:py-2.5"
+            >
+              <img
+                src="/characters/{entry.edition}/{g.seatId}{iconSuffix(
+                  entry.team ?? 0,
+                )}.webp"
+                alt=""
+                draggable="false"
+                class="h-12 w-12 shrink-0 rounded-full grayscale sm:h-20 sm:w-20"
+                onerror={(e: Event) =>
+                  ((e.target as HTMLImageElement).style.display = "none")}
+              />
+              <div class="min-w-0 flex-1">
+                <span
+                  class="text-sm font-medium text-muted line-through sm:text-base"
+                  >{entry.name}</span
+                >
+                <p
+                  class="mt-0.5 text-xs font-semibold text-indigo-600 sm:text-sm dark:text-indigo-300"
+                >
+                  &rarr; {g.hint}
+                </p>
+                <p class="text-xs text-muted sm:text-sm">
+                  {@html formatReminder(entry.reminder)}
+                </p>
+              </div>
+              {#if onundostarpass}
+                <button
+                  type="button"
+                  onclick={() => onundostarpass?.(g.seatId)}
+                  class="no-print shrink-0 rounded border border-border px-2 py-1 text-xs font-medium text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                  title="Undo promotion — revert this seat"
+                  aria-label="Undo promotion for {entry.name}"
+                >
+                  Undo
+                </button>
+              {/if}
+              <span
+                class="w-6 shrink-0 text-center text-xs font-medium text-muted"
                 >{i + 1}</span
               >
             </div>
@@ -1185,7 +1313,8 @@
               ] ?? ""}
             >
               <img
-                src="/characters/{entry.edition}/{entry.id}{effectiveIconSuffix(
+                src="/characters/{entry.edition}/{entry.actsAsId ??
+                  entry.id}{effectiveIconSuffix(
                   entry.id,
                   entry.team ?? 0,
                 )}.webp"
@@ -1237,7 +1366,11 @@
                 >
                   {@html formatReminder(entry.reminder)}
                 </p>
-                {#if !entry.isSpecial && entry.inPlay && helperContext}
+                <!-- No helper for a promoted MAIN row: its acts-as id would look
+                     up the wrong (or no) helper, and playerIdForEntry("imp")
+                     could resolve to the DEAD original Imp seat. Ghost rows are
+                     a separate branch and never reach here. -->
+                {#if !entry.isSpecial && !entry.actsAsId && entry.inPlay && helperContext}
                   <NightEntryHelper entryId={entry.id} ctx={helperContext} />
                 {/if}
                 {#if !entry.isSpecial && (ongamenote || onroundnote)}
@@ -1406,6 +1539,20 @@
                       />
                     </svg>
                     Star pass
+                  </button>
+                {/if}
+                {#if entry.actsAsId && onundostarpass}
+                  <!-- Primary undo affordance for the promotion. Required for a
+                       reminder-less minion (e.g. Baron) whose only row is this
+                       promoted MAIN row (no ghost row is emitted). -->
+                  <button
+                    type="button"
+                    onclick={() => onundostarpass?.(entry.id)}
+                    class="flex items-center gap-1 rounded border border-border px-1.5 py-1 text-xs font-medium text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                    title="Undo promotion — revert {entry.name}"
+                    aria-label="Undo promotion for {entry.name}"
+                  >
+                    Undo star pass
                   </button>
                 {/if}
                 {#if ondeath && !entryIsDead}
@@ -1623,7 +1770,7 @@
         Kill…
       </button>
     {/if}
-    {#if onstarpass && m.entryId === "imp" && m.entryInPlay}
+    {#if onstarpass && (m.entryActsAsId ?? m.entryId) === "imp" && m.entryInPlay && (!m.entryIsDead || !impPromoted)}
       <button
         onclick={() => {
           onstarpass?.();
@@ -1641,6 +1788,30 @@
           />
         </svg>
         Star pass
+      </button>
+    {/if}
+    {#if onundostarpass && m.entryActsAsId}
+      <button
+        onclick={() => {
+          onundostarpass?.(m.entryId);
+          closeOverflowMenu();
+        }}
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+      >
+        <svg
+          class="h-4 w-4 text-indigo-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M3 10h11a4 4 0 010 8h-1M3 10l4-4M3 10l4 4"
+          />
+        </svg>
+        Undo star pass
       </button>
     {/if}
     {#if ondeath && !m.entryIsDead}

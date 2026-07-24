@@ -6,11 +6,15 @@
     minions,
     onpick,
     onskip,
+    subtitle = "A Minion becomes the Imp (Star Pass, or the Demon dying with the Scarlet Woman in play).",
   }: {
     // Alive, in-play Minions by their REAL role (id = role id).
     minions: HelperPlayer[];
     onpick: (minionRoleId: string) => void;
     onskip: () => void;
+    // Generalized copy — the prompt is opened both by an Imp self-kill and by the
+    // Scarlet Woman promotion path, so the default fits either trigger.
+    subtitle?: string;
   } = $props();
 
   // The Scarlet Woman is the canonical star-pass recipient — flag it when present
@@ -57,7 +61,7 @@
       Who becomes the new Imp?
     </h3>
     <p class="mt-1 text-sm text-secondary">
-      The Imp killed itself — a Minion becomes the Imp (Star Pass).
+      {subtitle}
     </p>
 
     <div class="mt-4 space-y-1 max-h-72 overflow-y-auto">
