@@ -8,8 +8,12 @@ RUN buf generate
 # Stage 2: Build frontend
 FROM node:22-alpine AS frontend
 RUN corepack enable && corepack prepare pnpm@latest --activate
+# pnpm 11 runs a deps check before `pnpm run` and prompts to purge
+# node_modules when the tree changed (e.g. after COPY web/ .) — CI=true makes
+# it non-interactive instead of aborting with "no TTY".
+ENV CI=true
 WORKDIR /app/web
-COPY web/package.json web/pnpm-lock.yaml ./
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY web/ .
 COPY --from=protogen /app/web/src/lib/gen/ ./src/lib/gen/
