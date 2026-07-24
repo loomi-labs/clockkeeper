@@ -101,18 +101,16 @@
       : `Day ${phase.roundNumber}`;
   }
 
-  // Deaths propagate Night -> Day, so a day-phase row may just be the carried
-  // copy of a night kill. The round's night row (when present) is the ORIGIN —
-  // labels and moves must operate on it, not on the copy.
+  // Deaths propagate forward into every later phase, so a displayed row may
+  // just be a carried copy. The role's EARLIEST row across all phases (phases
+  // are ordered chronologically by id) is the ORIGIN — labels and moves must
+  // operate on it, not on a copy.
   function originDeath(death: Death): Death {
-    const cur = phaseById.get(death.phaseId);
-    if (!cur || cur.type === PhaseType.NIGHT) return death;
-    const night = phases.find(
-      (p) => p.roundNumber === cur.roundNumber && p.type === PhaseType.NIGHT,
-    );
-    return (
-      (night?.deaths ?? []).find((d) => d.roleId === death.roleId) ?? death
-    );
+    for (const p of phases) {
+      const row = (p.deaths ?? []).find((d) => d.roleId === death.roleId);
+      if (row) return row;
+    }
+    return death;
   }
 
   // The sibling phase of a death's ORIGIN phase in the same round (a night kill

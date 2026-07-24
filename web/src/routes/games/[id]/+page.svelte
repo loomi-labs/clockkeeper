@@ -938,8 +938,13 @@
     };
   }
 
-  async function removeDeath(deathId: bigint, propagate = false) {
-    if (!game) return;
+  // Resolves to whether the removal reached the server, so callers with
+  // follow-up writes (moveDeath) can gate on it.
+  async function removeDeath(
+    deathId: bigint,
+    propagate = false,
+  ): Promise<boolean> {
+    if (!game) return false;
     error = "";
     try {
       const resp = await client.removeDeath({
@@ -948,8 +953,10 @@
         propagate,
       });
       game = resp.game;
+      return true;
     } catch (err) {
       error = getErrorMessage(err, "Failed to remove death");
+      return false;
     }
   }
 
@@ -1024,8 +1031,10 @@
         : death.cause === DeathCause.DEMON
           ? DeathCause.DEMON
           : DeathCause.UNSPECIFIED;
-    await removeDeath(death.id, true);
-    await doRecordDeath(death.roleId, sibling.id, true, cause);
+    // Only re-record once the removal reached the server — otherwise the
+    // death would end up on BOTH sibling phases.
+    const removed = await removeDeath(death.id, true);
+    if (removed) await doRecordDeath(death.roleId, sibling.id, true, cause);
   }
 
   async function useGhostVote(deathId: bigint) {

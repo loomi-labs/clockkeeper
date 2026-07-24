@@ -23,7 +23,8 @@ control:
 - The **Ravenkeeper** helper renders only the night the Ravenkeeper dies: pick a
   player to learn their displayed character and show the character-token card.
 - The **Scarlet Woman** helper is an alert that fires when the Demon dies with
-  5+ players alive, opening the revertible promotion prompt.
+  5+ non-Traveller players alive (counting the Demon before their death),
+  opening the revertible promotion prompt.
 
 Helpers are advisory. They read game state (seating, deaths, alignments,
 poisoned/drunk status, bag substitutions) and never mutate real roles on their
@@ -108,7 +109,7 @@ Legend for "Night": F = has a first-night action, O = has an other-night action,
 | Saint         | Outsider  | -     | none                 | No helper. Passive execution-loss condition; no night action.                                                                                                                                        |
 | Poisoner      | Minion    | FO    | TokenPickHelper      | Implemented. Single-player picker (may target anyone, including the Poisoner) that attaches the "Poisoned" reminder token, which the state-aware night sheet already reads to flag impaired info.    |
 | Spy           | Minion    | FO    | none                 | Proposed: a deliberate "show grimoire" no-op note (the Spy sees the grimoire; there is nothing to compute). Also surfaced as ranges in Empath/Chef/FT via its may-register-good treatment.           |
-| Scarletwoman  | Minion    | O     | ScarletWomanHelper   | Implemented. Amber alert that fires when every Demon is dead with 5+ players alive, with a Promote button that opens the revertible star-pass / promotion prompt (`onstarpass`).                     |
+| Scarletwoman  | Minion    | O     | ScarletWomanHelper   | Implemented. Amber alert that fires when every Demon is dead with 5+ non-Traveller players alive (counted before the death), with a Promote button that opens the revertible star-pass / promotion prompt (`onstarpass`).                     |
 | Baron         | Minion    | -     | none                 | No helper. Passive setup modifier (+2 Outsiders); affects the bag at setup, not at night.                                                                                                            |
 | Imp           | Demon     | O     | none (demon kill)    | Uses the existing demon-kill picker. Star pass is a revertible promotion: when the Imp dies, `onstarpass` opens the prompt to promote a Minion to the Demon ("Imp (ex Baron)"), overlaid via `rolePromotions` and reversible.                                         |
 | Beggar        | Traveller | -     | none                 | No helper. Day-time voting ability; no night action.                                                                                                                                                 |
