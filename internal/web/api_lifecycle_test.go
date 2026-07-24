@@ -53,6 +53,18 @@ func startedGame(t *testing.T, handler *ClockKeeperServiceHandler) (ownerID int,
 	return u.ID, startResp.Msg.Game
 }
 
+// advanceToNextRound advances a game from its active Night N through Day N to an
+// active Night N+1 (two steps under the step-wise AdvancePhase semantics) and
+// returns the updated game.
+func advanceToNextRound(t *testing.T, handler *ClockKeeperServiceHandler, ownerID int, gameID int64) *clockkeeperv1.Game {
+	t.Helper()
+	_, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: gameID}))
+	require.NoError(t, err)
+	resp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: gameID}))
+	require.NoError(t, err)
+	return resp.Msg.Game
+}
+
 // --- StartGame tests ---
 
 func TestStartGame_Success(t *testing.T) {
@@ -156,11 +168,12 @@ func TestStartGame_BlocksOtherUser(t *testing.T) {
 
 // --- AdvancePhase tests ---
 
-func TestAdvancePhase_CreatesNextRound(t *testing.T) {
+func TestAdvancePhase_StepWise(t *testing.T) {
 	handler := testHandler(t)
 	ownerID, game := startedGame(t, handler)
 
-	// Game starts at Night 1 + Day 1. Advance creates Night 2 + Day 2.
+	// Game starts at Night 1 (active) + Day 1 (inactive).
+	// First advance: Night 1 -> Day 1. No new round, no new phases.
 	resp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
 		GameId: game.Id,
 	}))
@@ -169,33 +182,94 @@ func TestAdvancePhase_CreatesNextRound(t *testing.T) {
 	g := resp.Msg.Game
 	require.NotNil(t, g.PlayState)
 	require.NotNil(t, g.PlayState.CurrentPhase)
-	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, g.PlayState.CurrentPhase.Type)
+	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, g.PlayState.CurrentPhase.Type, "should activate Day 1")
+	assert.Equal(t, int32(1), g.PlayState.CurrentRound, "round should stay at 1")
+	assert.True(t, g.PlayState.CurrentPhase.IsActive)
+	assert.Len(t, g.PlayState.Phases, 2, "no new phases created advancing Night -> Day")
+
+	// The companion Night 1 must now be inactive.
+	n1 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+	assert.False(t, n1.IsActive, "Night 1 should be inactive after advancing to Day 1")
+
+	// Second advance: Day 1 -> Night 2. Creates round 2 (Night 2 + Day 2).
+	resp, err = handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
+		GameId: game.Id,
+	}))
+	require.NoError(t, err)
+
+	g = resp.Msg.Game
+	require.NotNil(t, g.PlayState.CurrentPhase)
+	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, g.PlayState.CurrentPhase.Type, "should activate Night 2")
 	assert.Equal(t, int32(2), g.PlayState.CurrentRound, "round should advance to 2")
 	assert.True(t, g.PlayState.CurrentPhase.IsActive)
 	assert.Len(t, g.PlayState.Phases, 4, "should have 2 rounds × 2 phases each")
+}
+
+func TestAdvancePhase_ExecutionStaysOnDayCarryForwardUnspecified(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, game := startedGame(t, handler)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	roleID := game.SelectedRoleIds[0]
+
+	// Advance Night 1 -> Day 1, then record an EXECUTION death on Day 1
+	// (with propagation so it lands on Day 1, which carries accumulated deaths).
+	advResp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
+	require.NoError(t, err)
+	game = advResp.Msg.Game
+	d1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
+	require.NotNil(t, d1)
+
+	deathResp, err := handler.RecordDeath(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
+		GameId:    game.Id,
+		RoleId:    roleID,
+		PhaseId:   &d1.Id,
+		Propagate: true,
+		Cause:     clockkeeperv1.DeathCause_DEATH_CAUSE_EXECUTION,
+	}))
+	require.NoError(t, err)
+	game = deathResp.Msg.Game
+
+	// Advance Day 1 -> Night 2: creates round 2 and carries deaths forward.
+	advResp, err = handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
+	require.NoError(t, err)
+	g := advResp.Msg.Game
+
+	// The Day 1 execution keeps its EXECUTION cause.
+	d1After := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
+	require.NotNil(t, d1After)
+	d1Death := deathForRole(d1After, roleID)
+	require.NotNil(t, d1Death, "should still be dead on Day 1")
+	assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_EXECUTION, d1Death.Cause, "Day 1 execution keeps its cause")
+
+	// The carried-forward copies in round 2 mean "already dead" — cause UNSPECIFIED.
+	n2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
+	require.NotNil(t, n2)
+	n2Death := deathForRole(n2, roleID)
+	require.NotNil(t, n2Death, "carried-forward death should exist on Night 2")
+	assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_UNSPECIFIED, n2Death.Cause, "carried-forward copy is UNSPECIFIED")
+
+	d2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
+	require.NotNil(t, d2)
+	d2Death := deathForRole(d2, roleID)
+	require.NotNil(t, d2Death, "carried-forward death should exist on Day 2")
+	assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_UNSPECIFIED, d2Death.Cause, "carried-forward copy is UNSPECIFIED")
 }
 
 func TestAdvancePhase_MultipleRounds(t *testing.T) {
 	handler := testHandler(t)
 	ownerID, game := startedGame(t, handler)
 
-	// Advance once: creates round 2 (Night 2 + Day 2).
-	_, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
-		GameId: game.Id,
-	}))
-	require.NoError(t, err)
+	// Two full step pairs advance from round 1 to round 3.
+	// Round 1 Night -> Day -> Round 2 Night -> Day -> Round 3 Night.
+	advanceToNextRound(t, handler, ownerID, game.Id)      // -> Night 2 active
+	g := advanceToNextRound(t, handler, ownerID, game.Id) // -> Night 3 active
 
-	// Advance again: creates round 3 (Night 3 + Day 3).
-	resp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
-		GameId: game.Id,
-	}))
-	require.NoError(t, err)
-
-	g := resp.Msg.Game
 	require.NotNil(t, g.PlayState)
 	require.NotNil(t, g.PlayState.CurrentPhase)
 	assert.Equal(t, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, g.PlayState.CurrentPhase.Type)
-	assert.Equal(t, int32(3), g.PlayState.CurrentRound, "round should be 3 after two advances")
+	assert.Equal(t, int32(3), g.PlayState.CurrentRound, "round should be 3 after four advances")
 	assert.True(t, g.PlayState.CurrentPhase.IsActive)
 	assert.Len(t, g.PlayState.Phases, 6, "should have 3 rounds × 2 phases each")
 }
@@ -756,10 +830,8 @@ func TestRecordDeath_PropagateToAllLaterPhases(t *testing.T) {
 	require.NotEmpty(t, game.SelectedRoleIds)
 	roleID := game.SelectedRoleIds[0]
 
-	// Advance once: creates round 2 (Night 2 + Day 2). Total 4 phases.
-	advResp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
-	require.NoError(t, err)
-	game = advResp.Msg.Game
+	// Advance to round 2 (Night 2 + Day 2). Total 4 phases.
+	game = advanceToNextRound(t, handler, ownerID, game.Id)
 	require.Len(t, game.PlayState.Phases, 4)
 
 	n1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
@@ -903,11 +975,8 @@ func TestAdvancePhase_CopiesDeaths(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	// Advance — propagates Day 1 deaths into Night 2 + Day 2.
-	advResp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
-	require.NoError(t, err)
-
-	g := advResp.Msg.Game
+	// Advance to round 2 — Day 1 deaths propagate into Night 2 + Day 2.
+	g := advanceToNextRound(t, handler, ownerID, game.Id)
 	n2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
 	require.NotNil(t, n2)
 	assert.True(t, phaseHasDeathForRole(n2, roleID), "death should be copied to Night 2")
@@ -938,16 +1007,15 @@ func TestAdvancePhase_CopiesMultipleDeaths(t *testing.T) {
 	_, err = handler.RecordDeath(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{GameId: game.Id, RoleId: role2, Propagate: true}))
 	require.NoError(t, err)
 
-	// Advance — propagates Day 1 deaths into Night 2 + Day 2.
-	advResp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
-	require.NoError(t, err)
+	// Advance to round 2 — Day 1 deaths propagate into Night 2 + Day 2.
+	g := advanceToNextRound(t, handler, ownerID, game.Id)
 
-	n2 := findPhase(advResp.Msg.Game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
+	n2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 2)
 	require.NotNil(t, n2)
 	assert.True(t, phaseHasDeathForRole(n2, role1), "role1 death should be copied to Night 2")
 	assert.True(t, phaseHasDeathForRole(n2, role2), "role2 death should be copied to Night 2")
 
-	d2 := findPhase(advResp.Msg.Game, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
+	d2 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 2)
 	require.NotNil(t, d2)
 	assert.True(t, phaseHasDeathForRole(d2, role1), "role1 death should be copied to Day 2")
 	assert.True(t, phaseHasDeathForRole(d2, role2), "role2 death should be copied to Day 2")
@@ -960,13 +1028,13 @@ func TestUseGhostVote_SyncsAcrossPhases(t *testing.T) {
 	require.NotEmpty(t, game.SelectedRoleIds)
 	roleID := game.SelectedRoleIds[0]
 
-	// Record death in Night 1.
+	// Record death in Night 1 with propagation so Day 1 has a copy too.
 	deathResp, err := handler.RecordDeath(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
-		GameId: game.Id, RoleId: roleID,
+		GameId: game.Id, RoleId: roleID, Propagate: true,
 	}))
 	require.NoError(t, err)
 
-	// Advance to Day 1 (death copied).
+	// Advance Night 1 -> Day 1.
 	_, err = handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
 	require.NoError(t, err)
 
@@ -999,10 +1067,8 @@ func TestRecordDeath_ResurrectionFlow(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	// Advance once: creates round 2 (Night 2 + Day 2). Day 1 deaths propagate to both.
-	advResp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: game.Id}))
-	require.NoError(t, err)
-	game = advResp.Msg.Game
+	// Advance to round 2 (Night 2 + Day 2). Day 1 deaths propagate to both.
+	game = advanceToNextRound(t, handler, ownerID, game.Id)
 
 	// Dead in all 4 phases (N1, D1, N2, D2).
 	require.Len(t, game.PlayState.Phases, 4)
@@ -1068,11 +1134,8 @@ func TestGetGame_IncludesPlayState(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	// Advance — propagates Day 1 deaths to Night 2 + Day 2.
-	_, err = handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
-		GameId: game.Id,
-	}))
-	require.NoError(t, err)
+	// Advance to round 2 — propagates Day 1 deaths to Night 2 + Day 2.
+	advanceToNextRound(t, handler, ownerID, game.Id)
 
 	// Fetch the game via GetGame.
 	resp, err := handler.GetGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.GetGameRequest{
@@ -1835,11 +1898,7 @@ func TestUpdateCharacterAlignment_Propagates(t *testing.T) {
 	ownerID, game := startedGame(t, handler)
 
 	// Advance to round 2 so we have Night 1, Day 1, Night 2, Day 2.
-	advResp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
-		GameId: game.Id,
-	}))
-	require.NoError(t, err)
-	game = advResp.Msg.Game
+	game = advanceToNextRound(t, handler, ownerID, game.Id)
 	require.Len(t, game.PlayState.Phases, 4)
 
 	require.NotEmpty(t, game.SelectedRoleIds)
@@ -2034,12 +2093,8 @@ func TestAdvancePhase_PropagatesAlignments(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	// Advance to round 2.
-	advResp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
-		GameId: game.Id,
-	}))
-	require.NoError(t, err)
-	g := advResp.Msg.Game
+	// Advance to round 2. The Day 1 -> Night 2 step copies Day 1 alignments forward.
+	g := advanceToNextRound(t, handler, ownerID, game.Id)
 	require.Len(t, g.PlayState.Phases, 4)
 
 	// Verify Night 2 and Day 2 have the alignment propagated from Day 1.

@@ -197,6 +197,12 @@ func (h *ClockKeeperServiceHandler) RandomizeRoles(ctx context.Context, req *con
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// Re-fetch: Save() drops eager-loaded edges, which would blank PlayState.
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return connect.NewResponse(&clockkeeperv1.RandomizeRolesResponse{
 		Game: entGameToProto(g, h.registry),
 	}), nil
@@ -254,6 +260,12 @@ func (h *ClockKeeperServiceHandler) UpdateGameRoles(ctx context.Context, req *co
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// Re-fetch: Save() drops eager-loaded edges, which would blank PlayState.
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return connect.NewResponse(&clockkeeperv1.UpdateGameRolesResponse{
 		Game: entGameToProto(g, h.registry),
 	}), nil
@@ -305,6 +317,13 @@ func (h *ClockKeeperServiceHandler) UpdateGameTravellers(ctx context.Context, re
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// Re-fetch: Save() drops eager-loaded edges, which would blank PlayState
+	// (travellers can join mid-game, so this runs while phases exist).
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return connect.NewResponse(&clockkeeperv1.UpdateGameTravellersResponse{
 		Game: entGameToProto(g, h.registry),
 	}), nil
@@ -329,6 +348,13 @@ func (h *ClockKeeperServiceHandler) UpdateGameExtraCharacters(ctx context.Contex
 	if err != nil {
 		slog.Error("save updated extra characters failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Re-fetch: Save() drops eager-loaded edges, which would blank PlayState
+	// (extra characters can be edited mid-game, so this runs while phases exist).
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	return connect.NewResponse(&clockkeeperv1.UpdateGameExtraCharactersResponse{
@@ -560,6 +586,14 @@ func (h *ClockKeeperServiceHandler) UpdateDemonBluffs(ctx context.Context, req *
 	if err != nil {
 		slog.Error("update demon bluffs failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Re-fetch: Save() returns the row without eager-loaded edges, so serializing
+	// it directly would drop PlayState (populated only from g.Edges.Phases) and
+	// blank the in-progress view. getOwnedGame reloads phases+deaths.
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	return connect.NewResponse(&clockkeeperv1.UpdateDemonBluffsResponse{

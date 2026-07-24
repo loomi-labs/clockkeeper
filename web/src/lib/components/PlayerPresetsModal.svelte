@@ -5,9 +5,13 @@
   let {
     onclose,
     onassign,
+    onrenamed,
   }: {
     onclose: () => void;
     onassign?: (names: string[]) => void;
+    // Fired after a preset is renamed in place, so the caller can update the
+    // current game's seat assignments (which store names by value, not index).
+    onrenamed?: (oldName: string, newName: string) => void;
   } = $props();
 
   let names = $state<string[]>([]);
@@ -15,6 +19,10 @@
   let saving = $state(false);
   let error = $state("");
   let newName = $state("");
+
+  // Inline rename of an existing preset (pencil -> text input).
+  let editingIndex = $state<number | null>(null);
+  let editText = $state("");
 
   async function load() {
     loading = true;
@@ -29,22 +37,27 @@
     }
   }
 
-  let saveChain = Promise.resolve();
+  let saveChain: Promise<unknown> = Promise.resolve();
 
-  async function save() {
-    saveChain = saveChain.then(async () => {
+  // Resolves to whether THIS save reached the server, so callers can gate
+  // follow-up effects (e.g. propagating a rename into the current game).
+  async function save(): Promise<boolean> {
+    const attempt = saveChain.then(async () => {
       saving = true;
       error = "";
       try {
         const resp = await client.updatePlayerPresets({ names });
         names = [...resp.names];
+        return true;
       } catch (err) {
         error = getErrorMessage(err, "Failed to save player presets");
+        return false;
       } finally {
         saving = false;
       }
     });
-    return saveChain;
+    saveChain = attempt;
+    return attempt;
   }
 
   function addName() {
@@ -58,6 +71,39 @@
   function removeName(index: number) {
     names = names.filter((_, i) => i !== index);
     save();
+  }
+
+  function startEdit(index: number) {
+    editingIndex = index;
+    editText = names[index];
+  }
+  function cancelEdit() {
+    editingIndex = null;
+    editText = "";
+  }
+  // Commit an inline rename. Guarded on index so the input's blur handler is a
+  // no-op after Escape cancels. Skips empty, unchanged, or duplicate names
+  // (presets are deduped server-side, mirroring addName's client-side guard).
+  // The rename only propagates to the current game (onrenamed) once the preset
+  // save reached the server; on failure the local edit is rolled back so the
+  // list never shows a name that was never persisted.
+  async function commitEdit(index: number) {
+    if (editingIndex !== index) return;
+    const trimmed = editText.trim();
+    const oldName = names[index];
+    if (!trimmed || trimmed === oldName || names.includes(trimmed)) {
+      cancelEdit();
+      return;
+    }
+    names = names.map((n, i) => (i === index ? trimmed : n));
+    editingIndex = null;
+    editText = "";
+    const saved = await save();
+    if (saved) {
+      onrenamed?.(oldName, trimmed);
+    } else {
+      names = names.map((n) => (n === trimmed ? oldName : n));
+    }
   }
 
   function moveName(from: number, to: number) {
@@ -128,7 +174,46 @@
             class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-hover group"
           >
             <span class="w-5 text-xs text-muted text-center">{i + 1}</span>
-            <span class="flex-1 text-sm text-primary">{name}</span>
+            {#if editingIndex === i}
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                type="text"
+                bind:value={editText}
+                autofocus
+                onblur={() => commitEdit(i)}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitEdit(i);
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelEdit();
+                  }
+                }}
+                aria-label="Rename {name}"
+                class="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm text-primary outline-none focus:border-indigo-500"
+              />
+            {:else}
+              <span class="flex-1 text-sm text-primary">{name}</span>
+              <button
+                onclick={() => startEdit(i)}
+                class="rounded p-0.5 text-muted opacity-100 transition-opacity hover:text-indigo-500 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                aria-label="Rename {name}"
+              >
+                <svg
+                  class="h-3.5 w-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  ><path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  /></svg
+                >
+              </button>
+            {/if}
             <button
               onclick={() => moveName(i, i - 1)}
               disabled={i === 0}

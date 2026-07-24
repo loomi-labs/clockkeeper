@@ -44,6 +44,7 @@
     playerStatuses,
     helperContext,
     ondemonkill,
+    onstarpass,
   }: {
     game: Game;
     scriptCharacters?: Character[];
@@ -67,6 +68,7 @@
     playerStatuses?: ReadonlyMap<string, PlayerStatus>;
     helperContext?: NightHelperContext;
     ondemonkill?: (demonRoleId: string, victimRoleId: string) => void;
+    onstarpass?: () => void;
   } = $props();
 
   import { onDestroy } from "svelte";
@@ -636,6 +638,28 @@
     return playerStatuses.get(seat);
   }
 
+  // Feature D: strong, unmistakable row highlight for poisoned/drunk seats
+  // (thick coloured left border + tint + ring). Only for in-play, living
+  // entries, and suppressed while done — the green "done" left border and
+  // dead (dashed/greyed) styling must keep winning. Poisoned takes precedence
+  // over drunk when both apply.
+  function statusRowClass(
+    entry: NightEntry,
+    done: boolean,
+    dead: boolean,
+  ): string {
+    if (done || dead || !entry.inPlay) return "";
+    const status = statusForEntry(entry.id);
+    if (!status) return "";
+    if (status.poisoned) {
+      return "border-l-4 border-l-purple-500 bg-purple-50/70 ring-1 ring-purple-400/50 dark:bg-purple-950/30 dark:ring-purple-500/40";
+    }
+    if (status.drunk) {
+      return "border-l-4 border-l-amber-500 bg-amber-50/70 ring-1 ring-amber-400/50 dark:bg-amber-950/30 dark:ring-amber-500/40";
+    }
+    return "";
+  }
+
   function isKillableDemon(entry: NightEntry): boolean {
     return (
       !!ondemonkill &&
@@ -660,11 +684,22 @@
 
   const demonKillExclude = $derived.by(() => {
     if (!demonKillFor) return new Set<string>();
+    // The Imp killing itself is legal — it's the Star Pass trigger — so keep the
+    // Imp's own seat pickable. Any other demon can't target its own seat.
+    if (demonKillFor.entryId === "imp") return new Set<string>();
     const seat =
       helperContext?.playerIdForEntry(demonKillFor.entryId) ??
       demonKillFor.entryId;
     return new Set<string>([seat]);
   });
+
+  // Whether the given entry is the in-play Imp — surfaces a manual "Star pass"
+  // affordance so the flow is reachable outside the kill button.
+  function isStarPassImp(entry: NightEntry): boolean {
+    return (
+      !!onstarpass && !entry.isSpecial && entry.id === "imp" && entry.inPlay
+    );
+  }
 
   function openDemonKill(entry: NightEntry, button: HTMLElement) {
     const rect = button.getBoundingClientRect();
@@ -915,6 +950,14 @@
                         Add bluffs
                       </button>
                     {/if}
+                    {#if onshowcard}
+                      <button
+                        onclick={() => onshowcard?.("std:minions")}
+                        class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                      >
+                        Show card: Your Minions
+                      </button>
+                    {/if}
                   </div>
                 {:else if entry.id === "minioninfo" && onshowcard}
                   <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -1131,7 +1174,12 @@
                     'border-border')
                   : (unselectedColors[
                       effectiveTeam(entry.id, entry.team ?? 0)
-                    ] ?? 'border-border/50') + ' opacity-40 border-dashed'}"
+                    ] ?? 'border-border/50') +
+                    ' opacity-40 border-dashed'} {statusRowClass(
+                entry,
+                isDone,
+                entryIsDead,
+              )}"
               data-team={teamDataAttr[
                 effectiveTeam(entry.id, entry.team ?? 0)
               ] ?? ""}
@@ -1339,6 +1387,25 @@
                       />
                     </svg>
                     Kill…
+                  </button>
+                {/if}
+                {#if isStarPassImp(entry)}
+                  <button
+                    onclick={() => onstarpass?.()}
+                    class="flex items-center gap-1 rounded border border-indigo-300 px-1.5 py-1 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-400 dark:hover:bg-indigo-950/30"
+                    title="Star pass — a Minion becomes the new Imp"
+                    aria-label="Star pass from {entry.name}"
+                  >
+                    <svg
+                      class="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path
+                        d="M12 2l2.9 6.26L21.5 9l-5 4.87L17.8 21 12 17.27 6.2 21l1.3-7.13-5-4.87 6.6-.74L12 2z"
+                      />
+                    </svg>
+                    Star pass
                   </button>
                 {/if}
                 {#if ondeath && !entryIsDead}
@@ -1554,6 +1621,26 @@
           <path stroke-linecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
         </svg>
         Kill…
+      </button>
+    {/if}
+    {#if onstarpass && m.entryId === "imp" && m.entryInPlay}
+      <button
+        onclick={() => {
+          onstarpass?.();
+          closeOverflowMenu();
+        }}
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+      >
+        <svg
+          class="h-4 w-4 text-indigo-500"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path
+            d="M12 2l2.9 6.26L21.5 9l-5 4.87L17.8 21 12 17.27 6.2 21l1.3-7.13-5-4.87 6.6-.74L12 2z"
+          />
+        </svg>
+        Star pass
       </button>
     {/if}
     {#if ondeath && !m.entryIsDead}

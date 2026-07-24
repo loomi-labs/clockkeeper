@@ -45,6 +45,7 @@
   import NameChipsBar from "~/lib/components/NameChipsBar.svelte";
   import InfoCardPicker from "~/lib/components/InfoCardPicker.svelte";
   import InfoCardDisplay from "~/lib/components/InfoCardDisplay.svelte";
+  import StarPassPrompt from "~/lib/components/StarPassPrompt.svelte";
   import {
     getStartGameWarnings as computeStartGameWarnings,
     bluffCharactersInPlay,
@@ -56,6 +57,7 @@
     unassignName,
     assignInOrder,
     shuffled,
+    renameAssignedName,
   } from "~/lib/player-names";
   import {
     stableReminderIds,
@@ -336,6 +338,14 @@
   const nightPhase = $derived(viewingRound?.night);
   const dayPhase = $derived(viewingRound?.day);
   const isViewingCurrent = $derived(viewingRoundIndex === rounds.length - 1);
+
+  // The single active step (the server marks exactly one phase is_active). The
+  // day/night pair of a round advances step-wise, so this tells us whether the
+  // current round is presently on its Night or its Day.
+  const activePhase = $derived(
+    (game?.playState?.phases ?? []).find((p) => p.isActive),
+  );
+  const activeIsDay = $derived(activePhase?.type === PhaseType.DAY);
 
   // Dead characters per phase type.
   const nightDeadRoleIds = $derived(
@@ -665,6 +675,10 @@
         gameId: game.id,
         bluffIds,
       });
+      // Guard against a future regression where the RPC drops playState — keep
+      // the current one so the in-progress view doesn't blank out.
+      if (game?.playState && resp.game && !resp.game.playState)
+        resp.game.playState = game.playState;
       game = resp.game;
     } catch (err) {
       error = getErrorMessage(err, "Failed to update demon bluffs");
@@ -1036,6 +1050,20 @@
   // --- In-progress view toggle ---
   type InProgressView = "nightsheet" | "grimoire";
   let inProgressView = $state<InProgressView>("nightsheet");
+
+  // Auto-switch the in-progress view when the active STEP transitions: the Day
+  // step defaults to the grimoire (executions are recorded there via the death
+  // toggle), the Night step to the night sheet. Tracks the previous step so it
+  // fires only on a transition and never fights a manual toggle within a step.
+  let prevActiveIsDay = $state<boolean | undefined>(undefined);
+  $effect(() => {
+    const day = activeIsDay;
+    untrack(() => {
+      if (prevActiveIsDay === day) return;
+      prevActiveIsDay = day;
+      inProgressView = day ? "grimoire" : "nightsheet";
+    });
+  });
 
   // --- Grimoire state (persisted per game) ---
   let grimoirePositions = $state(new Map<string, { x: number; y: number }>());
@@ -1638,6 +1666,10 @@
   // Default orbit angle for auto-attached info tokens; matches the previous
   // "Attach tokens" behaviour and avoids the bag-sub token's 0.25π default.
   const INFO_ATTACH_ANGLE = Math.PI * 0.75;
+  // Orbit angle for tokens auto-attached by the reminder-token pickers (Fortune
+  // Teller Red Herring, Poisoner, Butler). Distinct from the bag-sub default
+  // (0.25π) and the first-night info default (0.75π) so tokens don't stack.
+  const HELPER_TOKEN_ANGLE = Math.PI * 1.25;
 
   // Resolve a reminder token's STABLE id from (characterId, text). Shared by the
   // pick derivation and the attach/detach writer so both agree on the id.
@@ -1761,6 +1793,29 @@
       infoPicks,
       oninfopick: setInfoPick,
       onshowcard: (card: DisplayCard) => showInfoCard(card),
+      // Reminder-token pickers (Fortune Teller Red Herring, Poisoner, Butler):
+      // picking IS attaching the token, so it stays in sync with manual
+      // grimoire edits and persists across reloads.
+      onattachtoken: (
+        characterId: string,
+        tokenText: string,
+        playerId: string | undefined,
+      ) => {
+        const sid = stableIdForToken(characterId, tokenText);
+        if (!sid) return;
+        if (playerId) handleReminderAttach(sid, playerId, HELPER_TOKEN_ANGLE);
+        else handleReminderDetach(sid);
+      },
+      tokenHolder: (characterId: string, tokenText: string) => {
+        const sid = stableIdForToken(characterId, tokenText);
+        return sid ? reminderAttachments.get(sid)?.playerId : undefined;
+      },
+      scriptCharacters: (script?.characters ?? []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        team: c.team,
+        edition: c.edition,
+      })),
     };
   });
 
@@ -1770,6 +1825,39 @@
     if (!game || !nightPhase) return;
     await doRecordDeath(victimRoleId, nightPhase.id, true, DeathCause.DEMON);
     await toggleNightAction(demonRoleId, true);
+    // Imp self-kill triggers a Star Pass — a Minion becomes the new Imp.
+    if (victimRoleId === demonRoleId && demonRoleId === "imp") openStarPass();
+  }
+
+  // --- Star pass (Imp self-kill) ---
+  let starPassOpen = $state(false);
+
+  // Alive, in-play Minions by their REAL role — candidates to become the Imp.
+  const starPassMinions = $derived(
+    [...nightHelperPlayers.values()].filter(
+      (p) => p.team === Team.MINION && !p.isDead,
+    ),
+  );
+
+  function openStarPass() {
+    starPassOpen = true;
+  }
+
+  async function doStarPass(minionRoleId: string) {
+    if (!game) return;
+    starPassOpen = false;
+    error = "";
+    // Cancel any pending debounced grimoire save so a stale full-map save can't
+    // clobber the server-side seat remap (mirrors the bag-sub reassign path).
+    clearTimeout(grimoireSaveTimeout);
+    try {
+      const resp = await client.starPass({ gameId: game.id, minionRoleId });
+      // Re-init local grimoire maps from the server-remapped state.
+      grimoireInitialized = false;
+      game = resp.game;
+    } catch (err) {
+      error = getErrorMessage(err, "Failed to perform star pass");
+    }
   }
 
   // --- Info cards (Feature C) ---
@@ -2253,6 +2341,7 @@
           {isFullscreen}
           ontogglefullscreen={toggleFullscreen}
           onshowcards={() => (infoCardPickerOpen = true)}
+          dayActive={activeIsDay}
         />
 
         {#if inProgressView === "nightsheet"}
@@ -2279,6 +2368,7 @@
             {playerStatuses}
             helperContext={nightHelperContext}
             ondemonkill={handleDemonKill}
+            onstarpass={openStarPass}
           />
 
           <!-- Death tracker -->
@@ -2302,6 +2392,28 @@
               onclose={() => (showNameChips = false)}
               selectedName={selectedChipName}
             />
+          {/if}
+          <!-- Active-day hint: executions are recorded via the grimoire skull. -->
+          {#if activeIsDay && isViewingCurrent}
+            <div
+              class="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              <svg
+                class="h-4 w-4 shrink-0 text-amber-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path
+                  stroke-linecap="round"
+                  d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+                />
+              </svg>
+              Day {viewingRound?.roundNumber ?? 1} — tap a player's skull in the grimoire
+              to record an execution.
+            </div>
           {/if}
           <!-- Grimoire view -->
           <div
@@ -2750,6 +2862,10 @@
         loadPresets();
       }}
       onassign={handleAssignPresets}
+      onrenamed={(o, n) => {
+        grimoireNames = renameAssignedName(grimoireNames, o, n);
+        saveGrimoireState();
+      }}
     />
   {/if}
 
@@ -2768,6 +2884,15 @@
       card={activeInfoCard.card}
       character={activeInfoCard.character}
       onclose={() => (activeInfoCard = null)}
+    />
+  {/if}
+
+  <!-- Star pass prompt (Imp self-kill → promote a Minion to Imp) -->
+  {#if starPassOpen}
+    <StarPassPrompt
+      minions={starPassMinions}
+      onpick={doStarPass}
+      onskip={() => (starPassOpen = false)}
     />
   {/if}
 

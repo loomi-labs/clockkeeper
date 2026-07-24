@@ -232,7 +232,11 @@ func TestReassignBagSubstitution_FullRemap(t *testing.T) {
 	setBagSub(t, handler, ownerID, gameID, &clockkeeperv1.BagSubstitution{CausedById: "drunk", CharacterId: "fortuneteller"})
 
 	// Start and advance to round 2 (phases: r1 night, r1 day, r2 night, r2 day).
+	// AdvancePhase is step-wise (night -> day -> next round's night), so
+	// reaching round 2 takes two advances.
 	_, err := handler.StartGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.StartGameRequest{GameId: gameID}))
+	require.NoError(t, err)
+	_, err = handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: gameID}))
 	require.NoError(t, err)
 	_, err = handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: gameID}))
 	require.NoError(t, err)
@@ -296,13 +300,13 @@ func TestReassignBagSubstitution_FullRemap(t *testing.T) {
 	_, err = handler.UpdateGrimoireState(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGrimoireStateRequest{
 		GameId: gameID,
 		Positions: map[string]*clockkeeperv1.Position{
-			"drunk":                  {X: 10, Y: 10},
-			"washerwoman":            {X: 20, Y: 20},
-			"chef":                   {X: 30, Y: 30},
-			"reminder-drunk-0":       {X: 1, Y: 1},
-			"reminder-washerwoman-0": {X: 2, Y: 2},
-			"reminder-washerwoman-1": {X: 3, Y: 3},
-			"bagsub-reminder-drunk":  {X: 4, Y: 4},
+			"drunk":                               {X: 10, Y: 10},
+			"washerwoman":                         {X: 20, Y: 20},
+			"chef":                                {X: 30, Y: 30},
+			"reminder-drunk-0":                    {X: 1, Y: 1},
+			"reminder-washerwoman-0":              {X: 2, Y: 2},
+			"reminder-washerwoman-1":              {X: 3, Y: 3},
+			"bagsub-reminder-drunk":               {X: 4, Y: 4},
 			"reminder-" + strconv.Itoa(legacyIdx): {X: 99, Y: 99}, // legacy positional key
 		},
 		PlayerNames: map[string]string{"drunk": "Alice", "washerwoman": "Bob", "chef": "Carol"},
