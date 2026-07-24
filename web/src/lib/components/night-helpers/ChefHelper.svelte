@@ -1,10 +1,36 @@
 <script lang="ts">
-  import { chefRangeCauses, computeChef } from "~/lib/night-helpers/helpers";
+  import {
+    chefPairs,
+    chefRangeCauses,
+    computeChef,
+    RECLUSE_ID,
+    SPY_ID,
+    type ChefPair,
+    type HelperPlayer,
+  } from "~/lib/night-helpers/helpers";
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
 
   let { entryId, ctx }: { entryId: string; ctx: NightHelperContext } = $props();
 
   const result = $derived(computeChef(ctx.order, ctx.players));
+  const pairs = $derived(chefPairs(ctx.order, ctx.players));
+
+  const playerLabel = (p: HelperPlayer) => p.name || p.characterName;
+
+  /** Suffix for an ambiguous pair, naming which registration is assumed. */
+  function ambiguousSuffix(pair: ChefPair): string {
+    const isAmbiguous = (p: HelperPlayer) =>
+      p.id === RECLUSE_ID || p.id === SPY_ID;
+    const recluse =
+      (isAmbiguous(pair.a) && pair.a.id === RECLUSE_ID) ||
+      (isAmbiguous(pair.b) && pair.b.id === RECLUSE_ID);
+    const spy =
+      (isAmbiguous(pair.a) && pair.a.id === SPY_ID) ||
+      (isAmbiguous(pair.b) && pair.b.id === SPY_ID);
+    if (recluse && spy) return " (if Recluse & Spy register evil)";
+    if (spy) return " (if Spy registers evil)";
+    return " (if Recluse registers evil)";
+  }
 
   // Only report a Recluse/Spy that actually widens the range.
   const causes = $derived(
@@ -33,6 +59,17 @@
     >
   {/if}
 </div>
+{#if pairs.length > 0}
+  <ul class="mt-0.5 space-y-0.5 text-[11px] text-muted">
+    {#each pairs as pair (pair.a.id + "+" + pair.b.id)}
+      <li>
+        {playerLabel(pair.a)} + {playerLabel(pair.b)}{pair.ambiguous
+          ? ambiguousSuffix(pair)
+          : ""}
+      </li>
+    {/each}
+  </ul>
+{/if}
 {#if causes.recluse || causes.spy}
   <div class="mt-0.5 text-[11px] text-muted">
     {#if causes.recluse}<span>Recluse may register as evil</span>{/if}

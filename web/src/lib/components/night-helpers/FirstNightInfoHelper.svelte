@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
+  import type { HelperPlayer } from "~/lib/night-helpers/helpers";
   import { firstNightInfoCard, noOutsidersCard } from "~/lib/info-cards";
   import { iconSuffix } from "~/lib/team-styles";
   import PlayerPickerPopover from "./PlayerPickerPopover.svelte";
@@ -18,7 +19,6 @@
     librarian: { team: Team.OUTSIDER, teamLabel: "Outsider" },
     investigator: { team: Team.MINION, teamLabel: "Minion" },
   };
-  const WRONG_TEXT = "Wrong";
 
   const cfg = $derived(CONFIG[entryId]);
   const isLibrarian = $derived(entryId === "librarian");
@@ -47,25 +47,36 @@
   );
   const impaired = $derived(!!status && (status.poisoned || status.drunk));
 
+  // The shown character is whatever the picked "right" seat DISPLAYS — bag-sub
+  // aware and NOT team-filtered. A drunk/poisoned info character can legitimately
+  // be shown any character, so we never restrict the pick by team.
   const shownChar = $derived(
     rightId ? ctx.displayedCharacterOf?.(rightId) : undefined,
   );
 
-  // Right candidates: seats (alive or dead) whose DISPLAYED team matches the
-  // required team, excluding the helper's own seat.
+  // Both slots list ALL seats (alive or dead), excluding only the helper's own
+  // seat and the other slot's current pick. No team filtering — see above.
   const rightCandidates = $derived(
-    [...ctx.players.values()].filter((p) => {
-      if (p.id === helperPlayerId) return false;
-      const dc = ctx.displayedCharacterOf?.(p.id);
-      return dc?.team === cfg?.team;
-    }),
+    [...ctx.players.values()].filter(
+      (p) => p.id !== helperPlayerId && p.id !== wrongId,
+    ),
   );
-  // Wrong candidates: any other seat except the right pick and the helper's own.
   const wrongCandidates = $derived(
     [...ctx.players.values()].filter(
       (p) => p.id !== helperPlayerId && p.id !== rightId,
     ),
   );
+
+  // "Shows" slot annotation: green badge with the required team's label on
+  // seats whose DISPLAYED team matches, muted "not a {team}" otherwise. Advisory
+  // only — every seat stays pickable.
+  function annotateRight(p: HelperPlayer) {
+    if (!cfg) return undefined;
+    const dc = ctx.displayedCharacterOf?.(p.id);
+    return dc?.team === cfg.team
+      ? { label: cfg.teamLabel, tone: "ok" as const }
+      : { label: `not a ${cfg.teamLabel}`, tone: "muted" as const };
+  }
 
   let picker = $state<{
     slot: "right" | "wrong";
@@ -105,24 +116,13 @@
     ctx.oninfopick?.(entryId, next);
   }
 
-  function attachTokens() {
-    if (!cfg || !rightId || !wrongId) return;
-    ctx.onattachreminder?.(entryId, cfg.teamLabel, rightId);
-    ctx.onattachreminder?.(entryId, WRONG_TEXT, wrongId);
-  }
-
   function showCard() {
     if (noOutsiders) {
       ctx.onshowcard?.(noOutsidersCard());
       return;
     }
     if (!shownChar || !rightId || !wrongId) return;
-    ctx.onshowcard?.(
-      firstNightInfoCard(shownChar, [
-        playerName(rightId) ?? shownChar.name,
-        playerName(wrongId) ?? "",
-      ]),
-    );
+    ctx.onshowcard?.(firstNightInfoCard(shownChar));
   }
 </script>
 
@@ -248,13 +248,6 @@
       <div class="mt-2 flex flex-wrap gap-2">
         <button
           type="button"
-          onclick={attachTokens}
-          class="rounded border border-border px-2 py-1 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
-        >
-          Attach tokens
-        </button>
-        <button
-          type="button"
           onclick={showCard}
           class="rounded border border-purple-400 px-2 py-1 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-950/40"
         >
@@ -281,10 +274,11 @@
   {#if picker}
     <PlayerPickerPopover
       title={picker.slot === "right"
-        ? `${cfg.teamLabel} player`
+        ? `Shows the ${cfg.teamLabel}`
         : "Wrong player"}
       players={picker.slot === "right" ? rightCandidates : wrongCandidates}
       anchor={picker.anchor}
+      annotate={picker.slot === "right" ? annotateRight : undefined}
       onpick={(id) => setSlot(picker!.slot, id)}
       onclose={() => (picker = null)}
     />

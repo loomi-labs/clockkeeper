@@ -18,6 +18,7 @@
     travellerAlignment,
     onalignmentchange,
     bagSubstitution,
+    bagSubWarning = false,
     onbagsubchange,
     onpreview,
   }: {
@@ -30,6 +31,8 @@
     bagSubstitution?:
       | { characterId: string; characterName: string }
       | undefined;
+    /** Amber-flag the shown-token row: its character is also in play. */
+    bagSubWarning?: boolean;
     onbagsubchange?: () => void;
     onpreview?: () => void;
   } = $props();
@@ -146,13 +149,17 @@
             onbagsubchange?.();
           }}
           class="mt-1.5 flex w-full items-center gap-1.5 rounded border px-2 py-1 text-left text-xs transition-colors {bagSubstitution.characterId
-            ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50'
+            ? bagSubWarning
+              ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/50'
+              : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50'
             : 'border-dashed border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 dark:border-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-300 dark:hover:bg-yellow-900/40'}"
         >
           {#if bagSubstitution.characterId}
             <span class="font-medium">Appears as:</span>
             {bagSubstitution.characterName}
-            <span class="ml-auto text-[10px] opacity-60">Change</span>
+            <span class="ml-auto text-[10px] opacity-60"
+              >{bagSubWarning ? "In play!" : "Change"}</span
+            >
           {:else}
             <svg
               class="h-3 w-3 shrink-0"

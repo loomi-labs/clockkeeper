@@ -16,26 +16,43 @@ export interface CurrentDistribution {
 /** Player count at/above which demon bluffs are dealt. */
 const BLUFF_PLAYER_GATE = 7;
 
+/** Every character id in play — selected roles, extras, and travellers. */
+export function inPlayCharacterIds(game: Game): Set<string> {
+  return new Set<string>([
+    ...(game.selectedRoleIds ?? []),
+    ...(game.extraCharacterIds ?? []),
+    ...(game.selectedTravellerIds ?? []),
+  ]);
+}
+
 /**
  * Demon bluff characters that are actually in play — selected as a script role,
  * an extra character, or a traveller. Advisory only: a storyteller may
  * knowingly bluff an in-play character (Pit-Hag, etc.).
  */
 export function bluffCharactersInPlay(game: Game): Character[] {
-  const inPlay = new Set<string>([
-    ...(game.selectedRoleIds ?? []),
-    ...(game.extraCharacterIds ?? []),
-    ...(game.selectedTravellerIds ?? []),
-  ]);
+  const inPlay = inPlayCharacterIds(game);
   return (game.selectedBluffCharacters ?? []).filter((c) => inPlay.has(c.id));
+}
+
+/**
+ * Demon bluff characters that are some bag substitution's shown token (e.g.
+ * the character the Drunk believes they are). Advisory: that character acts
+ * "in play" from the players' perspective, so it makes a poor bluff.
+ */
+export function bluffCharactersShownByBagSubs(game: Game): Character[] {
+  const shown = new Set(
+    (game.bagSubstitutions ?? []).map((bs) => bs.characterId).filter(Boolean),
+  );
+  return (game.selectedBluffCharacters ?? []).filter((c) => shown.has(c.id));
 }
 
 /**
  * Compute the advisory warnings shown before starting a game.
  *
  * Covers: unpicked bag-substitute tokens, missing demon bluffs (7+ players),
- * demon bluffs that are actually in play, and role-count / distribution
- * mismatches against the expected distribution.
+ * demon bluffs that are actually in play or shown by a bag substitution, and
+ * role-count / distribution mismatches against the expected distribution.
  */
 export function getStartGameWarnings(
   game: Game,
@@ -44,9 +61,16 @@ export function getStartGameWarnings(
   const warnings: string[] = [];
 
   // Bag substitutions (e.g. the Drunk hasn't picked a townsfolk token).
+  const inPlay = inPlayCharacterIds(game);
   for (const bs of game.bagSubstitutions ?? []) {
     if (!bs.characterId) {
       warnings.push(`${bs.causedByName} has not picked a substitute token.`);
+    } else if (inPlay.has(bs.characterId)) {
+      // The shown token doubles up: the same character is a real role AND the
+      // Drunk's shown token, so it would appear twice in play.
+      warnings.push(
+        `The ${bs.causedByName}'s shown token (${bs.characterName}) is also in play.`,
+      );
     }
   }
 
@@ -61,6 +85,16 @@ export function getStartGameWarnings(
   // Bluffs that are actually in play.
   for (const c of bluffCharactersInPlay(game)) {
     warnings.push(`Demon bluff ${c.name} is in play.`);
+  }
+
+  // Bluffs that are a bag substitution's shown token (e.g. the Drunk's).
+  for (const c of bluffCharactersShownByBagSubs(game)) {
+    const bs = (game.bagSubstitutions ?? []).find(
+      (b) => b.characterId === c.id,
+    );
+    warnings.push(
+      `Demon bluff ${c.name} is the ${bs?.causedByName ?? "Drunk"}'s shown token.`,
+    );
   }
 
   // Role count vs. player count.

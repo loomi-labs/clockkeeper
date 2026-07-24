@@ -172,15 +172,17 @@ describe("customCardToDisplay", () => {
 });
 
 describe("firstNightInfoCard", () => {
-  it("builds the Washerwoman-style card with an uppercase title", () => {
-    const card = firstNightInfoCard(
-      { id: "empath", name: "Empath", edition: "tb", team: Team.TOWNSFOLK },
-      ["Alice", "Bob"],
-    );
+  it("builds the Washerwoman-style card with an uppercase title and no body", () => {
+    const card = firstNightInfoCard({
+      id: "empath",
+      name: "Empath",
+      edition: "tb",
+      team: Team.TOWNSFOLK,
+    });
     expect(card.id).toBe("dyn:firstnight-empath");
     expect(card.title).toBe("ONE OF THESE PLAYERS IS THE EMPATH");
-    expect(card.body).toContain("Alice");
-    expect(card.body).toContain("Bob");
+    // No player names on the card — the body is empty.
+    expect(card.body).toBe("");
     expect(card.accent).toBe("purple");
     expect(card.kind).toBe("standard");
     expect(card.characters).toEqual([
@@ -189,15 +191,19 @@ describe("firstNightInfoCard", () => {
   });
 
   it("derives the icon suffix from the shown character's team", () => {
-    const outsider = firstNightInfoCard(
-      { id: "butler", name: "Butler", edition: "tb", team: Team.OUTSIDER },
-      ["X", "Y"],
-    );
+    const outsider = firstNightInfoCard({
+      id: "butler",
+      name: "Butler",
+      edition: "tb",
+      team: Team.OUTSIDER,
+    });
     expect(outsider.characters[0].iconSuffix).toBe("_g");
-    const minion = firstNightInfoCard(
-      { id: "spy", name: "Spy", edition: "tb", team: Team.MINION },
-      ["X", "Y"],
-    );
+    const minion = firstNightInfoCard({
+      id: "spy",
+      name: "Spy",
+      edition: "tb",
+      team: Team.MINION,
+    });
     expect(minion.characters[0].iconSuffix).toBe("_e");
   });
 });

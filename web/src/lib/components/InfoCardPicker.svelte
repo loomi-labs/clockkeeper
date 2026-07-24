@@ -43,10 +43,12 @@
   let cardsError = $state("");
 
   // View state: the modal shows one of these at a time.
+  // In-play pick step for parameterized cards (Washerwoman etc.).
   let pickForCard = $state<DisplayCard | null>(null);
+  // Full-script pick step for `pickFromAllCharacters` cards (std:character) —
+  // uses the shared CharacterPickerModal (search + edition filter).
+  let charTokenCard = $state<DisplayCard | null>(null);
   let formOpen = $state(false);
-  // Search text for the all-characters pick step (std:character).
-  let charSearch = $state("");
 
   // Inline edit/create form.
   let formId = $state<bigint | null>(null);
@@ -92,14 +94,18 @@
   }
 
   async function tapStandard(card: DisplayCard) {
-    if (card.needsCharacterPick) {
-      charSearch = "";
-      // The character-token card picks from the full script, not just in-play
-      // characters — reuse the cached list fetched for the custom-card editor.
-      if (card.pickFromAllCharacters) await ensureCharacters();
-      pickForCard = card;
-    } else {
+    if (!card.needsCharacterPick) {
       onshow(card);
+      return;
+    }
+    if (card.pickFromAllCharacters) {
+      // The character-token card picks from the full script — reuse the shared
+      // CharacterPickerModal (search + edition filter) over the cached list.
+      await ensureCharacters();
+      charTokenCard = card;
+    } else {
+      // Other parameterized cards pick from the in-play characters only.
+      pickForCard = card;
     }
   }
 
@@ -108,27 +114,32 @@
     return card.id === "std:character" ? "Character token" : card.title;
   }
 
-  // Candidate characters for the pick step: all script characters (filtered by
-  // search) for `pickFromAllCharacters`, otherwise the in-play characters.
-  const pickCandidates = $derived.by<Character[]>(() => {
-    if (!pickForCard) return [];
-    if (!pickForCard.pickFromAllCharacters) return inPlayCharacters;
-    const q = charSearch.trim().toLowerCase();
-    return q
-      ? allCharacters.filter((c) => c.name.toLowerCase().includes(q))
-      : allCharacters;
-  });
+  // Candidate characters for the in-play pick step.
+  const pickCandidates = $derived<Character[]>(
+    pickForCard ? inPlayCharacters : [],
+  );
 
-  function pickCharacter(c: Character) {
-    const card = pickForCard;
-    if (!card) return;
-    pickForCard = null;
+  function showCardWithCharacter(card: DisplayCard, c: Character) {
     onshow(card, {
       id: c.id,
       name: c.name,
       edition: c.edition,
       iconSuffix: iconSuffix(c.team),
     });
+  }
+
+  function pickCharacter(c: Character) {
+    const card = pickForCard;
+    if (!card) return;
+    pickForCard = null;
+    showCardWithCharacter(card, c);
+  }
+
+  function pickTokenCharacter(c: Character) {
+    const card = charTokenCard;
+    if (!card) return;
+    charTokenCard = null;
+    showCardWithCharacter(card, c);
   }
 
   function tapCustom(card: InfoCard) {
@@ -279,21 +290,9 @@
             >{tileLabel(pickForCard)}</span
           >".
         </p>
-        {#if pickForCard.pickFromAllCharacters}
-          <input
-            type="text"
-            bind:value={charSearch}
-            placeholder="Search characters…"
-            class="mb-3 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-primary outline-none focus:border-indigo-500"
-          />
-        {/if}
-        {#if loadingChars}
-          <p class="py-6 text-center text-sm text-muted">Loading characters…</p>
-        {:else if pickCandidates.length === 0}
+        {#if pickCandidates.length === 0}
           <p class="py-6 text-center text-sm text-muted">
-            {pickForCard.pickFromAllCharacters
-              ? "No characters match."
-              : "No characters are in play yet."}
+            No characters are in play yet.
           </p>
         {:else}
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -560,6 +559,17 @@
     </div>
   </div>
 </div>
+
+{#if charTokenCard}
+  <CharacterPickerModal
+    title="Choose a character"
+    characters={allCharacters}
+    selectedIds={new Set()}
+    onselect={pickTokenCharacter}
+    ondeselect={() => {}}
+    onclose={() => (charTokenCard = null)}
+  />
+{/if}
 
 {#if charPickerOpen}
   <CharacterPickerModal

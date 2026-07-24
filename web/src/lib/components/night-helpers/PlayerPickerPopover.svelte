@@ -9,6 +9,7 @@
     anchor,
     onpick,
     onclose,
+    annotate,
   }: {
     title: string;
     players: HelperPlayer[];
@@ -16,6 +17,15 @@
     anchor: { top: number; left?: number; right?: number };
     onpick: (id: string) => void;
     onclose: () => void;
+    /**
+     * Optional per-row badge. Returning `undefined` renders no badge for that
+     * row. `tone: "ok"` reads as a match (green), `"muted"` as a non-match
+     * (gray). Purely advisory — every row stays pickable (a misled info
+     * character can be shown anything).
+     */
+    annotate?: (
+      p: HelperPlayer,
+    ) => { label: string; tone: "ok" | "muted" } | undefined;
   } = $props();
 
   const VIEWPORT_MARGIN = 8;
@@ -135,6 +145,19 @@
             {p.characterName}
           </span>
         </span>
+        {#if annotate}
+          {@const badge = annotate(p)}
+          {#if badge}
+            <span
+              class="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium {badge.tone ===
+              'ok'
+                ? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300'
+                : 'bg-hover text-muted'}"
+            >
+              {badge.label}
+            </span>
+          {/if}
+        {/if}
         {#if p.isDead}
           <span class="shrink-0 text-xs text-red-500 dark:text-red-400"
             >&#128128;</span

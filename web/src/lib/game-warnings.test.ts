@@ -10,6 +10,7 @@ import {
 import {
   getStartGameWarnings,
   bluffCharactersInPlay,
+  bluffCharactersShownByBagSubs,
   type CurrentDistribution,
 } from "./game-warnings";
 
@@ -51,6 +52,42 @@ describe("bluffCharactersInPlay", () => {
       selectedBluffCharacters: [char("virgin", "Virgin")],
     });
     expect(bluffCharactersInPlay(game)).toEqual([]);
+  });
+});
+
+describe("bluffCharactersShownByBagSubs", () => {
+  it("returns bluffs that are a bag substitution's shown token", () => {
+    const game = makeGame({
+      bagSubstitutions: [
+        {
+          causedById: "drunk",
+          causedByName: "Drunk",
+          characterId: "chef",
+          characterName: "Chef",
+          team: "townsfolk",
+        },
+      ],
+      selectedBluffCharacters: [char("chef", "Chef"), char("virgin", "Virgin")],
+    });
+    expect(bluffCharactersShownByBagSubs(game).map((c) => c.id)).toEqual([
+      "chef",
+    ]);
+  });
+
+  it("ignores substitutions without a picked token", () => {
+    const game = makeGame({
+      bagSubstitutions: [
+        {
+          causedById: "drunk",
+          causedByName: "Drunk",
+          characterId: "",
+          characterName: "",
+          team: "townsfolk",
+        },
+      ],
+      selectedBluffCharacters: [char("chef", "Chef")],
+    });
+    expect(bluffCharactersShownByBagSubs(game)).toEqual([]);
   });
 });
 
@@ -139,5 +176,61 @@ describe("getStartGameWarnings", () => {
     });
     const warnings = getStartGameWarnings(game, matchingDist);
     expect(warnings).toContain("Drunk has not picked a substitute token.");
+  });
+
+  it("warns when the Drunk's shown token is also in play", () => {
+    const game = makeGame({
+      playerCount: 2,
+      selectedRoleIds: ["chef", "imp"],
+      bagSubstitutions: [
+        {
+          causedById: "drunk",
+          causedByName: "Drunk",
+          characterId: "chef",
+          characterName: "Chef",
+        },
+      ],
+    });
+    const warnings = getStartGameWarnings(game, matchingDist);
+    expect(warnings).toContain(
+      "The Drunk's shown token (Chef) is also in play.",
+    );
+  });
+
+  it("warns when a demon bluff is the Drunk's shown token", () => {
+    const game = makeGame({
+      playerCount: 5,
+      selectedRoleIds: ["drunk"],
+      bagSubstitutions: [
+        {
+          causedById: "drunk",
+          causedByName: "Drunk",
+          characterId: "chef",
+          characterName: "Chef",
+          team: "townsfolk",
+        },
+      ],
+      selectedBluffCharacters: [char("chef", "Chef")],
+      selectedBluffIds: ["chef"],
+    });
+    const warnings = getStartGameWarnings(game, matchingDist);
+    expect(warnings).toContain("Demon bluff Chef is the Drunk's shown token.");
+  });
+
+  it("does not warn when the shown token is not in play", () => {
+    const game = makeGame({
+      playerCount: 2,
+      selectedRoleIds: ["washerwoman", "imp"],
+      bagSubstitutions: [
+        {
+          causedById: "drunk",
+          causedByName: "Drunk",
+          characterId: "chef",
+          characterName: "Chef",
+        },
+      ],
+    });
+    const warnings = getStartGameWarnings(game, matchingDist);
+    expect(warnings.some((w) => w.includes("shown token"))).toBe(false);
   });
 });

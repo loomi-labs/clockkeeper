@@ -240,19 +240,22 @@ export function generateStandardCards(game: Game): DisplayCard[] {
 }
 
 /**
- * Dynamic first-night "1 of 2 players is X" card (Washerwoman / Librarian /
- * Investigator). Shows the revealed character's icon above the two candidate
- * player names — the shown character is the DISPLAYED character of the "right"
- * seat (bag-sub aware), never a separate pick.
+ * Dynamic first-night "one of these players is X" card (Washerwoman / Librarian
+ * / Investigator). Shows the revealed character's icon under an uppercase title
+ * — no player names at all (the Storyteller points at the two seats in person).
+ * The shown character is the DISPLAYED character of the picked "right" seat
+ * (bag-sub aware), whatever that seat's team.
  */
-export function firstNightInfoCard(
-  shownCharacter: { id: string; name: string; edition: string; team: Team },
-  playerNames: [string, string],
-): DisplayCard {
+export function firstNightInfoCard(shownCharacter: {
+  id: string;
+  name: string;
+  edition: string;
+  team: Team;
+}): DisplayCard {
   return {
     id: `dyn:firstnight-${shownCharacter.id}`,
     title: `ONE OF THESE PLAYERS IS THE ${shownCharacter.name.toUpperCase()}`,
-    body: `${playerNames[0]}   •   ${playerNames[1]}`,
+    body: "",
     characters: [
       {
         id: shownCharacter.id,

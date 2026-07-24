@@ -6,12 +6,23 @@
 
 import { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 
-export type BagSubVerdict = "ok" | "self" | "not-in-play" | "wrong-team";
+export type BagSubVerdict =
+  | "ok"
+  | "self"
+  | "not-in-play"
+  | "wrong-team"
+  | "shown-in-play";
 
 /**
  * Decides whether the bag-sub token may be reassigned onto `targetId`.
  *
- * - "self": dropped back on the seat that already causes the substitution.
+ * - "self": dropped back on the seat that already causes the substitution
+ *   (a harmless visual re-attach — allowed even when the shown token is in
+ *   play, so the token can always be repositioned).
+ * - "shown-in-play": the substitution's shown character (`shownCharacterId`) is
+ *   itself a selected role, so the shown token would double up in play. The
+ *   backend rejects the reassignment with `[failed_precondition]`; catching it
+ *   here lets us show a friendly hint instead of the raw error toast.
  * - "not-in-play": target role isn't among the selected roles (e.g. a
  *   traveller seat) so it cannot receive the substitution.
  * - "wrong-team": target's real team differs from the required team (the
@@ -25,8 +36,11 @@ export function bagSubDropTarget(
   selectedRoleIds: ReadonlySet<string>,
   teamById: (id: string) => Team | undefined,
   requiredTeam: Team,
+  shownCharacterId?: string,
 ): BagSubVerdict {
   if (targetId === causedById) return "self";
+  if (shownCharacterId && selectedRoleIds.has(shownCharacterId))
+    return "shown-in-play";
   if (!selectedRoleIds.has(targetId)) return "not-in-play";
   if (teamById(targetId) !== requiredTeam) return "wrong-team";
   return "ok";
@@ -41,8 +55,11 @@ export function bagSubDropHint(
   verdict: BagSubVerdict,
   causedByName: string,
   requiredTeamLabel: string,
+  shownName?: string,
 ): string {
   switch (verdict) {
+    case "shown-in-play":
+      return `Can't move the ${causedByName} - their shown token (${shownName ?? "their shown character"}) is also in play. Pick a different shown token first.`;
     case "wrong-team":
       return `The ${causedByName} must think they're a ${requiredTeamLabel} — drop the token on a ${requiredTeamLabel} seat.`;
     case "not-in-play":

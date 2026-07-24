@@ -48,6 +48,8 @@
   import {
     getStartGameWarnings as computeStartGameWarnings,
     bluffCharactersInPlay,
+    bluffCharactersShownByBagSubs,
+    inPlayCharacterIds,
   } from "~/lib/game-warnings";
   import {
     assignNameInMap,
@@ -190,6 +192,22 @@
       });
     }
     return map;
+  });
+
+  // Bag substitutions whose shown token is ALSO a role in play (the "two Chefs"
+  // collision) — keyed by caused_by_id, used to amber-flag the affected row.
+  const bagSubCollisions = $derived.by(() => {
+    const set = new Set<string>();
+    if (!game) return set;
+    const inPlay = new Set([
+      ...(game.selectedRoleIds ?? []),
+      ...(game.extraCharacterIds ?? []),
+      ...(game.selectedTravellerIds ?? []),
+    ]);
+    for (const bs of game.bagSubstitutions ?? []) {
+      if (bs.characterId && inPlay.has(bs.characterId)) set.add(bs.causedById);
+    }
+    return set;
   });
 
   const fabledCharacters = $derived(
@@ -418,6 +436,36 @@
     }
   }
 
+  // If the added character equals a bag substitution's shown token, clear that
+  // token so the shown character can't double up in play (a "two Chefs" state).
+  // Setup only — the RPC is setup-gated; in progress the drag hint + start
+  // warning cover it. Runs after the add so `game` already reflects the new role.
+  async function clearCollidingBagSub(addedId: string) {
+    if (!game || !isSetup) return;
+    const subs = game.bagSubstitutions ?? [];
+    if (!subs.some((bs) => bs.characterId === addedId)) return;
+    const updated = subs.map((bs) =>
+      bs.characterId === addedId
+        ? { ...bs, characterId: "", characterName: "" }
+        : bs,
+    );
+    try {
+      const resp = await client.updateBagSubstitutions({
+        gameId: game.id,
+        bagSubstitutions: updated,
+      });
+      game = resp.game;
+      const name = characterById.get(addedId)?.name ?? addedId;
+      const causedByName =
+        subs.find((bs) => bs.characterId === addedId)?.causedByName ?? "Drunk";
+      showSetupHint(
+        `${name} was the ${causedByName}'s shown token — pick a new token for the ${causedByName}.`,
+      );
+    } catch (err) {
+      error = getErrorMessage(err, "Failed to update bag substitution");
+    }
+  }
+
   async function toggleRole(id: string) {
     if (!game || (!isSetup && !isInProgress)) return;
     error = "";
@@ -438,15 +486,17 @@
     }
 
     // Otherwise toggle via the normal roles API.
-    const newIds = selectedRoleIdSet.has(id)
-      ? game.selectedRoleIds.filter((rid) => rid !== id)
-      : [...game.selectedRoleIds, id];
+    const isAdding = !selectedRoleIdSet.has(id);
+    const newIds = isAdding
+      ? [...game.selectedRoleIds, id]
+      : game.selectedRoleIds.filter((rid) => rid !== id);
     try {
       const resp = await client.updateGameRoles({
         gameId: game.id,
         selectedRoleIds: newIds,
       });
       game = resp.game;
+      if (isAdding) await clearCollidingBagSub(id);
     } catch (err) {
       error = getErrorMessage(err, "Failed to update roles");
     }
@@ -477,6 +527,7 @@
         extraCharacterIds: newIds,
       });
       game = resp.game;
+      await clearCollidingBagSub(char.id);
     } catch (err) {
       error = getErrorMessage(err, "Failed to add character");
     }
@@ -574,6 +625,11 @@
       ...(game.selectedRoleIds ?? []),
       ...(game.extraCharacterIds ?? []),
     ]);
+    // A bag substitution's shown token (the character the Drunk believes they
+    // are) acts "in play" from the players' perspective — never re-roll it in.
+    for (const bs of game.bagSubstitutions ?? []) {
+      if (bs.characterId) selectedIds.add(bs.characterId);
+    }
     const goodChars = (script.characters ?? []).filter(
       (c) =>
         !selectedIds.has(c.id) &&
@@ -646,6 +702,9 @@
   // --- Game lifecycle actions ---
   // Demon bluffs that are actually in play (advisory — see game-warnings.ts).
   const bluffsInPlay = $derived(game ? bluffCharactersInPlay(game) : []);
+  const bluffsShownByBagSubs = $derived(
+    game ? bluffCharactersShownByBagSubs(game) : [],
+  );
 
   function getStartGameWarnings(): string[] {
     if (!game) return [];
@@ -999,6 +1058,16 @@
     grimoireHintTimeout = setTimeout(() => (grimoireHint = ""), 3000);
   }
 
+  // Transient banner shown near the setup roles grid, e.g. when adding a role
+  // that collided with (and cleared) the Drunk's shown token. Auto-clears.
+  let setupHint = $state("");
+  let setupHintTimeout: ReturnType<typeof setTimeout> | undefined;
+  function showSetupHint(msg: string) {
+    setupHint = msg;
+    clearTimeout(setupHintTimeout);
+    setupHintTimeout = setTimeout(() => (setupHint = ""), 4000);
+  }
+
   // Initialize grimoire from persisted server state, then fill gaps with defaults
   $effect(() => {
     const chars = [
@@ -1342,16 +1411,16 @@
       (b) => b.causedById === causedById,
     );
     const requiredTeam = teamFromLabel(bs?.team) ?? Team.TOWNSFOLK;
-    const selectedRoleIds = new Set([
-      ...(game.selectedRoleIds ?? []),
-      ...(game.extraCharacterIds ?? []),
-    ]);
+    // Single in-play definition shared with bagSubCollisions and the
+    // start-game warnings (roles + extras + travellers).
+    const selectedRoleIds = inPlayCharacterIds(game);
     const verdict = bagSubDropTarget(
       targetPlayerId,
       causedById,
       selectedRoleIds,
       (id) => characterById.get(id)?.team,
       requiredTeam,
+      bs?.characterId,
     );
 
     const causedByName =
@@ -1367,6 +1436,7 @@
           verdict,
           causedByName,
           teamSingulars[requiredTeam] ?? "Townsfolk",
+          bs?.characterName,
         ),
       );
       return;
@@ -1555,18 +1625,88 @@
   // Ephemeral Fortune Teller picks, keyed by night phase id (lost on reload).
   let ftPicksByPhase = $state(new Map<bigint, string[]>());
 
-  // Ephemeral first-night info picks (Washerwoman/Librarian/Investigator),
-  // keyed by helper character id. First-night scope, lost on reload.
-  let infoPicksState = $state(
-    new Map<string, { rightId?: string; wrongId?: string }>(),
-  );
+  // First-night info picks (Washerwoman/Librarian/Investigator) are NOT
+  // ephemeral: they ARE the grimoire reminder-token attachments. Each helper's
+  // team token text equals the team's singular label (roles.json reminders);
+  // the decoy uses the shared "Wrong" token.
+  const INFO_ROLE_TEAM_LABEL: Record<string, string> = {
+    washerwoman: "Townsfolk",
+    librarian: "Outsider",
+    investigator: "Minion",
+  };
+  const INFO_WRONG_TEXT = "Wrong";
+  // Default orbit angle for auto-attached info tokens; matches the previous
+  // "Attach tokens" behaviour and avoids the bag-sub token's 0.25π default.
+  const INFO_ATTACH_ANGLE = Math.PI * 0.75;
+
+  // Resolve a reminder token's STABLE id from (characterId, text). Shared by the
+  // pick derivation and the attach/detach writer so both agree on the id.
+  function stableIdForToken(
+    characterId: string,
+    text: string,
+  ): string | undefined {
+    if (!game) return undefined;
+    const tokens = game.reminderTokens ?? [];
+    const idx = tokens.findIndex(
+      (t) => t.characterId === characterId && t.text === text,
+    );
+    if (idx < 0) return undefined;
+    return stableReminderIds(tokens)[idx];
+  }
+
+  // Derive info picks from the current reminder attachments. A slot is "picked"
+  // iff its matching token is attached to a seat, so manual grimoire
+  // attach/detach shows up here automatically and picks survive reloads.
+  const infoPicks = $derived.by(() => {
+    const map = new Map<string, { rightId?: string; wrongId?: string }>();
+    if (!game) return map;
+    for (const [charId, teamLabel] of Object.entries(INFO_ROLE_TEAM_LABEL)) {
+      if (!selectedRoleIdSet.has(charId)) continue; // only in-play info roles
+      const rightSid = stableIdForToken(charId, teamLabel);
+      const wrongSid = stableIdForToken(charId, INFO_WRONG_TEXT);
+      const rightId = rightSid
+        ? reminderAttachments.get(rightSid)?.playerId
+        : undefined;
+      const wrongId = wrongSid
+        ? reminderAttachments.get(wrongSid)?.playerId
+        : undefined;
+      if (rightId || wrongId) map.set(charId, { rightId, wrongId });
+    }
+    return map;
+  });
+
+  // Apply a pick change by attaching/detaching the matching token. Only the
+  // slots that actually changed are touched, so a manual grimoire edit to the
+  // other slot is never clobbered.
   function setInfoPick(
     charId: string,
     picks: { rightId?: string; wrongId?: string },
   ) {
-    const next = new Map(infoPicksState);
-    next.set(charId, picks);
-    infoPicksState = next;
+    const teamLabel = INFO_ROLE_TEAM_LABEL[charId];
+    if (!teamLabel) return;
+    const cur = infoPicks.get(charId) ?? {};
+    applyInfoSlot(charId, teamLabel, cur.rightId, picks.rightId);
+    applyInfoSlot(charId, INFO_WRONG_TEXT, cur.wrongId, picks.wrongId);
+  }
+
+  function applyInfoSlot(
+    charId: string,
+    text: string,
+    curId: string | undefined,
+    nextId: string | undefined,
+  ) {
+    if (curId === nextId) return;
+    const sid = stableIdForToken(charId, text);
+    if (!sid) {
+      // Only reachable if a script's reminder texts diverge from the official
+      // ones this helper keys on — the pick would otherwise vanish silently.
+      console.warn(
+        `info helper: no "${text}" reminder token found for ${charId}; pick not persisted`,
+      );
+      return;
+    }
+    if (nextId) handleReminderAttach(sid, nextId, INFO_ATTACH_ANGLE);
+    else handleReminderDetach(sid);
   }
 
   // The DISPLAYED character of a seat (bag-sub aware): a substituted seat shows
@@ -1596,25 +1736,6 @@
     return undefined;
   }
 
-  // Bridge FirstNightInfoHelper's "Attach tokens" to the grimoire: resolve the
-  // token's STABLE id from (characterId, text) and attach it to the seat. The
-  // two calls target DIFFERENT seats, so a fixed default angle is fine (chosen
-  // to avoid the bag-sub token's Math.PI * 0.25 default).
-  function attachInfoReminder(
-    characterId: string,
-    text: string,
-    playerId: string,
-  ) {
-    if (!game) return;
-    const tokens = game.reminderTokens ?? [];
-    const idx = tokens.findIndex(
-      (t) => t.characterId === characterId && t.text === text,
-    );
-    if (idx < 0) return;
-    const stableId = stableReminderIds(tokens)[idx];
-    handleReminderAttach(stableId, playerId, Math.PI * 0.75);
-  }
-
   const nightHelperContext = $derived.by((): NightHelperContext | undefined => {
     if (!nightPhase) return undefined;
     const phaseId = nightPhase.id;
@@ -1637,9 +1758,8 @@
       },
       // First-night info helpers (Washerwoman / Librarian / Investigator).
       displayedCharacterOf,
-      infoPicks: infoPicksState,
+      infoPicks,
       oninfopick: setInfoPick,
-      onattachreminder: attachInfoReminder,
       onshowcard: (card: DisplayCard) => showInfoCard(card),
     };
   });
@@ -2250,6 +2370,13 @@
           />
 
           <!-- Characters — click to toggle selection (script + extra merged) -->
+          {#if setupHint}
+            <div
+              class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              {setupHint}
+            </div>
+          {/if}
           {#if script}
             <div class="space-y-6">
               {#each teamOrder as team}
@@ -2262,6 +2389,7 @@
                     onclick={toggleRole}
                     onadd={() => openCharacterPicker(team)}
                     bagSubstitutions={bagSubByRole}
+                    bagSubWarnings={bagSubCollisions}
                     onbagsubchange={openBagSubPicker}
                     onpreview={(c) => (previewCharacter = c)}
                   />
@@ -2288,13 +2416,19 @@
                         {@const isInPlay = bluffsInPlay.some(
                           (b) => b.id === char.id,
                         )}
+                        {@const isShownToken = bluffsShownByBagSubs.some(
+                          (b) => b.id === char.id,
+                        )}
+                        {@const isWarned = isInPlay || isShownToken}
                         <button
-                          class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors {isInPlay
+                          class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors {isWarned
                             ? 'border-amber-400 bg-amber-50 dark:border-amber-600 dark:bg-amber-950/30'
                             : 'border-border bg-surface'} hover:border-red-300 hover:bg-red-50 dark:hover:border-red-700 dark:hover:bg-red-950/30"
                           title={isInPlay
                             ? `${char.name} is in play — remove?`
-                            : `Remove ${char.name}`}
+                            : isShownToken
+                              ? `${char.name} is the Drunk's shown token — remove?`
+                              : `Remove ${char.name}`}
                           onclick={() =>
                             updateDemonBluffs(
                               (game?.selectedBluffIds ?? []).filter(
@@ -2311,11 +2445,11 @@
                                 "none")}
                           />
                           <span
-                            class="text-xs font-medium {isInPlay
+                            class="text-xs font-medium {isWarned
                               ? 'text-amber-700 dark:text-amber-300'
                               : 'text-primary'}">{char.name}</span
                           >
-                          {#if isInPlay}
+                          {#if isWarned}
                             <svg
                               class="h-3.5 w-3.5 text-amber-500"
                               fill="none"
@@ -2384,6 +2518,30 @@
                           {bluffsInPlay.map((b) => b.name).join(", ")}
                           {bluffsInPlay.length === 1 ? "is" : "are"} in play — the
                           demon would be bluffing a character actually in the game.
+                        </span>
+                      </p>
+                    {/if}
+                    {#if bluffsShownByBagSubs.length > 0}
+                      <p
+                        class="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"
+                      >
+                        <svg
+                          class="mt-0.5 h-3.5 w-3.5 shrink-0"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          ><path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                          /></svg
+                        >
+                        <span>
+                          {bluffsShownByBagSubs.map((b) => b.name).join(", ")}
+                          {bluffsShownByBagSubs.length === 1 ? "is" : "are"} the Drunk's
+                          shown token — that character acts in play from the players'
+                          perspective.
                         </span>
                       </p>
                     {/if}

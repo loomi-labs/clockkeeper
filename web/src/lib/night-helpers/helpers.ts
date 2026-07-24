@@ -3,11 +3,7 @@
 
 import type { Phase } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 import { DeathCause, Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
-import {
-  countAdjacentEvilPairs,
-  countEvilAliveNeighbours,
-  type Registration,
-} from "./seating";
+import { countEvilAliveNeighbours, type Registration } from "./seating";
 
 /** Night-scoped view of a player, everything the helpers need. */
 export interface HelperPlayer {
@@ -125,19 +121,83 @@ export function computeEmpath(
   );
 }
 
+/** An adjacent, maybe-evil pair around the alive circle (see {@link chefPairs}). */
+export interface ChefPair {
+  a: HelperPlayer;
+  b: HelperPlayer;
+  /**
+   * `true` when the pair only counts if a Recluse/Spy registers accordingly —
+   * i.e. at least one member is `ambiguous` (and the other is evil-or-ambiguous,
+   * which every pair here satisfies). `false` when both members are definite
+   * evils.
+   */
+  ambiguous: boolean;
+}
+
+/**
+ * The alive-adjacent pairs a Chef counts: every pair of neighbours (dead
+ * skipped, wrap-around) where both members register evil-or-`ambiguous`.
+ *
+ * This is the single source of truth for {@link computeChef} — `min` is the
+ * count of non-`ambiguous` pairs, `max` is the total — so the reported count and
+ * this list can never diverge. Two alive players are adjacent exactly once (the
+ * wrap is not double-counted).
+ */
+export function chefPairs(
+  order: readonly string[],
+  players: ReadonlyMap<string, HelperPlayer>,
+): ChefPair[] {
+  const dead = deadSet(players);
+  const alive = order.filter((id) => !dead.has(id));
+  const m = alive.length;
+  if (m < 2) return [];
+
+  const reg = (id: string) => classifyRegistration(players.get(id));
+  const isEvil = (id: string) => reg(id) === "evil";
+  const mayEvil = (id: string) => {
+    const r = reg(id);
+    return r === "evil" || r === "ambiguous";
+  };
+
+  // Two alive players are adjacent exactly once (no wrap double-count).
+  const indices: Array<[string, string]> =
+    m === 2
+      ? [[alive[0], alive[1]]]
+      : alive.map((id, i) => [id, alive[(i + 1) % m]]);
+
+  const pairs: ChefPair[] = [];
+  for (const [aId, bId] of indices) {
+    if (!mayEvil(aId) || !mayEvil(bId)) continue;
+    const a = players.get(aId);
+    const b = players.get(bId);
+    if (!a || !b) continue;
+    pairs.push({ a, b, ambiguous: !(isEvil(aId) && isEvil(bId)) });
+  }
+  return pairs;
+}
+
 /**
  * Chef: how many pairs of evil-registering players sit adjacent around the
  * circle. Returns a `{min, max}` range (exact when `min === max`): `min` counts
  * pairs of definite evils, `max` counts pairs where both members register
- * evil-or-`ambiguous` (e.g. evil/Recluse/evil ⇒ {min:0, max:2}).
+ * evil-or-`ambiguous` (e.g. evil/Recluse/evil ⇒ {min:0, max:2}). Both bounds are
+ * derived from {@link chefPairs} so the count and the listed pairs stay in sync.
  */
 export function computeChef(
   order: readonly string[],
   players: ReadonlyMap<string, HelperPlayer>,
 ): { min: number; max: number; unknown: boolean } {
-  return countAdjacentEvilPairs(order, deadSet(players), (id) =>
-    classifyRegistration(players.get(id)),
+  const dead = deadSet(players);
+  const pairs = chefPairs(order, players);
+  const unknown = order.some(
+    (id) =>
+      !dead.has(id) && classifyRegistration(players.get(id)) === "unknown",
   );
+  return {
+    min: pairs.filter((p) => !p.ambiguous).length,
+    max: pairs.length,
+    unknown,
+  };
 }
 
 /**

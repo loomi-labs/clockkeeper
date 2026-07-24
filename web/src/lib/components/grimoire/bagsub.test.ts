@@ -81,6 +81,46 @@ describe("bagSubDropTarget", () => {
       ),
     ).toBe("wrong-team");
   });
+
+  it('returns "shown-in-play" when the shown token is itself a selected role', () => {
+    // Drunk shown as the Washerwoman, but the Washerwoman is also in play.
+    expect(
+      bagSubDropTarget(
+        "empath",
+        causedById,
+        selected,
+        teamOf,
+        requiredTeam,
+        "washerwoman",
+      ),
+    ).toBe("shown-in-play");
+  });
+
+  it('lets "self" win over "shown-in-play" (harmless re-attach)', () => {
+    expect(
+      bagSubDropTarget(
+        "drunk",
+        causedById,
+        selected,
+        teamOf,
+        requiredTeam,
+        "washerwoman",
+      ),
+    ).toBe("self");
+  });
+
+  it("ignores a shown token that is not in play", () => {
+    expect(
+      bagSubDropTarget(
+        "empath",
+        causedById,
+        selected,
+        teamOf,
+        requiredTeam,
+        "virgin",
+      ),
+    ).toBe("ok");
+  });
 });
 
 describe("bagSubDropHint", () => {
@@ -99,5 +139,11 @@ describe("bagSubDropHint", () => {
   it("returns empty string for ok and self", () => {
     expect(bagSubDropHint("ok", "Drunk", "Townsfolk")).toBe("");
     expect(bagSubDropHint("self", "Drunk", "Townsfolk")).toBe("");
+  });
+
+  it("names the shown token for shown-in-play", () => {
+    expect(bagSubDropHint("shown-in-play", "Drunk", "Townsfolk", "Chef")).toBe(
+      "Can't move the Drunk - their shown token (Chef) is also in play. Pick a different shown token first.",
+    );
   });
 });

@@ -65,21 +65,17 @@ export interface NightHelperContext {
     playerId: string,
   ) => { id: string; name: string; edition: string; team: Team } | undefined;
   /**
-   * Ephemeral first-night info picks, keyed by helper character id (the entry
-   * id). `rightId` is the seat showing the revealed character; `wrongId` is the
-   * decoy seat.
+   * First-night info picks, keyed by helper character id (the entry id).
+   * `rightId` is the seat showing the revealed character; `wrongId` is the decoy
+   * seat. Derived from (and written back to) the grimoire reminder-token
+   * attachments — picking a slot IS attaching the matching token, so picks
+   * persist across reloads and stay in sync with manual grimoire edits.
    */
   infoPicks?: ReadonlyMap<string, { rightId?: string; wrongId?: string }>;
-  /** Update the info picks for a helper (page owns the ephemeral state). */
+  /** Update the info picks for a helper (attaches/detaches the tokens). */
   oninfopick?: (
     charId: string,
     picks: { rightId?: string; wrongId?: string },
-  ) => void;
-  /** Attach a reminder token (matched by character id + text) to a seat. */
-  onattachreminder?: (
-    characterId: string,
-    text: string,
-    playerId: string,
   ) => void;
   /** Show a fully-built dynamic info card fullscreen. */
   onshowcard?: (card: DisplayCard) => void;

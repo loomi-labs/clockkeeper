@@ -10,6 +10,7 @@ import type { Death, Phase } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 import {
   computeEmpath,
   computeChef,
+  chefPairs,
   computeFortuneTeller,
   chefRangeCauses,
   classifyRegistration,
@@ -334,6 +335,91 @@ describe("computeChef", () => {
       max: 1,
       unknown: false,
     });
+  });
+});
+
+describe("chefPairs", () => {
+  const named = (id: string, overrides: Partial<HelperPlayer> = {}) =>
+    player(id, { name: id.toUpperCase(), ...overrides });
+
+  it("lists definite-evil adjacent pairs (with wrap-around)", () => {
+    const order = ["a", "b", "c", "d"];
+    const players = playerMap([
+      named("a", { alignment: "evil" }),
+      named("b", { alignment: "good" }),
+      named("c", { alignment: "good" }),
+      named("d", { alignment: "evil" }),
+    ]);
+    // d wraps around to a: the only adjacent evil pair.
+    const pairs = chefPairs(order, players);
+    expect(pairs).toHaveLength(1);
+    expect(new Set([pairs[0].a.id, pairs[0].b.id])).toEqual(
+      new Set(["d", "a"]),
+    );
+    expect(pairs[0].ambiguous).toBe(false);
+  });
+
+  it("flags an ambiguous Recluse pair", () => {
+    const order = ["evil1", "recluse", "evil2", "good1", "good2"];
+    const players = playerMap([
+      named("evil1", { alignment: "evil" }),
+      named("recluse", { team: Team.OUTSIDER, alignment: "good" }),
+      named("evil2", { alignment: "evil" }),
+      named("good1", { alignment: "good" }),
+      named("good2", { alignment: "good" }),
+    ]);
+    const pairs = chefPairs(order, players);
+    // evil1-recluse and recluse-evil2, both ambiguous.
+    expect(pairs).toHaveLength(2);
+    expect(pairs.every((p) => p.ambiguous)).toBe(true);
+    expect(
+      pairs.every((p) => p.a.id === "recluse" || p.b.id === "recluse"),
+    ).toBe(true);
+  });
+
+  it("excludes dead players from the pairs", () => {
+    const order = ["a", "b", "c", "d"];
+    const players = playerMap([
+      named("a", { alignment: "evil" }),
+      named("b", { alignment: "evil", isDead: true }),
+      named("c", { alignment: "evil" }),
+      named("d", { alignment: "good" }),
+    ]);
+    // b is dead, so a and c become adjacent -> one evil pair.
+    const pairs = chefPairs(order, players);
+    expect(pairs).toHaveLength(1);
+    expect(new Set([pairs[0].a.id, pairs[0].b.id])).toEqual(
+      new Set(["a", "c"]),
+    );
+  });
+
+  it("counts the wrap-around pair between last and first seats", () => {
+    const order = ["a", "b", "c"];
+    const players = playerMap([
+      named("a", { alignment: "evil" }),
+      named("b", { alignment: "good" }),
+      named("c", { alignment: "evil" }),
+    ]);
+    const pairs = chefPairs(order, players);
+    expect(pairs).toHaveLength(1);
+    expect(new Set([pairs[0].a.id, pairs[0].b.id])).toEqual(
+      new Set(["c", "a"]),
+    );
+  });
+
+  it("computeChef min/max equal the chefPairs-derived counts", () => {
+    const order = ["evil1", "recluse", "evil2", "spy", "good1"];
+    const players = playerMap([
+      named("evil1", { alignment: "evil" }),
+      named("recluse", { team: Team.OUTSIDER, alignment: "good" }),
+      named("evil2", { alignment: "evil" }),
+      named("spy", { team: Team.MINION, alignment: "evil" }),
+      named("good1", { alignment: "good" }),
+    ]);
+    const pairs = chefPairs(order, players);
+    const result = computeChef(order, players);
+    expect(result.min).toBe(pairs.filter((p) => !p.ambiguous).length);
+    expect(result.max).toBe(pairs.length);
   });
 });
 
