@@ -20,6 +20,7 @@
     onassign,
     onunassign,
     onassigninorder,
+    onrandomize,
     onclearall,
     onmanagepresets,
   }: {
@@ -28,6 +29,7 @@
     onassign: (playerId: string, name: string) => void;
     onunassign: (playerId: string) => void;
     onassigninorder: () => void;
+    onrandomize?: () => void;
     onclearall: () => void;
     onmanagepresets: () => void;
   } = $props();
@@ -236,6 +238,15 @@
       >
         Assign in order
       </button>
+      {#if onrandomize}
+        <button
+          onclick={onrandomize}
+          disabled={presetNames.length === 0}
+          class="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500 disabled:opacity-40 disabled:hover:border-border disabled:hover:text-secondary"
+        >
+          Randomize
+        </button>
+      {/if}
       {#if anyAssigned}
         <button
           onclick={onclearall}

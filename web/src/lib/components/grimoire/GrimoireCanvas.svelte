@@ -23,6 +23,7 @@
     onremindermove,
     onreminderattach,
     onreminderdetach,
+    onbagsubdrop,
     onplayerrename,
     onplayertoggledeath,
     onplayergamenote,
@@ -42,6 +43,11 @@
       angle: number,
     ) => void;
     onreminderdetach?: (reminderId: string) => void;
+    onbagsubdrop?: (
+      reminderId: string,
+      playerId: string,
+      angle: number,
+    ) => void;
     onplayerrename?: (id: string, name: string) => void;
     onplayertoggledeath?: (id: string) => void;
     onplayergamenote?: (id: string, note: string) => void;
@@ -161,6 +167,19 @@
   function handleReminderMoveEnd(reminderId: string, x: number, y: number) {
     const reminder = reminders.find((r) => r.id === reminderId);
     const wasAttached = reminder?.attachedTo;
+
+    // Bag-substitution tokens (e.g. "Is the Drunk") reassign the real role when
+    // dragged onto a DIFFERENT seat, rather than merely re-attaching. Same-seat
+    // drops and detaches fall through to the normal reminder paths below.
+    if (reminderId.startsWith("bagsub-reminder-") && onbagsubdrop) {
+      const nearPlayer = findNearestPlayer(x, y, ATTACH_THRESHOLD);
+      if (nearPlayer && nearPlayer.id !== wasAttached) {
+        const angle = angleFromPosition(x, y, nearPlayer.x, nearPlayer.y);
+        onbagsubdrop(reminderId, nearPlayer.id, angle);
+        attachPreviewPlayerId = null;
+        return;
+      }
+    }
 
     if (wasAttached) {
       const player = players.find((p) => p.id === wasAttached);

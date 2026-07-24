@@ -305,12 +305,28 @@
             }
           }
 
-          // Animate snap-back
+          // Animate snap-back, then clear the transform entirely. A lingering
+          // translate3d(...) — even (0,0,0) — makes the row a containing block
+          // for position:fixed descendants and lets its overflow-hidden wrapper
+          // clip them, which mis-positioned popovers rendered inside the row.
           el.style.transition = SNAP_BACK_TRANSITION;
           el.style.transform = "translate3d(0, 0, 0)";
           if (overlayEl) {
             overlayEl.style.display = "none";
           }
+
+          // Reset transform to "" once the snap-back finishes. transitionend
+          // may not fire for a zero-magnitude change, so keep a timeout fallback.
+          const resetTransform = () => {
+            el.style.transform = "";
+            el.removeEventListener("transitionend", onSnapBackEnd);
+            clearTimeout(fallbackTimer);
+          };
+          const onSnapBackEnd = (ev: TransitionEvent) => {
+            if (ev.propertyName === "transform") resetTransform();
+          };
+          el.addEventListener("transitionend", onSnapBackEnd);
+          const fallbackTimer = setTimeout(resetTransform, 400);
 
           activeDrag = null;
         },

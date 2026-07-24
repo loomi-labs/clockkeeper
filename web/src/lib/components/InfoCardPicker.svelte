@@ -45,6 +45,8 @@
   // View state: the modal shows one of these at a time.
   let pickForCard = $state<DisplayCard | null>(null);
   let formOpen = $state(false);
+  // Search text for the all-characters pick step (std:character).
+  let charSearch = $state("");
 
   // Inline edit/create form.
   let formId = $state<bigint | null>(null);
@@ -89,13 +91,33 @@
     }
   }
 
-  function tapStandard(card: DisplayCard) {
+  async function tapStandard(card: DisplayCard) {
     if (card.needsCharacterPick) {
+      charSearch = "";
+      // The character-token card picks from the full script, not just in-play
+      // characters — reuse the cached list fetched for the custom-card editor.
+      if (card.pickFromAllCharacters) await ensureCharacters();
       pickForCard = card;
     } else {
       onshow(card);
     }
   }
+
+  /** Short tile label — the character-token card has an empty title. */
+  function tileLabel(card: DisplayCard): string {
+    return card.id === "std:character" ? "Character token" : card.title;
+  }
+
+  // Candidate characters for the pick step: all script characters (filtered by
+  // search) for `pickFromAllCharacters`, otherwise the in-play characters.
+  const pickCandidates = $derived.by<Character[]>(() => {
+    if (!pickForCard) return [];
+    if (!pickForCard.pickFromAllCharacters) return inPlayCharacters;
+    const q = charSearch.trim().toLowerCase();
+    return q
+      ? allCharacters.filter((c) => c.name.toLowerCase().includes(q))
+      : allCharacters;
+  });
 
   function pickCharacter(c: Character) {
     const card = pickForCard;
@@ -254,16 +276,28 @@
         </button>
         <p class="mb-3 text-sm text-secondary">
           Pick the character for "<span class="font-medium text-primary"
-            >{pickForCard.title}</span
+            >{tileLabel(pickForCard)}</span
           >".
         </p>
-        {#if inPlayCharacters.length === 0}
+        {#if pickForCard.pickFromAllCharacters}
+          <input
+            type="text"
+            bind:value={charSearch}
+            placeholder="Search characters…"
+            class="mb-3 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-primary outline-none focus:border-indigo-500"
+          />
+        {/if}
+        {#if loadingChars}
+          <p class="py-6 text-center text-sm text-muted">Loading characters…</p>
+        {:else if pickCandidates.length === 0}
           <p class="py-6 text-center text-sm text-muted">
-            No characters are in play yet.
+            {pickForCard.pickFromAllCharacters
+              ? "No characters match."
+              : "No characters are in play yet."}
           </p>
         {:else}
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {#each inPlayCharacters as char (char.id)}
+            {#each pickCandidates as char (char.id)}
               <button
                 onclick={() => pickCharacter(char)}
                 class="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-hover p-2.5 text-center transition-colors hover:brightness-110"
@@ -405,7 +439,7 @@
                 class="font-serif text-[0.65rem] leading-tight font-bold tracking-wide uppercase"
                 style="text-shadow: 0 1px 3px rgba(0,0,0,0.5);"
               >
-                {card.title}
+                {tileLabel(card)}
               </span>
               {#if card.characters.length > 0}
                 <div class="flex -space-x-1.5">

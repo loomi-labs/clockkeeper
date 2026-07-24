@@ -15,6 +15,16 @@ export interface Point {
 
 export type Alignment = "good" | "evil" | undefined;
 
+/**
+ * How a seat registers to an alive-neighbour / adjacent-pair check.
+ *
+ * - `evil` / `good`: a definite alignment (from effective alignment).
+ * - `ambiguous`: a Recluse (may register evil) or Spy (may register good) —
+ *   counted in the upper bound of a range but never the lower bound.
+ * - `unknown`: alignment not set (e.g. a traveller the ST has not aligned).
+ */
+export type Registration = "good" | "evil" | "ambiguous" | "unknown";
+
 /** Positions closer than this to the centroid count as "on" the centroid. */
 const DEGENERATE_EPSILON = 1e-6;
 
@@ -88,60 +98,86 @@ export function aliveNeighbours(
 }
 
 /**
- * Count how many of a player's alive neighbours are evil (Empath).
+ * Count how many of a player's alive neighbours register as evil (Empath).
  *
- * `unknown` is true when at least one alive neighbour has an undefined
- * alignment (e.g. a traveller whose alignment the ST has not set), meaning the
- * count cannot be trusted. When only two players are alive the single alive
- * neighbour is counted once, not twice.
+ * Returns a range: `min` counts neighbours that definitely register evil, while
+ * `max` additionally counts `ambiguous` neighbours (a Recluse may register evil,
+ * a Spy may register good — each check is independent). When `min === max` the
+ * reading is exact.
+ *
+ * `unknown` is true when at least one alive neighbour has an `unknown`
+ * registration (e.g. a traveller whose alignment the ST has not set), meaning
+ * even the range cannot be trusted. When only two players are alive the single
+ * alive neighbour is counted once, not twice.
  */
 export function countEvilAliveNeighbours(
   order: readonly string[],
   playerId: string,
   dead: ReadonlySet<string>,
-  alignmentOf: (id: string) => Alignment,
-): { count: number; unknown: boolean } {
+  registrationOf: (id: string) => Registration,
+): { min: number; max: number; unknown: boolean } {
   const { cw, ccw } = aliveNeighbours(order, playerId, dead);
   const neighbours = new Set<string>();
   if (cw) neighbours.add(cw);
   if (ccw) neighbours.add(ccw);
 
-  let count = 0;
+  let min = 0;
+  let max = 0;
   let unknown = false;
   for (const id of neighbours) {
-    const a = alignmentOf(id);
-    if (a === "evil") count++;
-    else if (a === undefined) unknown = true;
+    const r = registrationOf(id);
+    if (r === "evil") {
+      min++;
+      max++;
+    } else if (r === "ambiguous") {
+      max++;
+    } else if (r === "unknown") {
+      unknown = true;
+    }
   }
-  return { count, unknown };
+  return { min, max, unknown };
 }
 
 /**
- * Count pairs of adjacent evil players around the alive circle (Chef).
+ * Count pairs of adjacent evil-registering players around the alive circle (Chef).
  *
  * Adjacency wraps around, and three evil players in a row form two pairs. Dead
- * players are removed before adjacency is considered. `unknown` is true when
- * any alive player has an undefined alignment (the true count may differ).
+ * players are removed before adjacency is considered. Returns a range: `min`
+ * counts pairs where both members definitely register evil, while `max` counts
+ * pairs where both members register evil-or-`ambiguous`. `unknown` is true when
+ * any alive player has an `unknown` registration (the true count may differ).
  */
 export function countAdjacentEvilPairs(
   order: readonly string[],
   dead: ReadonlySet<string>,
-  alignmentOf: (id: string) => Alignment,
-): { pairs: number; unknown: boolean } {
+  registrationOf: (id: string) => Registration,
+): { min: number; max: number; unknown: boolean } {
   const alive = order.filter((id) => !dead.has(id));
   const m = alive.length;
-  const unknown = alive.some((id) => alignmentOf(id) === undefined);
-  const isEvil = (id: string) => alignmentOf(id) === "evil";
+  const unknown = alive.some((id) => registrationOf(id) === "unknown");
+  const isEvil = (id: string) => registrationOf(id) === "evil";
+  const mayEvil = (id: string) => {
+    const r = registrationOf(id);
+    return r === "evil" || r === "ambiguous";
+  };
 
-  if (m < 2) return { pairs: 0, unknown };
+  if (m < 2) return { min: 0, max: 0, unknown };
   // Two alive players are adjacent exactly once (avoid double-counting the wrap).
   if (m === 2) {
-    return { pairs: isEvil(alive[0]) && isEvil(alive[1]) ? 1 : 0, unknown };
+    return {
+      min: isEvil(alive[0]) && isEvil(alive[1]) ? 1 : 0,
+      max: mayEvil(alive[0]) && mayEvil(alive[1]) ? 1 : 0,
+      unknown,
+    };
   }
 
-  let pairs = 0;
+  let min = 0;
+  let max = 0;
   for (let i = 0; i < m; i++) {
-    if (isEvil(alive[i]) && isEvil(alive[(i + 1) % m])) pairs++;
+    const a = alive[i];
+    const b = alive[(i + 1) % m];
+    if (isEvil(a) && isEvil(b)) min++;
+    if (mayEvil(a) && mayEvil(b)) max++;
   }
-  return { pairs, unknown };
+  return { min, max, unknown };
 }

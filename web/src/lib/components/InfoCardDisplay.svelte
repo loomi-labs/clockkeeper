@@ -24,6 +24,10 @@
     ...(character ? [character] : []),
   ]);
 
+  // When the card has no title/body the character token IS the card — render
+  // the icon extra large (e.g. the ad-hoc "Character token" card).
+  const iconOnly = $derived(!card.title && !card.body);
+
   // Close on Escape from anywhere (tap/click is handled on the overlay itself).
   $effect(() => {
     function onKeydown(e: KeyboardEvent) {
@@ -66,12 +70,14 @@
   <div
     class="relative z-10 flex max-h-full w-full max-w-3xl flex-col items-center gap-6 overflow-y-auto px-8 py-16 text-center sm:gap-8"
   >
-    <h1
-      class="font-serif text-4xl font-bold tracking-wide uppercase sm:text-6xl"
-      style="text-shadow: 0 2px 6px rgba(0,0,0,0.45);"
-    >
-      {card.title}
-    </h1>
+    {#if card.title}
+      <h1
+        class="font-serif text-4xl font-bold tracking-wide uppercase sm:text-6xl"
+        style="text-shadow: 0 2px 6px rgba(0,0,0,0.45);"
+      >
+        {card.title}
+      </h1>
+    {/if}
 
     {#if card.body}
       <p class="font-serif text-2xl leading-relaxed" style="opacity: 0.95;">
@@ -82,16 +88,24 @@
     {#if icons.length > 0}
       <div class="flex flex-wrap items-start justify-center gap-6 sm:gap-10">
         {#each icons as icon (icon.id)}
-          <div class="flex w-32 flex-col items-center gap-2 sm:w-44">
+          <div
+            class="flex flex-col items-center gap-2 {iconOnly
+              ? 'w-56 sm:w-72'
+              : 'w-32 sm:w-44'}"
+          >
             <img
               src="/characters/{icon.edition}/{icon.id}{icon.iconSuffix}.webp"
               alt=""
-              class="h-32 w-32 rounded-full object-contain sm:h-44 sm:w-44"
+              class="rounded-full object-contain {iconOnly
+                ? 'h-48 w-48 sm:h-64 sm:w-64'
+                : 'h-32 w-32 sm:h-44 sm:w-44'}"
               style="filter: drop-shadow(0 3px 8px rgba(0,0,0,0.5));"
               onerror={hideBrokenIcon}
             />
             <span
-              class="font-serif text-xl font-semibold tracking-wide uppercase sm:text-2xl"
+              class="font-serif font-semibold tracking-wide uppercase {iconOnly
+                ? 'text-2xl sm:text-4xl'
+                : 'text-xl sm:text-2xl'}"
               style="text-shadow: 0 1px 4px rgba(0,0,0,0.45);"
             >
               {icon.name}

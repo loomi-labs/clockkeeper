@@ -204,24 +204,16 @@ func entGameToSummary(g *ent.Game) *clockkeeperv1.GameSummary {
 	return summary
 }
 
-func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
+// buildReminderTokens collects the reminder tokens for a game from its regular,
+// traveller, and extra characters. Tokens are emitted in a stable order: per
+// character (selected roles, then travellers, then extra characters), each
+// character's Reminders first, then its RemindersGlobal. This ordering is the
+// contract behind the stable reminder ids computed by stableReminderIDs.
+func buildReminderTokens(g *ent.Game, registry *botc.Registry) []*clockkeeperv1.ReminderToken {
 	chars := registry.Characters(g.SelectedRoles)
 	travellerChars := registry.Characters(g.SelectedTravellers)
 	extraChars := registry.Characters(g.ExtraCharacters)
-	bluffChars := registry.Characters(g.SelectedBluffs)
 
-	var dist *clockkeeperv1.RoleDistribution
-	if d, err := botc.DistributionForPlayerCount(g.PlayerCount); err == nil {
-		adjusted := botc.ApplySetupModifiers(d, chars).Distribution
-		dist = &clockkeeperv1.RoleDistribution{
-			Townsfolk: int32(adjusted.Townsfolk),
-			Outsiders: int32(adjusted.Outsiders),
-			Minions:   int32(adjusted.Minions),
-			Demons:    int32(adjusted.Demons),
-		}
-	}
-
-	// Collect reminder tokens from regular, traveller, and extra characters.
 	var tokens []*clockkeeperv1.ReminderToken
 	allChars := make([]*botc.Character, 0, len(chars)+len(travellerChars)+len(extraChars))
 	allChars = append(allChars, chars...)
@@ -243,6 +235,28 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 			})
 		}
 	}
+	return tokens
+}
+
+func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
+	chars := registry.Characters(g.SelectedRoles)
+	travellerChars := registry.Characters(g.SelectedTravellers)
+	extraChars := registry.Characters(g.ExtraCharacters)
+	bluffChars := registry.Characters(g.SelectedBluffs)
+
+	var dist *clockkeeperv1.RoleDistribution
+	if d, err := botc.DistributionForPlayerCount(g.PlayerCount); err == nil {
+		adjusted := botc.ApplySetupModifiers(d, chars).Distribution
+		dist = &clockkeeperv1.RoleDistribution{
+			Townsfolk: int32(adjusted.Townsfolk),
+			Outsiders: int32(adjusted.Outsiders),
+			Minions:   int32(adjusted.Minions),
+			Demons:    int32(adjusted.Demons),
+		}
+	}
+
+	// Collect reminder tokens from regular, traveller, and extra characters.
+	tokens := buildReminderTokens(g, registry)
 
 	proto := &clockkeeperv1.Game{
 		Id:                          int64(g.ID),

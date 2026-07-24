@@ -40,6 +40,7 @@ service ClockKeeperService {
   rpc UpdateGrimoireState(UpdateGrimoireStateRequest) returns (UpdateGrimoireStateResponse) {}
   rpc UpdateDemonBluffs(UpdateDemonBluffsRequest) returns (UpdateDemonBluffsResponse) {}
   rpc UpdateBagSubstitutions(UpdateBagSubstitutionsRequest) returns (UpdateBagSubstitutionsResponse) {}
+  rpc ReassignBagSubstitution(ReassignBagSubstitutionRequest) returns (ReassignBagSubstitutionResponse) {}
   rpc GetSetupChecklist(GetSetupChecklistRequest) returns (GetSetupChecklistResponse) {}
   rpc GetDistribution(GetDistributionRequest) returns (GetDistributionResponse) {}
   rpc DeleteGame(DeleteGameRequest) returns (DeleteGameResponse) {}
@@ -582,6 +583,18 @@ message UpdateBagSubstitutionsRequest {
 }
 
 message UpdateBagSubstitutionsResponse {
+  Game game = 1;
+}
+
+// Reassigns a bag substitution (e.g. the Drunk) from its current seat onto a
+// different in-play seat mid-game, swapping the two real roles atomically.
+message ReassignBagSubstitutionRequest {
+  int64 game_id = 1;
+  string caused_by_id = 2;
+  string target_role_id = 3;
+}
+
+message ReassignBagSubstitutionResponse {
   Game game = 1;
 }
 

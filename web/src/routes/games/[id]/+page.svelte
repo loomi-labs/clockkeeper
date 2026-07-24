@@ -18,7 +18,7 @@
     TravellerAlignment,
     DeathCause,
   } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
-  import { teamLabels } from "~/lib/team-styles";
+  import { teamLabels, teamSingulars } from "~/lib/team-styles";
   import CharacterCard from "~/lib/components/CharacterCard.svelte";
   import CharacterPickerModal from "~/lib/components/CharacterPickerModal.svelte";
   import ConfirmDialog from "~/lib/components/ConfirmDialog.svelte";
@@ -53,7 +53,16 @@
     assignNameInMap,
     unassignName,
     assignInOrder,
+    shuffled,
   } from "~/lib/player-names";
+  import {
+    stableReminderIds,
+    canonicalizeReminderKeys,
+  } from "~/lib/components/grimoire/reminder-ids";
+  import {
+    bagSubDropTarget,
+    bagSubDropHint,
+  } from "~/lib/components/grimoire/bagsub";
   import { derivePlayerStatuses } from "~/lib/night-helpers/status";
   import { seatingOrder } from "~/lib/night-helpers/seating";
   import { effectiveAlignment } from "~/lib/night-helpers/alignment";
@@ -980,6 +989,16 @@
   let grimoireRoundNotes = $state(new Map<string, string>());
   let grimoireInitialized = $state(false);
 
+  // Transient banner shown over the grimoire canvas for non-actionable bag-sub
+  // drops (wrong team / not in play) or reassignment errors. Auto-clears.
+  let grimoireHint = $state("");
+  let grimoireHintTimeout: ReturnType<typeof setTimeout> | undefined;
+  function showGrimoireHint(msg: string) {
+    grimoireHint = msg;
+    clearTimeout(grimoireHintTimeout);
+    grimoireHintTimeout = setTimeout(() => (grimoireHint = ""), 3000);
+  }
+
   // Initialize grimoire from persisted server state, then fill gaps with defaults
   $effect(() => {
     const chars = [
@@ -1015,14 +1034,25 @@
     const newReminderPositions = new Map<string, { x: number; y: number }>();
     const newNames = new Map<string, string>();
 
-    // Load all persisted positions, separating player vs reminder
+    const tokens = game?.reminderTokens ?? [];
+
+    // Load all persisted positions, separating player vs reminder. Reminder
+    // keys are both `reminder-*` (per-token) and `bagsub-reminder-*` (the
+    // synthesized "Is the Drunk" token) — the latter used to fall through to
+    // player positions here, which misrouted it; route it to reminders now.
     for (const [id, pos] of Object.entries(serverPositions)) {
-      if (id.startsWith("reminder-")) {
+      if (id.startsWith("reminder-") || id.startsWith("bagsub-reminder-")) {
         newReminderPositions.set(id, { x: pos.x, y: pos.y });
       } else {
         newPositions.set(id, { x: pos.x, y: pos.y });
       }
     }
+    // Lazy migration: canonicalize legacy positional `reminder-<n>` keys to the
+    // stable `reminder-<charId>-<n>` scheme (bagsub / stable keys pass through).
+    const canonReminderPositions = canonicalizeReminderKeys(
+      newReminderPositions,
+      tokens,
+    );
 
     // Load persisted player names
     for (const [id, name] of Object.entries(serverNames)) {
@@ -1037,16 +1067,17 @@
       }
     }
 
-    // Fill gaps for reminders without persisted positions (horizontal line at bottom)
-    const tokens = game?.reminderTokens ?? [];
+    // Fill gaps for reminders without persisted positions (horizontal line at
+    // bottom), keyed by the token's stable id.
     if (tokens.length > 0) {
+      const stableIds = stableReminderIds(tokens);
       const reminderY = 400;
       const totalWidth = tokens.length * 80;
       const startX = -totalWidth / 2 + 40;
       for (let i = 0; i < tokens.length; i++) {
-        const rid = `reminder-${i}`;
-        if (!newReminderPositions.has(rid)) {
-          newReminderPositions.set(rid, { x: startX + i * 80, y: reminderY });
+        const rid = stableIds[i];
+        if (!canonReminderPositions.has(rid)) {
+          canonReminderPositions.set(rid, { x: startX + i * 80, y: reminderY });
         }
       }
     }
@@ -1071,10 +1102,12 @@
         }
       }
     }
+    // Same lazy migration for attachment keys.
+    const canonAttachments = canonicalizeReminderKeys(newAttachments, tokens);
 
     grimoirePositions = newPositions;
-    reminderPositions = newReminderPositions;
-    reminderAttachments = newAttachments;
+    reminderPositions = canonReminderPositions;
+    reminderAttachments = canonAttachments;
     grimoireNames = newNames;
     grimoireGameNotes = new Map(Object.entries(serverGameNotes));
     grimoireRoundNotes = new Map(Object.entries(serverRoundNotes));
@@ -1136,9 +1169,10 @@
   // Derive grimoire reminders from game data + local state
   const grimoireReminders = $derived.by((): GrimoireReminder[] => {
     if (!game) return [];
+    const stableIds = stableReminderIds(game.reminderTokens ?? []);
     const reminders: GrimoireReminder[] = (game.reminderTokens ?? []).map(
       (token, i) => {
-        const rid = `reminder-${i}`;
+        const rid = stableIds[i];
         const char = characterById.get(token.characterId);
         const attachment = reminderAttachments.get(rid);
         let pos: { x: number; y: number };
@@ -1277,6 +1311,105 @@
     reminderPositions = new Map(reminderPositions);
     saveGrimoireState();
   }
+  // Map a bag substitution's stored team string to the Team enum. Defaults to
+  // Townsfolk (the only bag sub today — the Drunk — is a Townsfolk token).
+  function teamFromLabel(label: string | undefined): Team | undefined {
+    switch ((label ?? "").toLowerCase()) {
+      case "townsfolk":
+        return Team.TOWNSFOLK;
+      case "outsider":
+        return Team.OUTSIDER;
+      case "minion":
+        return Team.MINION;
+      case "demon":
+        return Team.DEMON;
+      default:
+        return undefined;
+    }
+  }
+
+  // Drag of the synthesized "Is the {Drunk}" token onto a DIFFERENT seat.
+  // Validates the target, then either plainly re-attaches (self), bounces with a
+  // transient hint (invalid), or confirms + reassigns the real roles (ok).
+  function handleBagSubDrop(
+    reminderId: string,
+    targetPlayerId: string,
+    angle: number,
+  ) {
+    if (!game || (!isSetup && !isInProgress)) return;
+    const causedById = reminderId.slice("bagsub-reminder-".length);
+    const bs = (game.bagSubstitutions ?? []).find(
+      (b) => b.causedById === causedById,
+    );
+    const requiredTeam = teamFromLabel(bs?.team) ?? Team.TOWNSFOLK;
+    const selectedRoleIds = new Set([
+      ...(game.selectedRoleIds ?? []),
+      ...(game.extraCharacterIds ?? []),
+    ]);
+    const verdict = bagSubDropTarget(
+      targetPlayerId,
+      causedById,
+      selectedRoleIds,
+      (id) => characterById.get(id)?.team,
+      requiredTeam,
+    );
+
+    const causedByName =
+      bs?.causedByName ?? characterById.get(causedById)?.name ?? "role";
+
+    if (verdict === "self") {
+      handleReminderAttach(reminderId, targetPlayerId, angle);
+      return;
+    }
+    if (verdict !== "ok") {
+      showGrimoireHint(
+        bagSubDropHint(
+          verdict,
+          causedByName,
+          teamSingulars[requiredTeam] ?? "Townsfolk",
+        ),
+      );
+      return;
+    }
+
+    // Valid reassignment — confirm before mutating real roles.
+    const targetName =
+      grimoireNames.get(targetPlayerId) ||
+      characterById.get(targetPlayerId)?.name ||
+      "that player";
+    const shownName = bs?.characterName || "their shown character";
+    confirmDialog = {
+      title: `Reassign the ${causedByName}`,
+      message: `${targetName} becomes the ${causedByName}, keeping their current character token. The previous ${causedByName} becomes the ${shownName}.`,
+      confirmLabel: `Make ${targetName} the ${causedByName}`,
+      cancelLabel: "Cancel",
+      onconfirm: async () => {
+        confirmDialog = null;
+        if (!game) return;
+        // Cancel any pending debounced save so it can't clobber the remap.
+        clearTimeout(grimoireSaveTimeout);
+        error = "";
+        try {
+          const resp = await client.reassignBagSubstitution({
+            gameId: game.id,
+            causedById,
+            targetRoleId: targetPlayerId,
+          });
+          // Re-init local maps from the server-remapped state.
+          grimoireInitialized = false;
+          game = resp.game;
+        } catch (err) {
+          showGrimoireHint(
+            getErrorMessage(err, "Failed to reassign the substitution"),
+          );
+        }
+      },
+      oncancel: () => {
+        confirmDialog = null;
+      },
+    };
+  }
+
   function handleGrimoirePlayerRename(id: string, name: string) {
     // Empty/whitespace name unassigns the seat (deletes the key) instead of
     // storing an empty string; preset-name duplicates steal from other seats.
@@ -1422,6 +1555,66 @@
   // Ephemeral Fortune Teller picks, keyed by night phase id (lost on reload).
   let ftPicksByPhase = $state(new Map<bigint, string[]>());
 
+  // Ephemeral first-night info picks (Washerwoman/Librarian/Investigator),
+  // keyed by helper character id. First-night scope, lost on reload.
+  let infoPicksState = $state(
+    new Map<string, { rightId?: string; wrongId?: string }>(),
+  );
+  function setInfoPick(
+    charId: string,
+    picks: { rightId?: string; wrongId?: string },
+  ) {
+    const next = new Map(infoPicksState);
+    next.set(charId, picks);
+    infoPicksState = next;
+  }
+
+  // The DISPLAYED character of a seat (bag-sub aware): a substituted seat shows
+  // its shown character (e.g. the Drunk shown as the Empath), else its own role.
+  function displayedCharacterOf(playerId: string) {
+    if (!game) return undefined;
+    const sub = bagSubByRole.get(playerId);
+    if (sub?.characterId) {
+      const c = characterById.get(sub.characterId);
+      if (c)
+        return { id: c.id, name: c.name, edition: c.edition, team: c.team };
+      return {
+        id: sub.characterId,
+        name: sub.characterName,
+        edition: "",
+        team: Team.UNSPECIFIED,
+      };
+    }
+    const own = characterById.get(playerId);
+    if (own)
+      return {
+        id: own.id,
+        name: own.name,
+        edition: own.edition,
+        team: own.team,
+      };
+    return undefined;
+  }
+
+  // Bridge FirstNightInfoHelper's "Attach tokens" to the grimoire: resolve the
+  // token's STABLE id from (characterId, text) and attach it to the seat. The
+  // two calls target DIFFERENT seats, so a fixed default angle is fine (chosen
+  // to avoid the bag-sub token's Math.PI * 0.25 default).
+  function attachInfoReminder(
+    characterId: string,
+    text: string,
+    playerId: string,
+  ) {
+    if (!game) return;
+    const tokens = game.reminderTokens ?? [];
+    const idx = tokens.findIndex(
+      (t) => t.characterId === characterId && t.text === text,
+    );
+    if (idx < 0) return;
+    const stableId = stableReminderIds(tokens)[idx];
+    handleReminderAttach(stableId, playerId, Math.PI * 0.75);
+  }
+
   const nightHelperContext = $derived.by((): NightHelperContext | undefined => {
     if (!nightPhase) return undefined;
     const phaseId = nightPhase.id;
@@ -1442,6 +1635,12 @@
         next.set(phaseId, picks);
         ftPicksByPhase = next;
       },
+      // First-night info helpers (Washerwoman / Librarian / Investigator).
+      displayedCharacterOf,
+      infoPicks: infoPicksState,
+      oninfopick: setInfoPick,
+      onattachreminder: attachInfoReminder,
+      onshowcard: (card: DisplayCard) => showInfoCard(card),
     };
   });
 
@@ -1986,10 +2185,17 @@
           {/if}
           <!-- Grimoire view -->
           <div
-            class="-mx-4 {isFullscreen
+            class="relative -mx-4 {isFullscreen
               ? 'h-[calc(100dvh-100px)]'
               : 'h-[calc(100dvh-240px)]'} sm:mx-0 sm:rounded-lg sm:border sm:border-border overflow-hidden"
           >
+            {#if grimoireHint}
+              <div
+                class="pointer-events-none absolute inset-x-0 top-3 z-20 mx-auto max-w-md rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-800 shadow-lg dark:border-amber-700 dark:bg-amber-950/80 dark:text-amber-200"
+              >
+                {grimoireHint}
+              </div>
+            {/if}
             <GrimoireCanvas
               players={grimoirePlayers}
               reminders={grimoireReminders}
@@ -1998,6 +2204,7 @@
               onremindermove={handleGrimoireReminderMove}
               onreminderattach={handleReminderAttach}
               onreminderdetach={handleReminderDetach}
+              onbagsubdrop={handleBagSubDrop}
               onplayerrename={handleGrimoirePlayerRename}
               onplayertoggledeath={handleGrimoirePlayerToggleDeath}
               onplayergamenote={handleGrimoireGameNote}
@@ -2037,6 +2244,7 @@
             onassign={assignNameToPlayer}
             onunassign={unassignPlayerName}
             onassigninorder={() => handleAssignPresets(presetNames)}
+            onrandomize={() => handleAssignPresets(shuffled(presetNames))}
             onclearall={clearAllPlayerNames}
             onmanagepresets={() => (showPlayerPresets = true)}
           />
@@ -2268,8 +2476,15 @@
           />
         {/if}
         <div
-          class="-mx-4 h-[calc(100dvh-200px)] sm:mx-0 sm:rounded-lg sm:border sm:border-border overflow-hidden"
+          class="relative -mx-4 h-[calc(100dvh-200px)] sm:mx-0 sm:rounded-lg sm:border sm:border-border overflow-hidden"
         >
+          {#if grimoireHint}
+            <div
+              class="pointer-events-none absolute inset-x-0 top-3 z-20 mx-auto max-w-md rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-800 shadow-lg dark:border-amber-700 dark:bg-amber-950/80 dark:text-amber-200"
+            >
+              {grimoireHint}
+            </div>
+          {/if}
           <GrimoireCanvas
             players={grimoirePlayers}
             reminders={grimoireReminders}
@@ -2277,6 +2492,7 @@
             onremindermove={handleGrimoireReminderMove}
             onreminderattach={handleReminderAttach}
             onreminderdetach={handleReminderDetach}
+            onbagsubdrop={handleBagSubDrop}
             onplayerrename={handleGrimoirePlayerRename}
             onplayertoggledeath={handleGrimoirePlayerToggleDeath}
             onplayergamenote={handleGrimoireGameNote}

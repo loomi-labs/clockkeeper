@@ -70,6 +70,18 @@
       .filter(Boolean)
       .join("; "),
   );
+
+  // Portal the popover to <body>. Rendered inline it would resolve its
+  // `position: fixed` against a transformed ancestor (e.g. a swiped night row
+  // whose pan element keeps a translate3d transform) and get clipped by the
+  // row's `overflow-hidden` wrapper. Reparenting to <body> makes it immune to
+  // its render location. Svelte 5 attaches delegated event listeners to both
+  // the mount container and `document`, so onclick/onpointerdown handlers keep
+  // working after the node is moved outside the app root.
+  function portalToBody(node: HTMLElement) {
+    document.body.appendChild(node);
+    return () => node.remove();
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -77,6 +89,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={menuEl}
+  {@attach portalToBody}
   class="fixed z-50 max-h-[min(60vh,20rem)] w-56 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-lg"
   style={positionStyle}
   data-overflow-menu

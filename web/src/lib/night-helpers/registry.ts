@@ -15,6 +15,9 @@ import EmpathHelper from "~/lib/components/night-helpers/EmpathHelper.svelte";
 import ChefHelper from "~/lib/components/night-helpers/ChefHelper.svelte";
 import UndertakerHelper from "~/lib/components/night-helpers/UndertakerHelper.svelte";
 import FortuneTellerHelper from "~/lib/components/night-helpers/FortuneTellerHelper.svelte";
+import FirstNightInfoHelper from "~/lib/components/night-helpers/FirstNightInfoHelper.svelte";
+import type { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
+import type { DisplayCard } from "~/lib/info-cards";
 import type { HelperPlayer } from "./helpers";
 import type { PlayerStatus } from "./status";
 
@@ -48,6 +51,38 @@ export interface NightHelperContext {
   ftPicks: readonly string[];
   /** Update the Fortune Teller picks (page owns the ephemeral state). */
   onftpick: (picks: string[]) => void;
+
+  // ── First-night info helpers (Washerwoman / Librarian / Investigator) ──
+  // All optional: the page wires them in for the first night only. Helpers
+  // that need them render nothing when they are absent.
+
+  /**
+   * Resolve the DISPLAYED character of a seat (bag-sub aware). Returns the
+   * shown token — e.g. the Drunk shown as the Empath resolves to the Empath —
+   * so a substituted seat is classified by what players see, not its real role.
+   */
+  displayedCharacterOf?: (
+    playerId: string,
+  ) => { id: string; name: string; edition: string; team: Team } | undefined;
+  /**
+   * Ephemeral first-night info picks, keyed by helper character id (the entry
+   * id). `rightId` is the seat showing the revealed character; `wrongId` is the
+   * decoy seat.
+   */
+  infoPicks?: ReadonlyMap<string, { rightId?: string; wrongId?: string }>;
+  /** Update the info picks for a helper (page owns the ephemeral state). */
+  oninfopick?: (
+    charId: string,
+    picks: { rightId?: string; wrongId?: string },
+  ) => void;
+  /** Attach a reminder token (matched by character id + text) to a seat. */
+  onattachreminder?: (
+    characterId: string,
+    text: string,
+    playerId: string,
+  ) => void;
+  /** Show a fully-built dynamic info card fullscreen. */
+  onshowcard?: (card: DisplayCard) => void;
 }
 
 /**
@@ -68,4 +103,7 @@ export const NIGHT_HELPERS: Record<string, NightHelperDef> = {
     nights: ["first", "other"],
     component: FortuneTellerHelper,
   },
+  washerwoman: { nights: ["first"], component: FirstNightInfoHelper },
+  librarian: { nights: ["first"], component: FirstNightInfoHelper },
+  investigator: { nights: ["first"], component: FirstNightInfoHelper },
 };

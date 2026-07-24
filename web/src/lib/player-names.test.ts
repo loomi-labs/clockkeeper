@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { assignNameInMap, unassignName, assignInOrder } from "./player-names";
+import {
+  assignNameInMap,
+  unassignName,
+  assignInOrder,
+  shuffled,
+} from "./player-names";
 
 const PRESETS = ["Alice", "Bob", "Carol"] as const;
 
@@ -144,5 +149,31 @@ describe("assignInOrder", () => {
     const before = new Map(map);
     assignInOrder(map, ["s1", "s2"], PRESETS);
     expect([...map.entries()]).toEqual([...before.entries()]);
+  });
+});
+
+describe("shuffled", () => {
+  it("returns a permutation of the input (same multiset of elements)", () => {
+    const input = [1, 2, 3, 4, 5, 6, 7, 8];
+    const result = shuffled(input);
+    expect(result).toHaveLength(input.length);
+    expect([...result].sort((a, b) => a - b)).toEqual(input);
+  });
+
+  it("does not mutate the input array (immutability)", () => {
+    const input = ["a", "b", "c", "d"];
+    const before = [...input];
+    shuffled(input);
+    expect(input).toEqual(before);
+  });
+
+  it("returns a new array instance", () => {
+    const input = [1, 2, 3];
+    expect(shuffled(input)).not.toBe(input);
+  });
+
+  it("handles empty and single-element arrays", () => {
+    expect(shuffled([])).toEqual([]);
+    expect(shuffled([42])).toEqual([42]);
   });
 });

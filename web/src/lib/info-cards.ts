@@ -9,10 +9,11 @@ import type {
   Character,
   Game,
   InfoCard,
+  Team,
 } from "./gen/clockkeeper/v1/clockkeeper_pb";
 import { iconSuffix } from "./team-styles";
 
-/** The eight official standard info tokens. */
+/** The standard info tokens (eight official + the ad-hoc character token). */
 export type StandardCardId =
   | "std:notinplay"
   | "std:thisisthedemon"
@@ -21,7 +22,8 @@ export type StandardCardId =
   | "std:thisplayeris"
   | "std:selectedyou"
   | "std:vote"
-  | "std:nominate";
+  | "std:nominate"
+  | "std:character";
 
 /** Accent colour family, mirroring the physical token colours. */
 export type Accent = "gold" | "purple" | "green" | "blue" | "red" | "neutral";
@@ -41,7 +43,7 @@ export interface DisplayCharacter {
 }
 
 export interface DisplayCard {
-  id: StandardCardId | `custom:${string}`;
+  id: StandardCardId | `custom:${string}` | `dyn:${string}`;
   /** Uppercase display text. */
   title: string;
   body: string;
@@ -54,6 +56,11 @@ export interface DisplayCard {
    * show-time ("You are", "This player is", "This character selected you").
    */
   needsCharacterPick?: boolean;
+  /**
+   * When true the show-time character pick draws from ALL script characters
+   * (not just those in play) — used by the ad-hoc "Character token" card.
+   */
+  pickFromAllCharacters?: boolean;
 }
 
 /**
@@ -215,9 +222,60 @@ export function generateStandardCards(game: Game): DisplayCard[] {
       kind: "standard",
       accent: "gold",
     },
+    {
+      // Ad-hoc single-character token. The chosen character IS the card, so it
+      // has no title/body — the icon renders extra-large in the display.
+      id: "std:character",
+      title: "",
+      body: "",
+      characters: [],
+      kind: "standard",
+      accent: "neutral",
+      needsCharacterPick: true,
+      pickFromAllCharacters: true,
+    },
   );
 
   return cards;
+}
+
+/**
+ * Dynamic first-night "1 of 2 players is X" card (Washerwoman / Librarian /
+ * Investigator). Shows the revealed character's icon above the two candidate
+ * player names — the shown character is the DISPLAYED character of the "right"
+ * seat (bag-sub aware), never a separate pick.
+ */
+export function firstNightInfoCard(
+  shownCharacter: { id: string; name: string; edition: string; team: Team },
+  playerNames: [string, string],
+): DisplayCard {
+  return {
+    id: `dyn:firstnight-${shownCharacter.id}`,
+    title: `ONE OF THESE PLAYERS IS THE ${shownCharacter.name.toUpperCase()}`,
+    body: `${playerNames[0]}   •   ${playerNames[1]}`,
+    characters: [
+      {
+        id: shownCharacter.id,
+        name: shownCharacter.name,
+        edition: shownCharacter.edition,
+        iconSuffix: iconSuffix(shownCharacter.team),
+      },
+    ],
+    kind: "standard",
+    accent: "purple",
+  };
+}
+
+/** Librarian's "no Outsiders in play" card — no players, no icons. */
+export function noOutsidersCard(): DisplayCard {
+  return {
+    id: "dyn:no-outsiders",
+    title: "THERE ARE NO OUTSIDERS IN PLAY",
+    body: "",
+    characters: [],
+    kind: "standard",
+    accent: "blue",
+  };
 }
 
 /**

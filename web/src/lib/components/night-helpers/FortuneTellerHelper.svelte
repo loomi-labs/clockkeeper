@@ -115,6 +115,14 @@
         (red herring)
       </span>
     {/if}
+    {#if result.recluseMayYes}
+      <span
+        class="text-[11px] italic text-secondary"
+        title="A picked Recluse may register as the Demon — you may answer YES."
+      >
+        (Recluse could register as YES)
+      </span>
+    {/if}
   </div>
 {/if}
 

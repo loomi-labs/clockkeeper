@@ -5,15 +5,16 @@ import {
   countEvilAliveNeighbours,
   countAdjacentEvilPairs,
   type Point,
-  type Alignment,
+  type Registration,
 } from "./seating";
 
 function posMap(entries: Record<string, Point>): Map<string, Point> {
   return new Map(Object.entries(entries));
 }
 
-function alignFrom(m: Record<string, Alignment>) {
-  return (id: string): Alignment => m[id];
+/** Map ids to a registration; missing/undefined entries register as unknown. */
+function regFrom(m: Record<string, Registration | undefined>) {
+  return (id: string): Registration => m[id] ?? "unknown";
 }
 
 describe("seatingOrder", () => {
@@ -147,25 +148,25 @@ describe("countEvilAliveNeighbours", () => {
   it("counts 0 / 1 / 2 evil neighbours", () => {
     expect(
       countEvilAliveNeighbours(order, "ft", new Set(), () => "good"),
-    ).toEqual({ count: 0, unknown: false });
+    ).toEqual({ min: 0, max: 0, unknown: false });
 
     expect(
       countEvilAliveNeighbours(
         order,
         "ft",
         new Set(),
-        alignFrom({ left: "good", y: "evil" }),
+        regFrom({ left: "good", y: "evil" }),
       ),
-    ).toEqual({ count: 1, unknown: false });
+    ).toEqual({ min: 1, max: 1, unknown: false });
 
     expect(
       countEvilAliveNeighbours(
         order,
         "ft",
         new Set(),
-        alignFrom({ left: "evil", y: "evil" }),
+        regFrom({ left: "evil", y: "evil" }),
       ),
-    ).toEqual({ count: 2, unknown: false });
+    ).toEqual({ min: 2, max: 2, unknown: false });
   });
 
   it("skips dead neighbours to the next alive one", () => {
@@ -175,20 +176,20 @@ describe("countEvilAliveNeighbours", () => {
         order,
         "ft",
         new Set(["left"]),
-        alignFrom({ right: "evil", y: "good" }),
+        regFrom({ right: "evil", y: "good" }),
       ),
-    ).toEqual({ count: 1, unknown: false });
+    ).toEqual({ min: 1, max: 1, unknown: false });
   });
 
-  it("flags unknown when a neighbour has undefined alignment", () => {
+  it("flags unknown when a neighbour has unknown registration", () => {
     expect(
       countEvilAliveNeighbours(
         order,
         "ft",
         new Set(),
-        alignFrom({ left: undefined, y: "evil" }),
+        regFrom({ left: undefined, y: "evil" }),
       ),
-    ).toEqual({ count: 1, unknown: true });
+    ).toEqual({ min: 1, max: 1, unknown: true });
   });
 
   it("counts a shared two-alive neighbour once", () => {
@@ -198,9 +199,41 @@ describe("countEvilAliveNeighbours", () => {
         ["ft", "x", "y"],
         "ft",
         new Set(["y"]),
-        alignFrom({ x: "evil" }),
+        regFrom({ x: "evil" }),
       ),
-    ).toEqual({ count: 1, unknown: false });
+    ).toEqual({ min: 1, max: 1, unknown: false });
+  });
+
+  it("widens max for an ambiguous neighbour (Recluse/Spy)", () => {
+    // One definite-good and one ambiguous neighbour -> 0 or 1.
+    expect(
+      countEvilAliveNeighbours(
+        order,
+        "ft",
+        new Set(),
+        regFrom({ left: "ambiguous", y: "good" }),
+      ),
+    ).toEqual({ min: 0, max: 1, unknown: false });
+
+    // Two ambiguous neighbours -> 0 to 2.
+    expect(
+      countEvilAliveNeighbours(
+        order,
+        "ft",
+        new Set(),
+        regFrom({ left: "ambiguous", y: "ambiguous" }),
+      ),
+    ).toEqual({ min: 0, max: 2, unknown: false });
+
+    // A definite-evil plus an ambiguous neighbour -> 1 or 2.
+    expect(
+      countEvilAliveNeighbours(
+        order,
+        "ft",
+        new Set(),
+        regFrom({ left: "evil", y: "ambiguous" }),
+      ),
+    ).toEqual({ min: 1, max: 2, unknown: false });
   });
 });
 
@@ -212,9 +245,9 @@ describe("countAdjacentEvilPairs", () => {
       countAdjacentEvilPairs(
         order,
         new Set(),
-        alignFrom({ a: "evil", b: "good", c: "good", d: "evil" }),
+        regFrom({ a: "evil", b: "good", c: "good", d: "evil" }),
       ),
-    ).toEqual({ pairs: 1, unknown: false });
+    ).toEqual({ min: 1, max: 1, unknown: false });
   });
 
   it("counts three-in-a-row as two pairs", () => {
@@ -223,15 +256,16 @@ describe("countAdjacentEvilPairs", () => {
       countAdjacentEvilPairs(
         order,
         new Set(),
-        alignFrom({ a: "evil", b: "evil", c: "evil", d: "good", e: "good" }),
+        regFrom({ a: "evil", b: "evil", c: "evil", d: "good", e: "good" }),
       ),
-    ).toEqual({ pairs: 2, unknown: false });
+    ).toEqual({ min: 2, max: 2, unknown: false });
   });
 
   it("counts all-evil circle as one pair per seat", () => {
     const order = ["a", "b", "c", "d"];
     expect(countAdjacentEvilPairs(order, new Set(), () => "evil")).toEqual({
-      pairs: 4,
+      min: 4,
+      max: 4,
       unknown: false,
     });
   });
@@ -243,9 +277,9 @@ describe("countAdjacentEvilPairs", () => {
       countAdjacentEvilPairs(
         order,
         new Set(["b"]),
-        alignFrom({ a: "evil", c: "evil", d: "good" }),
+        regFrom({ a: "evil", c: "evil", d: "good" }),
       ),
-    ).toEqual({ pairs: 1, unknown: false });
+    ).toEqual({ min: 1, max: 1, unknown: false });
   });
 
   it("counts two alive evil players as a single pair", () => {
@@ -254,19 +288,54 @@ describe("countAdjacentEvilPairs", () => {
       countAdjacentEvilPairs(
         order,
         new Set(["c"]),
-        alignFrom({ a: "evil", b: "evil" }),
+        regFrom({ a: "evil", b: "evil" }),
       ),
-    ).toEqual({ pairs: 1, unknown: false });
+    ).toEqual({ min: 1, max: 1, unknown: false });
   });
 
-  it("flags unknown when an alive player has undefined alignment", () => {
+  it("flags unknown when an alive player has unknown registration", () => {
     const order = ["a", "b", "c"];
     expect(
       countAdjacentEvilPairs(
         order,
         new Set(),
-        alignFrom({ a: "evil", b: "evil", c: undefined }),
+        regFrom({ a: "evil", b: "evil", c: undefined }),
       ),
-    ).toEqual({ pairs: 1, unknown: true });
+    ).toEqual({ min: 1, max: 1, unknown: true });
+  });
+
+  it("widens max for an ambiguous member of a pair (evil/ambiguous/evil)", () => {
+    // b is ambiguous, between two evils who are NOT otherwise adjacent
+    // (the wrap runs through goods) -> min 0, max 2 (a-b, b-c).
+    const order = ["a", "b", "c", "d", "e"];
+    expect(
+      countAdjacentEvilPairs(
+        order,
+        new Set(),
+        regFrom({ a: "evil", b: "ambiguous", c: "evil", d: "good", e: "good" }),
+      ),
+    ).toEqual({ min: 0, max: 2, unknown: false });
+  });
+
+  it("does not widen max for an ambiguous player with only good neighbours", () => {
+    const order = ["a", "b", "c", "d"];
+    expect(
+      countAdjacentEvilPairs(
+        order,
+        new Set(),
+        regFrom({ a: "good", b: "ambiguous", c: "good", d: "good" }),
+      ),
+    ).toEqual({ min: 0, max: 0, unknown: false });
+  });
+
+  it("counts two alive players as an ambiguous single pair (max only)", () => {
+    const order = ["a", "b", "c"];
+    expect(
+      countAdjacentEvilPairs(
+        order,
+        new Set(["c"]),
+        regFrom({ a: "evil", b: "ambiguous" }),
+      ),
+    ).toEqual({ min: 0, max: 1, unknown: false });
   });
 });

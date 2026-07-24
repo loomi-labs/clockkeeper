@@ -11,7 +11,8 @@ import {
 import {
   generateStandardCards,
   customCardToDisplay,
-  type StandardCardId,
+  firstNightInfoCard,
+  noOutsidersCard,
 } from "./info-cards";
 
 function char(
@@ -27,7 +28,7 @@ function makeGame(overrides: MessageInitShape<typeof GameSchema> = {}): Game {
   return create(GameSchema, { playerCount: 5, ...overrides });
 }
 
-function ids(cards: { id: StandardCardId | `custom:${string}` }[]): string[] {
+function ids(cards: { id: string }[]): string[] {
   return cards.map((c) => c.id);
 }
 
@@ -95,12 +96,29 @@ describe("generateStandardCards", () => {
     expect(minions?.characters).toHaveLength(0);
   });
 
-  it("flags exactly the three pick cards as needsCharacterPick", () => {
+  it("flags exactly the four pick cards as needsCharacterPick", () => {
     const cards = generateStandardCards(makeGame({ playerCount: 7 }));
     const pickers = cards.filter((c) => c.needsCharacterPick).map((c) => c.id);
     expect(pickers.sort()).toEqual(
-      ["std:selectedyou", "std:thisplayeris", "std:youare"].sort(),
+      [
+        "std:character",
+        "std:selectedyou",
+        "std:thisplayeris",
+        "std:youare",
+      ].sort(),
     );
+  });
+
+  it("includes the character-token card with the all-characters pick flag", () => {
+    const cards = generateStandardCards(makeGame({ playerCount: 7 }));
+    const token = cards.find((c) => c.id === "std:character");
+    expect(token).toBeDefined();
+    expect(token?.title).toBe("");
+    expect(token?.body).toBe("");
+    expect(token?.needsCharacterPick).toBe(true);
+    expect(token?.pickFromAllCharacters).toBe(true);
+    expect(token?.accent).toBe("neutral");
+    expect(token?.characters).toHaveLength(0);
   });
 
   it("assigns the expected accents to the fixed cards", () => {
@@ -150,5 +168,48 @@ describe("customCardToDisplay", () => {
     const display = customCardToDisplay(card);
     expect(display.characters).toEqual([]);
     expect(display.id).toBe("custom:1");
+  });
+});
+
+describe("firstNightInfoCard", () => {
+  it("builds the Washerwoman-style card with an uppercase title", () => {
+    const card = firstNightInfoCard(
+      { id: "empath", name: "Empath", edition: "tb", team: Team.TOWNSFOLK },
+      ["Alice", "Bob"],
+    );
+    expect(card.id).toBe("dyn:firstnight-empath");
+    expect(card.title).toBe("ONE OF THESE PLAYERS IS THE EMPATH");
+    expect(card.body).toContain("Alice");
+    expect(card.body).toContain("Bob");
+    expect(card.accent).toBe("purple");
+    expect(card.kind).toBe("standard");
+    expect(card.characters).toEqual([
+      { id: "empath", name: "Empath", edition: "tb", iconSuffix: "_g" },
+    ]);
+  });
+
+  it("derives the icon suffix from the shown character's team", () => {
+    const outsider = firstNightInfoCard(
+      { id: "butler", name: "Butler", edition: "tb", team: Team.OUTSIDER },
+      ["X", "Y"],
+    );
+    expect(outsider.characters[0].iconSuffix).toBe("_g");
+    const minion = firstNightInfoCard(
+      { id: "spy", name: "Spy", edition: "tb", team: Team.MINION },
+      ["X", "Y"],
+    );
+    expect(minion.characters[0].iconSuffix).toBe("_e");
+  });
+});
+
+describe("noOutsidersCard", () => {
+  it("builds a player-less blue card", () => {
+    const card = noOutsidersCard();
+    expect(card.id).toBe("dyn:no-outsiders");
+    expect(card.title).toBe("THERE ARE NO OUTSIDERS IN PLAY");
+    expect(card.body).toBe("");
+    expect(card.characters).toEqual([]);
+    expect(card.accent).toBe("blue");
+    expect(card.kind).toBe("standard");
   });
 });

@@ -31,12 +31,26 @@
 
   const status = $derived(playerId ? ctx.statuses.get(playerId) : undefined);
   const impaired = $derived(!!status && (status.poisoned || status.drunk));
+
+  // Registration ambiguity among the counted neighbours (widens min→max).
+  const hasRecluseNeighbour = $derived(
+    result !== undefined &&
+      result.max > result.min &&
+      neighbours.some((p) => p.id === "recluse"),
+  );
+  const hasSpyNeighbour = $derived(
+    result !== undefined &&
+      result.max > result.min &&
+      neighbours.some((p) => p.id === "spy"),
+  );
 </script>
 
 {#if result}
   <div class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
     <span class="text-secondary">Empath sees:</span>
-    <span class="text-base font-bold text-primary">{result.count}</span>
+    <span class="text-base font-bold text-primary">
+      {result.min === result.max ? result.min : `${result.min}–${result.max}`}
+    </span>
     {#if result.unknown}
       <span
         class="text-amber-600 dark:text-amber-300"
@@ -44,6 +58,13 @@
       >
     {/if}
   </div>
+  {#if hasRecluseNeighbour || hasSpyNeighbour}
+    <div class="mt-0.5 text-[11px] text-muted">
+      {#if hasRecluseNeighbour}<span>Recluse may register as evil</span>{/if}
+      {#if hasRecluseNeighbour && hasSpyNeighbour}<span> &middot; </span>{/if}
+      {#if hasSpyNeighbour}<span>Spy may register as good</span>{/if}
+    </div>
+  {/if}
   {#if neighbours.length}
     <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
       {#each neighbours as p (p.id)}
