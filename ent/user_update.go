@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -187,6 +188,21 @@ func (_u *UserUpdate) AddGames(v ...*Game) *UserUpdate {
 	return _u.AddGameIDs(ids...)
 }
 
+// AddInfoCardIDs adds the "info_cards" edge to the InfoCard entity by IDs.
+func (_u *UserUpdate) AddInfoCardIDs(ids ...int) *UserUpdate {
+	_u.mutation.AddInfoCardIDs(ids...)
+	return _u
+}
+
+// AddInfoCards adds the "info_cards" edges to the InfoCard entity.
+func (_u *UserUpdate) AddInfoCards(v ...*InfoCard) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddInfoCardIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -232,6 +248,27 @@ func (_u *UserUpdate) RemoveGames(v ...*Game) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveGameIDs(ids...)
+}
+
+// ClearInfoCards clears all "info_cards" edges to the InfoCard entity.
+func (_u *UserUpdate) ClearInfoCards() *UserUpdate {
+	_u.mutation.ClearInfoCards()
+	return _u
+}
+
+// RemoveInfoCardIDs removes the "info_cards" edge to InfoCard entities by IDs.
+func (_u *UserUpdate) RemoveInfoCardIDs(ids ...int) *UserUpdate {
+	_u.mutation.RemoveInfoCardIDs(ids...)
+	return _u
+}
+
+// RemoveInfoCards removes "info_cards" edges to InfoCard entities.
+func (_u *UserUpdate) RemoveInfoCards(v ...*InfoCard) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveInfoCardIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -423,6 +460,51 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.InfoCardsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InfoCardsTable,
+			Columns: []string{user.InfoCardsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(infocard.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedInfoCardsIDs(); len(nodes) > 0 && !_u.mutation.InfoCardsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InfoCardsTable,
+			Columns: []string{user.InfoCardsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(infocard.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.InfoCardsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InfoCardsTable,
+			Columns: []string{user.InfoCardsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(infocard.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -599,6 +681,21 @@ func (_u *UserUpdateOne) AddGames(v ...*Game) *UserUpdateOne {
 	return _u.AddGameIDs(ids...)
 }
 
+// AddInfoCardIDs adds the "info_cards" edge to the InfoCard entity by IDs.
+func (_u *UserUpdateOne) AddInfoCardIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.AddInfoCardIDs(ids...)
+	return _u
+}
+
+// AddInfoCards adds the "info_cards" edges to the InfoCard entity.
+func (_u *UserUpdateOne) AddInfoCards(v ...*InfoCard) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddInfoCardIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -644,6 +741,27 @@ func (_u *UserUpdateOne) RemoveGames(v ...*Game) *UserUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveGameIDs(ids...)
+}
+
+// ClearInfoCards clears all "info_cards" edges to the InfoCard entity.
+func (_u *UserUpdateOne) ClearInfoCards() *UserUpdateOne {
+	_u.mutation.ClearInfoCards()
+	return _u
+}
+
+// RemoveInfoCardIDs removes the "info_cards" edge to InfoCard entities by IDs.
+func (_u *UserUpdateOne) RemoveInfoCardIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.RemoveInfoCardIDs(ids...)
+	return _u
+}
+
+// RemoveInfoCards removes "info_cards" edges to InfoCard entities.
+func (_u *UserUpdateOne) RemoveInfoCards(v ...*InfoCard) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveInfoCardIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -858,6 +976,51 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(game.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.InfoCardsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InfoCardsTable,
+			Columns: []string{user.InfoCardsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(infocard.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedInfoCardsIDs(); len(nodes) > 0 && !_u.mutation.InfoCardsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InfoCardsTable,
+			Columns: []string{user.InfoCardsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(infocard.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.InfoCardsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InfoCardsTable,
+			Columns: []string{user.InfoCardsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(infocard.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

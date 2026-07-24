@@ -40,5 +40,6 @@ func (User) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("scripts", Script.Type),
 		edge.To("games", Game.Type),
+		edge.To("info_cards", InfoCard.Type),
 	}
 }

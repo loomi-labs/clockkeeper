@@ -15,6 +15,11 @@
     teamDataAttr,
     iconSuffix,
   } from "~/lib/team-styles";
+  import StatusBadge from "./night-helpers/StatusBadge.svelte";
+  import NightEntryHelper from "./night-helpers/NightEntryHelper.svelte";
+  import PlayerPickerPopover from "./night-helpers/PlayerPickerPopover.svelte";
+  import type { PlayerStatus } from "~/lib/night-helpers/status";
+  import type { NightHelperContext } from "~/lib/night-helpers/registry";
 
   let {
     game,
@@ -34,6 +39,11 @@
     playerNames,
     bluffs,
     onalignment,
+    oneditbluffs,
+    onshowcard,
+    playerStatuses,
+    helperContext,
+    ondemonkill,
   }: {
     game: Game;
     scriptCharacters?: Character[];
@@ -52,6 +62,11 @@
     ongamenote?: (id: string, note: string) => void;
     onroundnote?: (id: string, note: string) => void;
     onalignment?: (id: string, alignment: string) => void;
+    oneditbluffs?: () => void;
+    onshowcard?: (cardId: string) => void;
+    playerStatuses?: ReadonlyMap<string, PlayerStatus>;
+    helperContext?: NightHelperContext;
+    ondemonkill?: (demonRoleId: string, victimRoleId: string) => void;
   } = $props();
 
   import { onDestroy } from "svelte";
@@ -150,7 +165,10 @@
           // stopPropagation pattern doesn't prevent the library's
           // direct DOM listener from firing first.
           const target = e.detail.event.target as HTMLElement;
-          if (target.closest("button, a, input, textarea, [data-overflow-menu]")) return;
+          if (
+            target.closest("button, a, input, textarea, [data-overflow-menu]")
+          )
+            return;
 
           const node = e.detail.attachmentNode;
           const wrapper = node.parentElement;
@@ -236,7 +254,8 @@
           let dx = e.detail.event.clientX - activeDrag.startX;
           // During guide, restrict to expected direction
           if (entryId === guideTargetId) {
-            if (guideStep <= 1) dx = Math.max(0, dx); // right only
+            if (guideStep <= 1)
+              dx = Math.max(0, dx); // right only
             else dx = Math.min(0, dx); // left only
           } else {
             if (!ontoggle) dx = Math.min(0, dx);
@@ -254,10 +273,7 @@
             activeDrag.overlayEl.style.display = dir ? "" : "none";
             for (const child of activeDrag.overlayEl.children) {
               const el = child as HTMLElement;
-              el.classList.toggle(
-                "hidden",
-                el.dataset.dir !== dir,
-              );
+              el.classList.toggle("hidden", el.dataset.dir !== dir);
             }
           }
         },
@@ -289,12 +305,28 @@
             }
           }
 
-          // Animate snap-back
+          // Animate snap-back, then clear the transform entirely. A lingering
+          // translate3d(...) — even (0,0,0) — makes the row a containing block
+          // for position:fixed descendants and lets its overflow-hidden wrapper
+          // clip them, which mis-positioned popovers rendered inside the row.
           el.style.transition = SNAP_BACK_TRANSITION;
           el.style.transform = "translate3d(0, 0, 0)";
           if (overlayEl) {
             overlayEl.style.display = "none";
           }
+
+          // Reset transform to "" once the snap-back finishes. transitionend
+          // may not fire for a zero-magnitude change, so keep a timeout fallback.
+          const resetTransform = () => {
+            el.style.transform = "";
+            el.removeEventListener("transitionend", onSnapBackEnd);
+            clearTimeout(fallbackTimer);
+          };
+          const onSnapBackEnd = (ev: TransitionEvent) => {
+            if (ev.propertyName === "transform") resetTransform();
+          };
+          el.addEventListener("transitionend", onSnapBackEnd);
+          const fallbackTimer = setTimeout(resetTransform, 400);
 
           activeDrag = null;
         },
@@ -464,7 +496,7 @@
   );
   const guideTargetId = $derived(
     showSwipeGuide && ontoggle && ondeath
-      ? activeOrder.find((e) => !e.isSpecial)?.id ?? null
+      ? (activeOrder.find((e) => !e.isSpecial)?.id ?? null)
       : null,
   );
   const specialIcons: Record<string, string> = {
@@ -483,14 +515,12 @@
     entryName: string;
     entryTeam: number;
     entryIsDead: boolean;
+    entryInPlay: boolean;
     top: number;
     right: number;
   } | null>(null);
 
-  function openOverflowMenu(
-    entry: NightEntry,
-    button: HTMLElement,
-  ) {
+  function openOverflowMenu(entry: NightEntry, button: HTMLElement) {
     if (overflowMenu?.entryId === entry.id) {
       overflowMenu = null;
       return;
@@ -501,6 +531,7 @@
       entryName: entry.name,
       entryTeam: entry.team ?? 0,
       entryIsDead: entry.isDead,
+      entryInPlay: entry.inPlay,
       top: rect.bottom + 4,
       right: window.innerWidth - rect.right,
     };
@@ -535,9 +566,7 @@
   }
 
   // Determine the default alignment for a team (what it is without override).
-  function defaultAlignmentForTeam(
-    team: number,
-  ): "good" | "evil" | undefined {
+  function defaultAlignmentForTeam(team: number): "good" | "evil" | undefined {
     if (team === Team.TOWNSFOLK || team === Team.OUTSIDER) return "good";
     if (team === Team.MINION || team === Team.DEMON) return "evil";
     return undefined; // Travellers, Fabled, Loric
@@ -576,21 +605,90 @@
     if (effective === "good") {
       return {
         label: "G",
-        colorClass: override
-          ? "text-blue-500"
-          : "text-muted",
+        colorClass: override ? "text-blue-500" : "text-muted",
       };
     }
     if (effective === "evil") {
       return {
         label: "E",
-        colorClass: override
-          ? "text-red-500"
-          : "text-muted",
+        colorClass: override ? "text-red-500" : "text-muted",
       };
     }
     // Undefined alignment (traveller with no override)
     return { label: "?", colorClass: "text-muted" };
+  }
+
+  // --- Feature B/C/E: bluff editing, info-card shortcuts, night-sheet state ---
+  const gameHasDemon = $derived(
+    allSelectedChars.some((c) => c.team === Team.DEMON),
+  );
+
+  // Compact "Bluffs" pill in the header controls, shown on later nights where
+  // the demoninfo entry (with its inline bluff editor) is absent.
+  const showBluffPill = $derived(
+    !!oneditbluffs && gameHasDemon && (activeRound ?? 0) > 1,
+  );
+
+  // Poisoned/drunk status for a night entry, resolved to its underlying seat.
+  function statusForEntry(entryId: string): PlayerStatus | undefined {
+    if (!playerStatuses) return undefined;
+    const seat = helperContext?.playerIdForEntry(entryId) ?? entryId;
+    return playerStatuses.get(seat);
+  }
+
+  function isKillableDemon(entry: NightEntry): boolean {
+    return (
+      !!ondemonkill &&
+      !entry.isSpecial &&
+      entry.team === Team.DEMON &&
+      entry.inPlay &&
+      !entry.isDead
+    );
+  }
+
+  // Demon "Kill…" player picker.
+  let demonKillFor = $state<{
+    entryId: string;
+    anchor: { top: number; right: number };
+  } | null>(null);
+
+  const demonKillPlayers = $derived(
+    helperContext
+      ? [...helperContext.players.values()].filter((p) => !p.isDead)
+      : [],
+  );
+
+  const demonKillExclude = $derived.by(() => {
+    if (!demonKillFor) return new Set<string>();
+    const seat =
+      helperContext?.playerIdForEntry(demonKillFor.entryId) ??
+      demonKillFor.entryId;
+    return new Set<string>([seat]);
+  });
+
+  function openDemonKill(entry: NightEntry, button: HTMLElement) {
+    const rect = button.getBoundingClientRect();
+    demonKillFor = {
+      entryId: entry.id,
+      anchor: { top: rect.bottom + 4, right: window.innerWidth - rect.right },
+    };
+    overflowMenu = null;
+  }
+
+  function handleDemonKillPick(victimId: string) {
+    if (demonKillFor && ondemonkill) {
+      ondemonkill(demonKillFor.entryId, victimId);
+    }
+    demonKillFor = null;
+  }
+
+  function demonKillFromMenu() {
+    if (!overflowMenu) return;
+    demonKillFor = {
+      entryId: overflowMenu.entryId,
+      anchor: { top: overflowMenu.top, right: overflowMenu.right },
+    };
+    overflowMenu = null;
   }
 </script>
 
@@ -622,6 +720,41 @@
       <div></div>
     {/if}
     <div class="flex items-center gap-3">
+      {#if showBluffPill}
+        <button
+          onclick={oneditbluffs}
+          class="flex items-center gap-1.5 rounded-full border border-border px-2 py-1 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+          title="Edit demon bluffs"
+          aria-label="Edit demon bluffs"
+        >
+          <span class="text-[10px] font-semibold text-muted">Bluffs</span>
+          {#if bluffs && bluffs.length > 0}
+            <span class="flex -space-x-1.5">
+              {#each bluffs.slice(0, 3) as bluff (bluff.id)}
+                <img
+                  src="/characters/{bluff.edition}/{bluff.id}_g.webp"
+                  alt=""
+                  class="h-5 w-5 rounded-full ring-1 ring-border"
+                  onerror={(e: Event) =>
+                    ((e.target as HTMLImageElement).style.display = "none")}
+                />
+              {/each}
+            </span>
+          {/if}
+          <svg
+            class="h-3 w-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+            ><path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+            /></svg
+          >
+        </button>
+      {/if}
       <button
         onclick={() => (showAll = !showAll)}
         class="flex items-center gap-1.5 text-xs text-secondary"
@@ -677,7 +810,9 @@
     {:else}
       {#each activeOrder as entry, i (entry.id)}
         {@const isGuideTarget = entry.id === guideTargetId}
-        {@const isDone = isGuideTarget ? guideVisualDone : (completedActions?.has(entry.id) ?? false)}
+        {@const isDone = isGuideTarget
+          ? guideVisualDone
+          : (completedActions?.has(entry.id) ?? false)}
         {@const entryIsDead = isGuideTarget ? guideVisualDead : entry.isDead}
         {#if entry.isSpecial}
           {@const isInteractive = !NON_INTERACTIVE_SPECIALS.has(entry.id)}
@@ -708,28 +843,93 @@
                 <p class="text-sm text-muted">
                   {@html formatReminder(entry.reminder)}
                 </p>
-                {#if entry.id === "demoninfo" && bluffs && bluffs.length > 0}
+                {#if entry.id === "demoninfo"}
                   <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <span class="text-xs font-semibold text-secondary"
-                      >Bluffs:</span
-                    >
-                    {#each bluffs as bluff (bluff.id)}
-                      <div
-                        class="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2 py-0.5"
+                    {#if bluffs && bluffs.length > 0}
+                      <span class="text-xs font-semibold text-secondary"
+                        >Bluffs:</span
                       >
-                        <img
-                          src="/characters/{bluff.edition}/{bluff.id}_g.webp"
-                          alt=""
-                          class="h-5 w-5 rounded-full"
-                          onerror={(e: Event) =>
-                            ((e.target as HTMLImageElement).style.display =
-                              "none")}
-                        />
-                        <span class="text-xs font-medium text-primary"
-                          >{bluff.name}</span
+                      {#each bluffs as bluff (bluff.id)}
+                        <div
+                          class="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2 py-0.5"
                         >
-                      </div>
-                    {/each}
+                          <img
+                            src="/characters/{bluff.edition}/{bluff.id}_g.webp"
+                            alt=""
+                            class="h-5 w-5 rounded-full"
+                            onerror={(e: Event) =>
+                              ((e.target as HTMLImageElement).style.display =
+                                "none")}
+                          />
+                          <span class="text-xs font-medium text-primary"
+                            >{bluff.name}</span
+                          >
+                        </div>
+                      {/each}
+                      {#if oneditbluffs}
+                        <button
+                          onclick={oneditbluffs}
+                          class="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                          title="Edit demon bluffs"
+                        >
+                          <svg
+                            class="h-3 w-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            ><path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                            /></svg
+                          >
+                          Edit
+                        </button>
+                      {/if}
+                      {#if onshowcard}
+                        <button
+                          onclick={() => onshowcard?.("std:notinplay")}
+                          class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                        >
+                          Show card: Not in play
+                        </button>
+                      {/if}
+                    {:else if oneditbluffs}
+                      <button
+                        onclick={oneditbluffs}
+                        class="flex items-center gap-1 rounded border border-dashed border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                      >
+                        <svg
+                          class="h-3 w-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          ><path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M12 4v16m8-8H4"
+                          /></svg
+                        >
+                        Add bluffs
+                      </button>
+                    {/if}
+                  </div>
+                {:else if entry.id === "minioninfo" && onshowcard}
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      onclick={() => onshowcard?.("std:thisisthedemon")}
+                      class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                    >
+                      Show card: This is the Demon
+                    </button>
+                    <button
+                      onclick={() => onshowcard?.("std:minions")}
+                      class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                    >
+                      Show card: These are your minions
+                    </button>
                   </div>
                 {/if}
               </div>
@@ -773,7 +973,10 @@
               : () => ondeath?.(entry.id)
             : undefined}
           <div
-            class="relative overflow-hidden rounded-lg {entry.id === guideTargetId ? 'z-50' : ''}"
+            class="relative overflow-hidden rounded-lg {entry.id ===
+            guideTargetId
+              ? 'z-50'
+              : ''}"
             data-entry={entry.id}
           >
             <!-- Swipe overlays: always in DOM, toggled via direct DOM manipulation -->
@@ -838,28 +1041,78 @@
             <!-- Guide: animated swipe hint overlay -->
             {#if isGuideTarget}
               <div
-                class="pointer-events-none absolute inset-0 z-10 flex items-center rounded-lg [&_*]:pointer-events-none {guideStep <= 1 ? 'guide-hint-right' : 'guide-hint-left'}"
+                class="pointer-events-none absolute inset-0 z-10 flex items-center rounded-lg [&_*]:pointer-events-none {guideStep <=
+                1
+                  ? 'guide-hint-right'
+                  : 'guide-hint-left'}"
               >
-                <div class="guide-hint-chevrons flex items-center gap-1 {guideStep <= 1 ? 'text-green-500' : 'text-red-500'}">
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <div
+                  class="guide-hint-chevrons flex items-center gap-1 {guideStep <=
+                  1
+                    ? 'text-green-500'
+                    : 'text-red-500'}"
+                >
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
                     {#if guideStep <= 1}
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 5l7 7-7 7"
+                      />
                     {:else}
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M15 19l-7-7 7-7"
+                      />
                     {/if}
                   </svg>
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
                     {#if guideStep <= 1}
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 5l7 7-7 7"
+                      />
                     {:else}
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M15 19l-7-7 7-7"
+                      />
                     {/if}
                   </svg>
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
                     {#if guideStep <= 1}
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 5l7 7-7 7"
+                      />
                     {:else}
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M15 19l-7-7 7-7"
+                      />
                     {/if}
                   </svg>
                 </div>
@@ -904,12 +1157,20 @@
                     ? 'line-through text-muted'
                     : (teamNameColors[
                         effectiveTeam(entry.id, entry.team ?? 0)
-                      ] ?? 'text-primary')}">{entry.name}{#if playerNames?.get(entry.id)}<span class="ml-1.5 text-xs font-normal text-muted">&mdash; {playerNames.get(entry.id)}</span>{/if}</span
+                      ] ?? 'text-primary')}"
+                  >{entry.name}{#if playerNames?.get(entry.id)}<span
+                      class="ml-1.5 text-xs font-normal text-muted"
+                      >&mdash; {playerNames.get(entry.id)}</span
+                    >{/if}</span
                 >
                 {#if entryIsDead}<span
                     class="ml-2 text-xs text-red-500 dark:text-red-400"
                     >Dead</span
                   >{/if}
+                {#if !entry.isSpecial}
+                  {@const status = statusForEntry(entry.id)}
+                  {#if status}<StatusBadge {status} />{/if}
+                {/if}
                 {#if !entry.isSpecial && alignments?.has(entry.id)}
                   {@const align = alignments.get(entry.id)}
                   <span
@@ -928,6 +1189,9 @@
                 >
                   {@html formatReminder(entry.reminder)}
                 </p>
+                {#if !entry.isSpecial && entry.inPlay && helperContext}
+                  <NightEntryHelper entryId={entry.id} ctx={helperContext} />
+                {/if}
                 {#if !entry.isSpecial && (ongamenote || onroundnote)}
                   {@const hasNotes = !!(
                     gameNotes?.get(entry.id) || roundNotes?.get(entry.id)
@@ -1052,9 +1316,31 @@
                 {/if}
               </div>
               <!-- Desktop: inline action buttons -->
-              <div
-                class="no-print hidden shrink-0 items-center gap-1 sm:flex"
-              >
+              <div class="no-print hidden shrink-0 items-center gap-1 sm:flex">
+                {#if isKillableDemon(entry)}
+                  <button
+                    onclick={(e: MouseEvent) =>
+                      openDemonKill(entry, e.currentTarget as HTMLElement)}
+                    class="flex items-center gap-1 rounded border border-red-300 px-1.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                    title="Demon kill a player"
+                    aria-label="Demon kill a player from {entry.name}"
+                  >
+                    <svg
+                      class="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="12" cy="12" r="8" />
+                      <path
+                        stroke-linecap="round"
+                        d="M12 2v3M12 19v3M2 12h3M19 12h3"
+                      />
+                    </svg>
+                    Kill…
+                  </button>
+                {/if}
                 {#if ondeath && !entryIsDead}
                   <button
                     onclick={() => ondeath?.(entry.id)}
@@ -1178,17 +1464,20 @@
                 </a>
               </div>
               <!-- Mobile: overflow menu -->
-              <div
-                class="no-print shrink-0 sm:hidden"
-                data-overflow-menu
-              >
+              <div class="no-print shrink-0 sm:hidden" data-overflow-menu>
                 <button
                   onclick={(e: MouseEvent) =>
                     openOverflowMenu(entry, e.currentTarget as HTMLElement)}
                   class="rounded p-1 text-muted transition-colors hover:bg-hover"
                   aria-label="Actions for {entry.name}"
                 >
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <circle cx="12" cy="5" r="1.5" fill="currentColor" />
                     <circle cx="12" cy="12" r="1.5" fill="currentColor" />
                     <circle cx="12" cy="19" r="1.5" fill="currentColor" />
@@ -1249,34 +1538,84 @@
     data-overflow-menu
     onpointerdown={(e: PointerEvent) => e.stopPropagation()}
   >
-    {#if ondeath && !m.entryIsDead}
+    {#if ondemonkill && m.entryTeam === Team.DEMON && !m.entryIsDead && m.entryInPlay}
       <button
-        onclick={() => { ondeath?.(m.entryId); closeOverflowMenu(); }}
+        onclick={demonKillFromMenu}
         class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
       >
-        <svg class="h-4 w-4 text-red-500" viewBox="0 0 24 24" fill="currentColor"
-          ><path d="M12 2C7.58 2 4 5.58 4 10c0 2.76 1.34 5.2 3.4 6.72V20a1 1 0 001 1h7.2a1 1 0 001-1v-3.28C18.66 15.2 20 12.76 20 10c0-4.42-3.58-8-8-8zm-1 15v-2h2v2h-2zm4-7a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /></svg
+        <svg
+          class="h-4 w-4 text-red-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <circle cx="12" cy="12" r="8" />
+          <path stroke-linecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+        </svg>
+        Kill…
+      </button>
+    {/if}
+    {#if ondeath && !m.entryIsDead}
+      <button
+        onclick={() => {
+          ondeath?.(m.entryId);
+          closeOverflowMenu();
+        }}
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+      >
+        <svg
+          class="h-4 w-4 text-red-500"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          ><path
+            d="M12 2C7.58 2 4 5.58 4 10c0 2.76 1.34 5.2 3.4 6.72V20a1 1 0 001 1h7.2a1 1 0 001-1v-3.28C18.66 15.2 20 12.76 20 10c0-4.42-3.58-8-8-8zm-1 15v-2h2v2h-2zm4-7a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"
+          /></svg
         >
         Kill
       </button>
     {:else if onundodeath && m.entryIsDead}
       <button
-        onclick={() => { onundodeath?.(m.entryId); closeOverflowMenu(); }}
+        onclick={() => {
+          onundodeath?.(m.entryId);
+          closeOverflowMenu();
+        }}
         class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
       >
-        <svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-          ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg
+        <svg
+          class="h-4 w-4 text-green-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          ><path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+          /></svg
         >
         Revive
       </button>
     {/if}
     {#if ongamenote || onroundnote}
       <button
-        onclick={() => { editingNoteId = editingNoteId === m.entryId ? null : m.entryId; closeOverflowMenu(); }}
+        onclick={() => {
+          editingNoteId = editingNoteId === m.entryId ? null : m.entryId;
+          closeOverflowMenu();
+        }}
         class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
       >
-        <svg class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
-          ><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg
+        <svg
+          class="h-4 w-4 text-amber-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+          ><path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+          /></svg
         >
         Notes
       </button>
@@ -1284,36 +1623,77 @@
     {#if onalignment}
       {@const display = alignmentDisplay(m.entryId, m.entryTeam)}
       <button
-        onclick={() => { cycleAlignment(m.entryId, m.entryTeam); closeOverflowMenu(); }}
+        onclick={() => {
+          cycleAlignment(m.entryId, m.entryTeam);
+          closeOverflowMenu();
+        }}
         class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
       >
-        <span class="flex h-4 w-4 items-center justify-center text-xs font-bold {display.colorClass}">{display.label}</span>
+        <span
+          class="flex h-4 w-4 items-center justify-center text-xs font-bold {display.colorClass}"
+          >{display.label}</span
+        >
         Alignment
       </button>
     {/if}
     <a
-      href="/almanac/{m.entryId}?from={encodeURIComponent(page.url.pathname + page.url.search)}"
+      href="/almanac/{m.entryId}?from={encodeURIComponent(
+        page.url.pathname + page.url.search,
+      )}"
       onclick={closeOverflowMenu}
       class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
     >
-      <svg class="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-        ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg
+      <svg
+        class="h-4 w-4 text-muted"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        ><path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+        /></svg
       >
       Almanac
     </a>
     <a
-      href="https://wiki.bloodontheclocktower.com/{m.entryName.replace(/ /g, '_')}"
+      href="https://wiki.bloodontheclocktower.com/{m.entryName.replace(
+        / /g,
+        '_',
+      )}"
       target="_blank"
       rel="noopener"
       onclick={closeOverflowMenu}
       class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
     >
-      <svg class="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-        ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg
+      <svg
+        class="h-4 w-4 text-muted"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        ><path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+        /></svg
       >
       Wiki
     </a>
   </div>
+{/if}
+
+<!-- Demon kill player picker — rendered at root to escape overflow/transform containers -->
+{#if demonKillFor}
+  <PlayerPickerPopover
+    title="Demon kill"
+    players={demonKillPlayers}
+    excludeIds={demonKillExclude}
+    anchor={demonKillFor.anchor}
+    onpick={handleDemonKillPick}
+    onclose={() => (demonKillFor = null)}
+  />
 {/if}
 
 <style>

@@ -17,6 +17,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -31,6 +32,8 @@ type Client struct {
 	Death *DeathClient
 	// Game is the client for interacting with the Game builders.
 	Game *GameClient
+	// InfoCard is the client for interacting with the InfoCard builders.
+	InfoCard *InfoCardClient
 	// Phase is the client for interacting with the Phase builders.
 	Phase *PhaseClient
 	// Script is the client for interacting with the Script builders.
@@ -50,6 +53,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Death = NewDeathClient(c.config)
 	c.Game = NewGameClient(c.config)
+	c.InfoCard = NewInfoCardClient(c.config)
 	c.Phase = NewPhaseClient(c.config)
 	c.Script = NewScriptClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -143,13 +147,14 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:    ctx,
-		config: cfg,
-		Death:  NewDeathClient(cfg),
-		Game:   NewGameClient(cfg),
-		Phase:  NewPhaseClient(cfg),
-		Script: NewScriptClient(cfg),
-		User:   NewUserClient(cfg),
+		ctx:      ctx,
+		config:   cfg,
+		Death:    NewDeathClient(cfg),
+		Game:     NewGameClient(cfg),
+		InfoCard: NewInfoCardClient(cfg),
+		Phase:    NewPhaseClient(cfg),
+		Script:   NewScriptClient(cfg),
+		User:     NewUserClient(cfg),
 	}, nil
 }
 
@@ -167,13 +172,14 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:    ctx,
-		config: cfg,
-		Death:  NewDeathClient(cfg),
-		Game:   NewGameClient(cfg),
-		Phase:  NewPhaseClient(cfg),
-		Script: NewScriptClient(cfg),
-		User:   NewUserClient(cfg),
+		ctx:      ctx,
+		config:   cfg,
+		Death:    NewDeathClient(cfg),
+		Game:     NewGameClient(cfg),
+		InfoCard: NewInfoCardClient(cfg),
+		Phase:    NewPhaseClient(cfg),
+		Script:   NewScriptClient(cfg),
+		User:     NewUserClient(cfg),
 	}, nil
 }
 
@@ -202,21 +208,21 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
-	c.Death.Use(hooks...)
-	c.Game.Use(hooks...)
-	c.Phase.Use(hooks...)
-	c.Script.Use(hooks...)
-	c.User.Use(hooks...)
+	for _, n := range []interface{ Use(...Hook) }{
+		c.Death, c.Game, c.InfoCard, c.Phase, c.Script, c.User,
+	} {
+		n.Use(hooks...)
+	}
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
-	c.Death.Intercept(interceptors...)
-	c.Game.Intercept(interceptors...)
-	c.Phase.Intercept(interceptors...)
-	c.Script.Intercept(interceptors...)
-	c.User.Intercept(interceptors...)
+	for _, n := range []interface{ Intercept(...Interceptor) }{
+		c.Death, c.Game, c.InfoCard, c.Phase, c.Script, c.User,
+	} {
+		n.Intercept(interceptors...)
+	}
 }
 
 // Mutate implements the ent.Mutator interface.
@@ -226,6 +232,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Death.mutate(ctx, m)
 	case *GameMutation:
 		return c.Game.mutate(ctx, m)
+	case *InfoCardMutation:
+		return c.InfoCard.mutate(ctx, m)
 	case *PhaseMutation:
 		return c.Phase.mutate(ctx, m)
 	case *ScriptMutation:
@@ -564,6 +572,155 @@ func (c *GameClient) mutate(ctx context.Context, m *GameMutation) (Value, error)
 		return (&GameDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Game mutation op: %q", m.Op())
+	}
+}
+
+// InfoCardClient is a client for the InfoCard schema.
+type InfoCardClient struct {
+	config
+}
+
+// NewInfoCardClient returns a client for the InfoCard from the given config.
+func NewInfoCardClient(c config) *InfoCardClient {
+	return &InfoCardClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `infocard.Hooks(f(g(h())))`.
+func (c *InfoCardClient) Use(hooks ...Hook) {
+	c.hooks.InfoCard = append(c.hooks.InfoCard, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `infocard.Intercept(f(g(h())))`.
+func (c *InfoCardClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InfoCard = append(c.inters.InfoCard, interceptors...)
+}
+
+// Create returns a builder for creating a InfoCard entity.
+func (c *InfoCardClient) Create() *InfoCardCreate {
+	mutation := newInfoCardMutation(c.config, OpCreate)
+	return &InfoCardCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InfoCard entities.
+func (c *InfoCardClient) CreateBulk(builders ...*InfoCardCreate) *InfoCardCreateBulk {
+	return &InfoCardCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InfoCardClient) MapCreateBulk(slice any, setFunc func(*InfoCardCreate, int)) *InfoCardCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InfoCardCreateBulk{err: fmt.Errorf("calling to InfoCardClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InfoCardCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InfoCardCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InfoCard.
+func (c *InfoCardClient) Update() *InfoCardUpdate {
+	mutation := newInfoCardMutation(c.config, OpUpdate)
+	return &InfoCardUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InfoCardClient) UpdateOne(_m *InfoCard) *InfoCardUpdateOne {
+	mutation := newInfoCardMutation(c.config, OpUpdateOne, withInfoCard(_m))
+	return &InfoCardUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InfoCardClient) UpdateOneID(id int) *InfoCardUpdateOne {
+	mutation := newInfoCardMutation(c.config, OpUpdateOne, withInfoCardID(id))
+	return &InfoCardUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InfoCard.
+func (c *InfoCardClient) Delete() *InfoCardDelete {
+	mutation := newInfoCardMutation(c.config, OpDelete)
+	return &InfoCardDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InfoCardClient) DeleteOne(_m *InfoCard) *InfoCardDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InfoCardClient) DeleteOneID(id int) *InfoCardDeleteOne {
+	builder := c.Delete().Where(infocard.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InfoCardDeleteOne{builder}
+}
+
+// Query returns a query builder for InfoCard.
+func (c *InfoCardClient) Query() *InfoCardQuery {
+	return &InfoCardQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInfoCard},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InfoCard entity by its id.
+func (c *InfoCardClient) Get(ctx context.Context, id int) (*InfoCard, error) {
+	return c.Query().Where(infocard.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InfoCardClient) GetX(ctx context.Context, id int) *InfoCard {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryOwner queries the owner edge of a InfoCard.
+func (c *InfoCardClient) QueryOwner(_m *InfoCard) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(infocard.Table, infocard.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, infocard.OwnerTable, infocard.OwnerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *InfoCardClient) Hooks() []Hook {
+	return c.hooks.InfoCard
+}
+
+// Interceptors returns the client interceptors.
+func (c *InfoCardClient) Interceptors() []Interceptor {
+	return c.inters.InfoCard
+}
+
+func (c *InfoCardClient) mutate(ctx context.Context, m *InfoCardMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InfoCardCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InfoCardUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InfoCardUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InfoCardDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown InfoCard mutation op: %q", m.Op())
 	}
 }
 
@@ -1037,6 +1194,22 @@ func (c *UserClient) QueryGames(_m *User) *GameQuery {
 	return query
 }
 
+// QueryInfoCards queries the info_cards edge of a User.
+func (c *UserClient) QueryInfoCards(_m *User) *InfoCardQuery {
+	query := (&InfoCardClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(infocard.Table, infocard.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.InfoCardsTable, user.InfoCardsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UserClient) Hooks() []Hook {
 	return c.hooks.User
@@ -1065,9 +1238,9 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Death, Game, Phase, Script, User []ent.Hook
+		Death, Game, InfoCard, Phase, Script, User []ent.Hook
 	}
 	inters struct {
-		Death, Game, Phase, Script, User []ent.Interceptor
+		Death, Game, InfoCard, Phase, Script, User []ent.Interceptor
 	}
 )

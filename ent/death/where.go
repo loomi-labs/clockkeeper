@@ -255,6 +255,26 @@ func GhostVoteNEQ(v bool) predicate.Death {
 	return predicate.Death(sql.FieldNEQ(FieldGhostVote, v))
 }
 
+// CauseEQ applies the EQ predicate on the "cause" field.
+func CauseEQ(v Cause) predicate.Death {
+	return predicate.Death(sql.FieldEQ(FieldCause, v))
+}
+
+// CauseNEQ applies the NEQ predicate on the "cause" field.
+func CauseNEQ(v Cause) predicate.Death {
+	return predicate.Death(sql.FieldNEQ(FieldCause, v))
+}
+
+// CauseIn applies the In predicate on the "cause" field.
+func CauseIn(vs ...Cause) predicate.Death {
+	return predicate.Death(sql.FieldIn(FieldCause, vs...))
+}
+
+// CauseNotIn applies the NotIn predicate on the "cause" field.
+func CauseNotIn(vs ...Cause) predicate.Death {
+	return predicate.Death(sql.FieldNotIn(FieldCause, vs...))
+}
+
 // HasPhase applies the HasEdge predicate on the "phase" edge.
 func HasPhase() predicate.Death {
 	return predicate.Death(func(s *sql.Selector) {

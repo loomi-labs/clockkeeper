@@ -146,8 +146,7 @@ export const teamBadgeColors: Record<number, string> = {
     "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300",
   [Team.MINION]:
     "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
-  [Team.DEMON]:
-    "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  [Team.DEMON]: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
   [Team.TRAVELLER]:
     "bg-gradient-to-r from-blue-100 to-red-100 text-blue-700 dark:from-blue-500/20 dark:to-red-500/20 dark:text-blue-300",
   [Team.FABLED]:

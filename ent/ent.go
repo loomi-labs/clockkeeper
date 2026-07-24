@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -77,11 +78,12 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			death.Table:  death.ValidColumn,
-			game.Table:   game.ValidColumn,
-			phase.Table:  phase.ValidColumn,
-			script.Table: script.ValidColumn,
-			user.Table:   user.ValidColumn,
+			death.Table:    death.ValidColumn,
+			game.Table:     game.ValidColumn,
+			infocard.Table: infocard.ValidColumn,
+			phase.Table:    phase.ValidColumn,
+			script.Table:   script.ValidColumn,
+			user.Table:     user.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

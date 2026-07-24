@@ -12,6 +12,7 @@ import (
 
 	"github.com/loomi-labs/clockkeeper/ent"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/internal/database"
@@ -45,6 +46,8 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260324183937_add_grimoire_reminder_attachments": validateGrimoireReminderAttachments,
 	"20260406182402_add_player_presets":                validatePlayerPresets,
 	"20260414094150_add_discord_and_anonymous":         validateDiscordAndAnonymous,
+	"20260724121222_add_death_cause":                   validateDeathCause,
+	"20260724121808_add_info_cards":                     validateInfoCards,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -117,6 +120,7 @@ func TestSchemaCompleteness(t *testing.T) {
 	knownEntities := []string{
 		"death.go",
 		"game.go",
+		"infocard.go",
 		"phase.go",
 		"script.go",
 		"user.go",
@@ -635,6 +639,46 @@ func validateDiscordAndAnonymous(t *testing.T, ctx context.Context, _ *sql.DB, c
 	}
 	if discordUser.IsAnonymous {
 		t.Error("discord user should not be anonymous")
+	}
+}
+
+// validateDeathCause checks that the cause column exists on deaths with default 'unspecified'.
+func validateDeathCause(t *testing.T, ctx context.Context, db *sql.DB, _ *ent.Client) {
+	t.Helper()
+
+	var colDefault string
+	err := db.QueryRowContext(ctx,
+		`SELECT column_default FROM information_schema.columns
+		 WHERE table_name = 'deaths' AND column_name = 'cause'`).Scan(&colDefault)
+	if err != nil {
+		t.Fatalf("cause column should exist on deaths table: %v", err)
+	}
+	if !strings.Contains(colDefault, "unspecified") {
+		t.Errorf("expected cause default to be 'unspecified', got %q", colDefault)
+	}
+}
+
+// validateInfoCards checks that the info_cards table exists with the seeded card.
+func validateInfoCards(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	c, err := client.InfoCard.Query().
+		Where(infocard.Title("Seed Info Card")).
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("failed to query seeded info card: %v", err)
+	}
+	if c.Body != "Seed body text" {
+		t.Errorf("expected body 'Seed body text', got %q", c.Body)
+	}
+	if len(c.CharacterIds) != 1 || c.CharacterIds[0] != "washerwoman" {
+		t.Errorf("expected character_ids [washerwoman], got %v", c.CharacterIds)
+	}
+	if c.SortOrder != 0 {
+		t.Errorf("expected sort_order 0, got %d", c.SortOrder)
+	}
+	if c.UserID == 0 {
+		t.Error("expected info card to have a user_id")
 	}
 }
 

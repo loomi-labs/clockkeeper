@@ -3,6 +3,7 @@
 package death
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -24,6 +25,8 @@ const (
 	FieldRoleID = "role_id"
 	// FieldGhostVote holds the string denoting the ghost_vote field in the database.
 	FieldGhostVote = "ghost_vote"
+	// FieldCause holds the string denoting the cause field in the database.
+	FieldCause = "cause"
 	// EdgePhase holds the string denoting the phase edge name in mutations.
 	EdgePhase = "phase"
 	// Table holds the table name of the death in the database.
@@ -45,6 +48,7 @@ var Columns = []string{
 	FieldPhaseID,
 	FieldRoleID,
 	FieldGhostVote,
+	FieldCause,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -69,6 +73,34 @@ var (
 	// DefaultGhostVote holds the default value on creation for the "ghost_vote" field.
 	DefaultGhostVote bool
 )
+
+// Cause defines the type for the "cause" enum field.
+type Cause string
+
+// CauseUnspecified is the default value of the Cause enum.
+const DefaultCause = CauseUnspecified
+
+// Cause values.
+const (
+	CauseUnspecified Cause = "unspecified"
+	CauseExecution   Cause = "execution"
+	CauseDemon       Cause = "demon"
+	CauseOther       Cause = "other"
+)
+
+func (c Cause) String() string {
+	return string(c)
+}
+
+// CauseValidator is a validator for the "cause" field enum values. It is called by the builders before save.
+func CauseValidator(c Cause) error {
+	switch c {
+	case CauseUnspecified, CauseExecution, CauseDemon, CauseOther:
+		return nil
+	default:
+		return fmt.Errorf("death: invalid enum value for cause field: %q", c)
+	}
+}
 
 // OrderOption defines the ordering options for the Death queries.
 type OrderOption func(*sql.Selector)
@@ -101,6 +133,11 @@ func ByRoleID(opts ...sql.OrderTermOption) OrderOption {
 // ByGhostVote orders the results by the ghost_vote field.
 func ByGhostVote(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGhostVote, opts...).ToFunc()
+}
+
+// ByCause orders the results by the cause field.
+func ByCause(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCause, opts...).ToFunc()
 }
 
 // ByPhaseField orders the results by phase field.

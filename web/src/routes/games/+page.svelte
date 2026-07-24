@@ -15,6 +15,7 @@
   import { GameState } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import DistributionBar from "~/lib/components/DistributionBar.svelte";
   import GamesList from "~/lib/components/GamesList.svelte";
+  import PlayerPresetsModal from "~/lib/components/PlayerPresetsModal.svelte";
 
   // --- Game list state ---
   let games = $state<GameSummary[]>([]);
@@ -22,8 +23,7 @@
   const runningGames = $derived(
     [...games]
       .filter(
-        (g) =>
-          g.state === GameState.SETUP || g.state === GameState.IN_PROGRESS,
+        (g) => g.state === GameState.SETUP || g.state === GameState.IN_PROGRESS,
       )
       .sort((a, b) => {
         const order: Record<number, number> = {
@@ -44,6 +44,19 @@
   let creating = $state(false);
   let error = $state("");
   let currentDist = $state<RoleDistribution | undefined>();
+
+  // Optional preset player names (assigned to seats later, in game setup).
+  let presetNames = $state<string[]>([]);
+  let showPresets = $state(false);
+
+  async function reloadPresets() {
+    try {
+      const resp = await client.getPlayerPresets({});
+      presetNames = [...resp.names];
+    } catch {
+      // silently ignore — names are optional
+    }
+  }
 
   const selectedScript = $derived(
     scripts.find((s) => s.id === selectedScriptId),
@@ -103,6 +116,9 @@
       .catch((err) => {
         console.error("Failed to load games", err);
       });
+
+    // Load optional player-name presets independently.
+    reloadPresets();
   });
 
   function selectEdition(editionId: string) {
@@ -151,7 +167,10 @@
   {#if !loading && runningGames.length > 0}
     <section class="space-y-3">
       <h2 class="text-lg font-semibold text-medium">Running Games</h2>
-      <GamesList games={runningGames} ondeleted={(id) => (games = games.filter((g) => g.id !== id))} />
+      <GamesList
+        games={runningGames}
+        ondeleted={(id) => (games = games.filter((g) => g.id !== id))}
+      />
     </section>
   {/if}
 
@@ -297,8 +316,7 @@
           <h3 class="text-base font-medium text-secondary">3. Travellers</h3>
           <div class="flex items-center gap-3">
             <button
-              onclick={() =>
-                (travellerCount = Math.max(0, travellerCount - 1))}
+              onclick={() => (travellerCount = Math.max(0, travellerCount - 1))}
               disabled={travellerCount <= 0}
               class="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface text-lg font-medium text-medium transition-colors hover:bg-hover disabled:opacity-30"
             >
@@ -330,7 +348,38 @@
           {/if}
         </div>
 
-        <!-- Step 4: Create -->
+        <!-- Step 4: Players (optional) -->
+        <div class="space-y-3">
+          <h3 class="text-base font-medium text-secondary">
+            4. Players <span class="text-sm font-normal text-muted"
+              >(optional)</span
+            >
+          </h3>
+          <p class="text-sm text-muted">
+            Assign names to seats in game setup after choosing roles.
+          </p>
+          <div class="flex flex-wrap items-center gap-2">
+            {#if presetNames.length === 0}
+              <span class="text-sm text-muted">No saved names yet.</span>
+            {:else}
+              {#each presetNames as name (name)}
+                <span
+                  class="rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs font-medium text-primary"
+                >
+                  {name}
+                </span>
+              {/each}
+            {/if}
+            <button
+              onclick={() => (showPresets = true)}
+              class="rounded-full border border-dashed border-border px-2.5 py-0.5 text-xs text-muted transition-colors hover:border-indigo-400 hover:text-indigo-500"
+            >
+              Edit names
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 5: Create -->
         <div>
           <button
             onclick={createGame}
@@ -344,3 +393,12 @@
     {/if}
   </section>
 </div>
+
+{#if showPresets}
+  <PlayerPresetsModal
+    onclose={() => {
+      showPresets = false;
+      reloadPresets();
+    }}
+  />
+{/if}

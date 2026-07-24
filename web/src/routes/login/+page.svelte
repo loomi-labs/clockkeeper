@@ -60,7 +60,9 @@
     </p>
 
     {#if error}
-      <div class="mb-4 rounded-lg bg-error-bg px-4 py-2 text-sm text-error-text">
+      <div
+        class="mb-4 rounded-lg bg-error-bg px-4 py-2 text-sm text-error-text"
+      >
         {error}
       </div>
     {/if}

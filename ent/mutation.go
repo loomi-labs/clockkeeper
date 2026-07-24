@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
@@ -29,11 +30,12 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeDeath  = "Death"
-	TypeGame   = "Game"
-	TypePhase  = "Phase"
-	TypeScript = "Script"
-	TypeUser   = "User"
+	TypeDeath    = "Death"
+	TypeGame     = "Game"
+	TypeInfoCard = "InfoCard"
+	TypePhase    = "Phase"
+	TypeScript   = "Script"
+	TypeUser     = "User"
 )
 
 // DeathMutation represents an operation that mutates the Death nodes in the graph.
@@ -46,6 +48,7 @@ type DeathMutation struct {
 	updated_at    *time.Time
 	role_id       *string
 	ghost_vote    *bool
+	cause         *death.Cause
 	clearedFields map[string]struct{}
 	phase         *int
 	clearedphase  bool
@@ -332,6 +335,42 @@ func (m *DeathMutation) ResetGhostVote() {
 	m.ghost_vote = nil
 }
 
+// SetCause sets the "cause" field.
+func (m *DeathMutation) SetCause(d death.Cause) {
+	m.cause = &d
+}
+
+// Cause returns the value of the "cause" field in the mutation.
+func (m *DeathMutation) Cause() (r death.Cause, exists bool) {
+	v := m.cause
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCause returns the old "cause" field's value of the Death entity.
+// If the Death object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DeathMutation) OldCause(ctx context.Context) (v death.Cause, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCause is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCause requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCause: %w", err)
+	}
+	return oldValue.Cause, nil
+}
+
+// ResetCause resets all changes to the "cause" field.
+func (m *DeathMutation) ResetCause() {
+	m.cause = nil
+}
+
 // ClearPhase clears the "phase" edge to the Phase entity.
 func (m *DeathMutation) ClearPhase() {
 	m.clearedphase = true
@@ -393,7 +432,7 @@ func (m *DeathMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DeathMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.created_at != nil {
 		fields = append(fields, death.FieldCreatedAt)
 	}
@@ -408,6 +447,9 @@ func (m *DeathMutation) Fields() []string {
 	}
 	if m.ghost_vote != nil {
 		fields = append(fields, death.FieldGhostVote)
+	}
+	if m.cause != nil {
+		fields = append(fields, death.FieldCause)
 	}
 	return fields
 }
@@ -427,6 +469,8 @@ func (m *DeathMutation) Field(name string) (ent.Value, bool) {
 		return m.RoleID()
 	case death.FieldGhostVote:
 		return m.GhostVote()
+	case death.FieldCause:
+		return m.Cause()
 	}
 	return nil, false
 }
@@ -446,6 +490,8 @@ func (m *DeathMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldRoleID(ctx)
 	case death.FieldGhostVote:
 		return m.OldGhostVote(ctx)
+	case death.FieldCause:
+		return m.OldCause(ctx)
 	}
 	return nil, fmt.Errorf("unknown Death field %s", name)
 }
@@ -489,6 +535,13 @@ func (m *DeathMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGhostVote(v)
+		return nil
+	case death.FieldCause:
+		v, ok := value.(death.Cause)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCause(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Death field %s", name)
@@ -556,6 +609,9 @@ func (m *DeathMutation) ResetField(name string) error {
 		return nil
 	case death.FieldGhostVote:
 		m.ResetGhostVote()
+		return nil
+	case death.FieldCause:
+		m.ResetCause()
 		return nil
 	}
 	return fmt.Errorf("unknown Death field %s", name)
@@ -2457,6 +2513,798 @@ func (m *GameMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Game edge %s", name)
 }
 
+// InfoCardMutation represents an operation that mutates the InfoCard nodes in the graph.
+type InfoCardMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int
+	created_at          *time.Time
+	updated_at          *time.Time
+	title               *string
+	body                *string
+	character_ids       *[]string
+	appendcharacter_ids []string
+	sort_order          *int
+	addsort_order       *int
+	clearedFields       map[string]struct{}
+	owner               *int
+	clearedowner        bool
+	done                bool
+	oldValue            func(context.Context) (*InfoCard, error)
+	predicates          []predicate.InfoCard
+}
+
+var _ ent.Mutation = (*InfoCardMutation)(nil)
+
+// infocardOption allows management of the mutation configuration using functional options.
+type infocardOption func(*InfoCardMutation)
+
+// newInfoCardMutation creates new mutation for the InfoCard entity.
+func newInfoCardMutation(c config, op Op, opts ...infocardOption) *InfoCardMutation {
+	m := &InfoCardMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeInfoCard,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withInfoCardID sets the ID field of the mutation.
+func withInfoCardID(id int) infocardOption {
+	return func(m *InfoCardMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *InfoCard
+		)
+		m.oldValue = func(ctx context.Context) (*InfoCard, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().InfoCard.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withInfoCard sets the old InfoCard of the mutation.
+func withInfoCard(node *InfoCard) infocardOption {
+	return func(m *InfoCardMutation) {
+		m.oldValue = func(context.Context) (*InfoCard, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m InfoCardMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m InfoCardMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *InfoCardMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *InfoCardMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().InfoCard.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *InfoCardMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *InfoCardMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the InfoCard entity.
+// If the InfoCard object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InfoCardMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *InfoCardMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *InfoCardMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *InfoCardMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the InfoCard entity.
+// If the InfoCard object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InfoCardMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *InfoCardMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetTitle sets the "title" field.
+func (m *InfoCardMutation) SetTitle(s string) {
+	m.title = &s
+}
+
+// Title returns the value of the "title" field in the mutation.
+func (m *InfoCardMutation) Title() (r string, exists bool) {
+	v := m.title
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTitle returns the old "title" field's value of the InfoCard entity.
+// If the InfoCard object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InfoCardMutation) OldTitle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTitle is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTitle requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
+	}
+	return oldValue.Title, nil
+}
+
+// ResetTitle resets all changes to the "title" field.
+func (m *InfoCardMutation) ResetTitle() {
+	m.title = nil
+}
+
+// SetBody sets the "body" field.
+func (m *InfoCardMutation) SetBody(s string) {
+	m.body = &s
+}
+
+// Body returns the value of the "body" field in the mutation.
+func (m *InfoCardMutation) Body() (r string, exists bool) {
+	v := m.body
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBody returns the old "body" field's value of the InfoCard entity.
+// If the InfoCard object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InfoCardMutation) OldBody(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBody is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBody requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBody: %w", err)
+	}
+	return oldValue.Body, nil
+}
+
+// ResetBody resets all changes to the "body" field.
+func (m *InfoCardMutation) ResetBody() {
+	m.body = nil
+}
+
+// SetCharacterIds sets the "character_ids" field.
+func (m *InfoCardMutation) SetCharacterIds(s []string) {
+	m.character_ids = &s
+	m.appendcharacter_ids = nil
+}
+
+// CharacterIds returns the value of the "character_ids" field in the mutation.
+func (m *InfoCardMutation) CharacterIds() (r []string, exists bool) {
+	v := m.character_ids
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCharacterIds returns the old "character_ids" field's value of the InfoCard entity.
+// If the InfoCard object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InfoCardMutation) OldCharacterIds(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCharacterIds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCharacterIds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCharacterIds: %w", err)
+	}
+	return oldValue.CharacterIds, nil
+}
+
+// AppendCharacterIds adds s to the "character_ids" field.
+func (m *InfoCardMutation) AppendCharacterIds(s []string) {
+	m.appendcharacter_ids = append(m.appendcharacter_ids, s...)
+}
+
+// AppendedCharacterIds returns the list of values that were appended to the "character_ids" field in this mutation.
+func (m *InfoCardMutation) AppendedCharacterIds() ([]string, bool) {
+	if len(m.appendcharacter_ids) == 0 {
+		return nil, false
+	}
+	return m.appendcharacter_ids, true
+}
+
+// ClearCharacterIds clears the value of the "character_ids" field.
+func (m *InfoCardMutation) ClearCharacterIds() {
+	m.character_ids = nil
+	m.appendcharacter_ids = nil
+	m.clearedFields[infocard.FieldCharacterIds] = struct{}{}
+}
+
+// CharacterIdsCleared returns if the "character_ids" field was cleared in this mutation.
+func (m *InfoCardMutation) CharacterIdsCleared() bool {
+	_, ok := m.clearedFields[infocard.FieldCharacterIds]
+	return ok
+}
+
+// ResetCharacterIds resets all changes to the "character_ids" field.
+func (m *InfoCardMutation) ResetCharacterIds() {
+	m.character_ids = nil
+	m.appendcharacter_ids = nil
+	delete(m.clearedFields, infocard.FieldCharacterIds)
+}
+
+// SetUserID sets the "user_id" field.
+func (m *InfoCardMutation) SetUserID(i int) {
+	m.owner = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *InfoCardMutation) UserID() (r int, exists bool) {
+	v := m.owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the InfoCard entity.
+// If the InfoCard object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InfoCardMutation) OldUserID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *InfoCardMutation) ResetUserID() {
+	m.owner = nil
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (m *InfoCardMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *InfoCardMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the InfoCard entity.
+// If the InfoCard object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InfoCardMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *InfoCardMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *InfoCardMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *InfoCardMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
+// SetOwnerID sets the "owner" edge to the User entity by id.
+func (m *InfoCardMutation) SetOwnerID(id int) {
+	m.owner = &id
+}
+
+// ClearOwner clears the "owner" edge to the User entity.
+func (m *InfoCardMutation) ClearOwner() {
+	m.clearedowner = true
+	m.clearedFields[infocard.FieldUserID] = struct{}{}
+}
+
+// OwnerCleared reports if the "owner" edge to the User entity was cleared.
+func (m *InfoCardMutation) OwnerCleared() bool {
+	return m.clearedowner
+}
+
+// OwnerID returns the "owner" edge ID in the mutation.
+func (m *InfoCardMutation) OwnerID() (id int, exists bool) {
+	if m.owner != nil {
+		return *m.owner, true
+	}
+	return
+}
+
+// OwnerIDs returns the "owner" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// OwnerID instead. It exists only for internal usage by the builders.
+func (m *InfoCardMutation) OwnerIDs() (ids []int) {
+	if id := m.owner; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetOwner resets all changes to the "owner" edge.
+func (m *InfoCardMutation) ResetOwner() {
+	m.owner = nil
+	m.clearedowner = false
+}
+
+// Where appends a list predicates to the InfoCardMutation builder.
+func (m *InfoCardMutation) Where(ps ...predicate.InfoCard) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the InfoCardMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *InfoCardMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.InfoCard, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *InfoCardMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *InfoCardMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (InfoCard).
+func (m *InfoCardMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *InfoCardMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.created_at != nil {
+		fields = append(fields, infocard.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, infocard.FieldUpdatedAt)
+	}
+	if m.title != nil {
+		fields = append(fields, infocard.FieldTitle)
+	}
+	if m.body != nil {
+		fields = append(fields, infocard.FieldBody)
+	}
+	if m.character_ids != nil {
+		fields = append(fields, infocard.FieldCharacterIds)
+	}
+	if m.owner != nil {
+		fields = append(fields, infocard.FieldUserID)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, infocard.FieldSortOrder)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *InfoCardMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case infocard.FieldCreatedAt:
+		return m.CreatedAt()
+	case infocard.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case infocard.FieldTitle:
+		return m.Title()
+	case infocard.FieldBody:
+		return m.Body()
+	case infocard.FieldCharacterIds:
+		return m.CharacterIds()
+	case infocard.FieldUserID:
+		return m.UserID()
+	case infocard.FieldSortOrder:
+		return m.SortOrder()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *InfoCardMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case infocard.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case infocard.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case infocard.FieldTitle:
+		return m.OldTitle(ctx)
+	case infocard.FieldBody:
+		return m.OldBody(ctx)
+	case infocard.FieldCharacterIds:
+		return m.OldCharacterIds(ctx)
+	case infocard.FieldUserID:
+		return m.OldUserID(ctx)
+	case infocard.FieldSortOrder:
+		return m.OldSortOrder(ctx)
+	}
+	return nil, fmt.Errorf("unknown InfoCard field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *InfoCardMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case infocard.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case infocard.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case infocard.FieldTitle:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTitle(v)
+		return nil
+	case infocard.FieldBody:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBody(v)
+		return nil
+	case infocard.FieldCharacterIds:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCharacterIds(v)
+		return nil
+	case infocard.FieldUserID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case infocard.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
+	}
+	return fmt.Errorf("unknown InfoCard field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *InfoCardMutation) AddedFields() []string {
+	var fields []string
+	if m.addsort_order != nil {
+		fields = append(fields, infocard.FieldSortOrder)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *InfoCardMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case infocard.FieldSortOrder:
+		return m.AddedSortOrder()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *InfoCardMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case infocard.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
+	}
+	return fmt.Errorf("unknown InfoCard numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *InfoCardMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(infocard.FieldCharacterIds) {
+		fields = append(fields, infocard.FieldCharacterIds)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *InfoCardMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *InfoCardMutation) ClearField(name string) error {
+	switch name {
+	case infocard.FieldCharacterIds:
+		m.ClearCharacterIds()
+		return nil
+	}
+	return fmt.Errorf("unknown InfoCard nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *InfoCardMutation) ResetField(name string) error {
+	switch name {
+	case infocard.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case infocard.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case infocard.FieldTitle:
+		m.ResetTitle()
+		return nil
+	case infocard.FieldBody:
+		m.ResetBody()
+		return nil
+	case infocard.FieldCharacterIds:
+		m.ResetCharacterIds()
+		return nil
+	case infocard.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case infocard.FieldSortOrder:
+		m.ResetSortOrder()
+		return nil
+	}
+	return fmt.Errorf("unknown InfoCard field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *InfoCardMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.owner != nil {
+		edges = append(edges, infocard.EdgeOwner)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *InfoCardMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case infocard.EdgeOwner:
+		if id := m.owner; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *InfoCardMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *InfoCardMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *InfoCardMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedowner {
+		edges = append(edges, infocard.EdgeOwner)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *InfoCardMutation) EdgeCleared(name string) bool {
+	switch name {
+	case infocard.EdgeOwner:
+		return m.clearedowner
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *InfoCardMutation) ClearEdge(name string) error {
+	switch name {
+	case infocard.EdgeOwner:
+		m.ClearOwner()
+		return nil
+	}
+	return fmt.Errorf("unknown InfoCard unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *InfoCardMutation) ResetEdge(name string) error {
+	switch name {
+	case infocard.EdgeOwner:
+		m.ResetOwner()
+		return nil
+	}
+	return fmt.Errorf("unknown InfoCard edge %s", name)
+}
+
 // PhaseMutation represents an operation that mutates the Phase nodes in the graph.
 type PhaseMutation struct {
 	config
@@ -4333,6 +5181,9 @@ type UserMutation struct {
 	games                map[int]struct{}
 	removedgames         map[int]struct{}
 	clearedgames         bool
+	info_cards           map[int]struct{}
+	removedinfo_cards    map[int]struct{}
+	clearedinfo_cards    bool
 	done                 bool
 	oldValue             func(context.Context) (*User, error)
 	predicates           []predicate.User
@@ -4936,6 +5787,60 @@ func (m *UserMutation) ResetGames() {
 	m.removedgames = nil
 }
 
+// AddInfoCardIDs adds the "info_cards" edge to the InfoCard entity by ids.
+func (m *UserMutation) AddInfoCardIDs(ids ...int) {
+	if m.info_cards == nil {
+		m.info_cards = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.info_cards[ids[i]] = struct{}{}
+	}
+}
+
+// ClearInfoCards clears the "info_cards" edge to the InfoCard entity.
+func (m *UserMutation) ClearInfoCards() {
+	m.clearedinfo_cards = true
+}
+
+// InfoCardsCleared reports if the "info_cards" edge to the InfoCard entity was cleared.
+func (m *UserMutation) InfoCardsCleared() bool {
+	return m.clearedinfo_cards
+}
+
+// RemoveInfoCardIDs removes the "info_cards" edge to the InfoCard entity by IDs.
+func (m *UserMutation) RemoveInfoCardIDs(ids ...int) {
+	if m.removedinfo_cards == nil {
+		m.removedinfo_cards = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.info_cards, ids[i])
+		m.removedinfo_cards[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedInfoCards returns the removed IDs of the "info_cards" edge to the InfoCard entity.
+func (m *UserMutation) RemovedInfoCardsIDs() (ids []int) {
+	for id := range m.removedinfo_cards {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// InfoCardsIDs returns the "info_cards" edge IDs in the mutation.
+func (m *UserMutation) InfoCardsIDs() (ids []int) {
+	for id := range m.info_cards {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetInfoCards resets all changes to the "info_cards" edge.
+func (m *UserMutation) ResetInfoCards() {
+	m.info_cards = nil
+	m.clearedinfo_cards = false
+	m.removedinfo_cards = nil
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -5232,12 +6137,15 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.scripts != nil {
 		edges = append(edges, user.EdgeScripts)
 	}
 	if m.games != nil {
 		edges = append(edges, user.EdgeGames)
+	}
+	if m.info_cards != nil {
+		edges = append(edges, user.EdgeInfoCards)
 	}
 	return edges
 }
@@ -5258,18 +6166,27 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeInfoCards:
+		ids := make([]ent.Value, 0, len(m.info_cards))
+		for id := range m.info_cards {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedscripts != nil {
 		edges = append(edges, user.EdgeScripts)
 	}
 	if m.removedgames != nil {
 		edges = append(edges, user.EdgeGames)
+	}
+	if m.removedinfo_cards != nil {
+		edges = append(edges, user.EdgeInfoCards)
 	}
 	return edges
 }
@@ -5290,18 +6207,27 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeInfoCards:
+		ids := make([]ent.Value, 0, len(m.removedinfo_cards))
+		for id := range m.removedinfo_cards {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedscripts {
 		edges = append(edges, user.EdgeScripts)
 	}
 	if m.clearedgames {
 		edges = append(edges, user.EdgeGames)
+	}
+	if m.clearedinfo_cards {
+		edges = append(edges, user.EdgeInfoCards)
 	}
 	return edges
 }
@@ -5314,6 +6240,8 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedscripts
 	case user.EdgeGames:
 		return m.clearedgames
+	case user.EdgeInfoCards:
+		return m.clearedinfo_cards
 	}
 	return false
 }
@@ -5335,6 +6263,9 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgeGames:
 		m.ResetGames()
+		return nil
+	case user.EdgeInfoCards:
+		m.ResetInfoCards()
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)

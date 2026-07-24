@@ -77,6 +77,20 @@ func (_u *DeathUpdate) SetNillableGhostVote(v *bool) *DeathUpdate {
 	return _u
 }
 
+// SetCause sets the "cause" field.
+func (_u *DeathUpdate) SetCause(v death.Cause) *DeathUpdate {
+	_u.mutation.SetCause(v)
+	return _u
+}
+
+// SetNillableCause sets the "cause" field if the given value is not nil.
+func (_u *DeathUpdate) SetNillableCause(v *death.Cause) *DeathUpdate {
+	if v != nil {
+		_u.SetCause(*v)
+	}
+	return _u
+}
+
 // SetPhase sets the "phase" edge to the Phase entity.
 func (_u *DeathUpdate) SetPhase(v *Phase) *DeathUpdate {
 	return _u.SetPhaseID(v.ID)
@@ -136,6 +150,11 @@ func (_u *DeathUpdate) check() error {
 			return &ValidationError{Name: "role_id", err: fmt.Errorf(`ent: validator failed for field "Death.role_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Cause(); ok {
+		if err := death.CauseValidator(v); err != nil {
+			return &ValidationError{Name: "cause", err: fmt.Errorf(`ent: validator failed for field "Death.cause": %w`, err)}
+		}
+	}
 	if _u.mutation.PhaseCleared() && len(_u.mutation.PhaseIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Death.phase"`)
 	}
@@ -162,6 +181,9 @@ func (_u *DeathUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.GhostVote(); ok {
 		_spec.SetField(death.FieldGhostVote, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Cause(); ok {
+		_spec.SetField(death.FieldCause, field.TypeEnum, value)
 	}
 	if _u.mutation.PhaseCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -260,6 +282,20 @@ func (_u *DeathUpdateOne) SetNillableGhostVote(v *bool) *DeathUpdateOne {
 	return _u
 }
 
+// SetCause sets the "cause" field.
+func (_u *DeathUpdateOne) SetCause(v death.Cause) *DeathUpdateOne {
+	_u.mutation.SetCause(v)
+	return _u
+}
+
+// SetNillableCause sets the "cause" field if the given value is not nil.
+func (_u *DeathUpdateOne) SetNillableCause(v *death.Cause) *DeathUpdateOne {
+	if v != nil {
+		_u.SetCause(*v)
+	}
+	return _u
+}
+
 // SetPhase sets the "phase" edge to the Phase entity.
 func (_u *DeathUpdateOne) SetPhase(v *Phase) *DeathUpdateOne {
 	return _u.SetPhaseID(v.ID)
@@ -332,6 +368,11 @@ func (_u *DeathUpdateOne) check() error {
 			return &ValidationError{Name: "role_id", err: fmt.Errorf(`ent: validator failed for field "Death.role_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Cause(); ok {
+		if err := death.CauseValidator(v); err != nil {
+			return &ValidationError{Name: "cause", err: fmt.Errorf(`ent: validator failed for field "Death.cause": %w`, err)}
+		}
+	}
 	if _u.mutation.PhaseCleared() && len(_u.mutation.PhaseIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Death.phase"`)
 	}
@@ -375,6 +416,9 @@ func (_u *DeathUpdateOne) sqlSave(ctx context.Context) (_node *Death, err error)
 	}
 	if value, ok := _u.mutation.GhostVote(); ok {
 		_spec.SetField(death.FieldGhostVote, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Cause(); ok {
+		_spec.SetField(death.FieldCause, field.TypeEnum, value)
 	}
 	if _u.mutation.PhaseCleared() {
 		edge := &sqlgraph.EdgeSpec{

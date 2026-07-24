@@ -588,6 +588,15 @@ func phaseHasDeathForRole(p *clockkeeperv1.Phase, roleID string) bool {
 	return false
 }
 
+func deathForRole(p *clockkeeperv1.Phase, roleID string) *clockkeeperv1.Death {
+	for _, d := range p.Deaths {
+		if d.RoleId == roleID {
+			return d
+		}
+	}
+	return nil
+}
+
 func TestRecordDeath_Propagate(t *testing.T) {
 	handler := testHandler(t)
 	ownerID, game := startedGame(t, handler)
@@ -622,6 +631,86 @@ func TestRecordDeath_Propagate(t *testing.T) {
 
 	assert.True(t, phaseHasDeathForRole(n1After, roleID), "should be dead in Night 1")
 	assert.True(t, phaseHasDeathForRole(d1After, roleID), "should be dead in Day 1 (propagated)")
+}
+
+func TestRecordDeath_WithCause(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, game := startedGame(t, handler)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	roleID := game.SelectedRoleIds[0]
+
+	// Advance to Day 1 so there is a later phase to propagate into.
+	advResp, err := handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{
+		GameId: game.Id,
+	}))
+	require.NoError(t, err)
+	game = advResp.Msg.Game
+
+	n1 := findPhase(game, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+
+	// Record a demon death on Night 1 with propagation.
+	resp, err := handler.RecordDeath(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
+		GameId:    game.Id,
+		RoleId:    roleID,
+		PhaseId:   &n1.Id,
+		Propagate: true,
+		Cause:     clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON,
+	}))
+	require.NoError(t, err)
+
+	g := resp.Msg.Game
+	n1After := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1After)
+	d1After := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_DAY, 1)
+	require.NotNil(t, d1After)
+
+	nightDeath := deathForRole(n1After, roleID)
+	require.NotNil(t, nightDeath, "should be dead in Night 1")
+	assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON, nightDeath.Cause)
+
+	dayDeath := deathForRole(d1After, roleID)
+	require.NotNil(t, dayDeath, "should be dead in Day 1 (propagated)")
+	assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON, dayDeath.Cause, "propagated row should carry the same cause")
+}
+
+func TestRecordDeath_DefaultCause(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, game := startedGame(t, handler)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	roleID := game.SelectedRoleIds[0]
+
+	// Record a death without specifying a cause.
+	resp, err := handler.RecordDeath(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
+		GameId: game.Id,
+		RoleId: roleID,
+	}))
+	require.NoError(t, err)
+
+	g := resp.Msg.Game
+	n1 := findPhase(g, clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT, 1)
+	require.NotNil(t, n1)
+	death := deathForRole(n1, roleID)
+	require.NotNil(t, death)
+	assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_UNSPECIFIED, death.Cause)
+}
+
+func TestRecordDeath_InvalidCause(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, game := startedGame(t, handler)
+
+	require.NotEmpty(t, game.SelectedRoleIds)
+	roleID := game.SelectedRoleIds[0]
+
+	_, err := handler.RecordDeath(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
+		GameId: game.Id,
+		RoleId: roleID,
+		Cause:  clockkeeperv1.DeathCause(99),
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }
 
 func TestRecordDeath_NoPropagateOnlyTargetPhase(t *testing.T) {
@@ -1986,11 +2075,29 @@ func TestUpdateDemonBluffs_Success(t *testing.T) {
 	assert.Equal(t, bluffs, resp.Msg.Game.SelectedBluffIds)
 }
 
-func TestUpdateDemonBluffs_FailsNotSetup(t *testing.T) {
+func TestUpdateDemonBluffs_AllowedInProgress(t *testing.T) {
 	handler := testHandler(t)
 	ownerID, game := startedGame(t, handler)
 
-	_, err := handler.UpdateDemonBluffs(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
+	bluffs := []string{"washerwoman", "librarian"}
+	resp, err := handler.UpdateDemonBluffs(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
+		GameId:   game.Id,
+		BluffIds: bluffs,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, bluffs, resp.Msg.Game.SelectedBluffIds)
+}
+
+func TestUpdateDemonBluffs_BlockedWhenCompleted(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, game := startedGame(t, handler)
+
+	_, err := handler.EndGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.EndGameRequest{
+		GameId: game.Id,
+	}))
+	require.NoError(t, err)
+
+	_, err = handler.UpdateDemonBluffs(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateDemonBluffsRequest{
 		GameId:   game.Id,
 		BluffIds: []string{"washerwoman"},
 	}))

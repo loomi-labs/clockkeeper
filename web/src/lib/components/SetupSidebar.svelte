@@ -200,7 +200,9 @@
 <div
   class="card-slate fixed top-0 right-0 bottom-0 hidden w-72 flex-col border-l border-border bg-surface 2xl:flex"
 >
-  <div class="flex items-center gap-3 border-b border-border px-4 py-3 pt-[72px]">
+  <div
+    class="flex items-center gap-3 border-b border-border px-4 py-3 pt-[72px]"
+  >
     <h2 class="text-lg font-semibold text-primary">Setup</h2>
     {#if hasSteps}
       <span class="text-sm text-secondary">{completed.size}/{steps.length}</span
@@ -342,10 +344,7 @@
       </div>
 
       <!-- Step content — entire area is clickable to toggle check -->
-      <button
-        class="mt-6 w-full text-left"
-        onclick={focusCheck}
-      >
+      <button class="mt-6 w-full text-left" onclick={focusCheck}>
         <div class="flex items-start gap-3">
           <div
             class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 transition-colors {completed.has(

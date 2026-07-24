@@ -20,6 +20,7 @@
     travellerAlignments,
     onalignmentchange,
     bagSubstitutions,
+    bagSubWarnings,
     onbagsubchange,
     onpreview,
   }: {
@@ -38,6 +39,8 @@
       string,
       { characterId: string; characterName: string }
     >;
+    /** caused_by_ids whose shown token is also in play (amber-flag the row). */
+    bagSubWarnings?: ReadonlySet<string>;
     onbagsubchange?: (causedById: string) => void;
     onpreview?: (character: Character) => void;
   } = $props();
@@ -94,6 +97,7 @@
               ? (a) => onalignmentchange(char.id, a)
               : undefined}
             bagSubstitution={bagSubstitutions?.get(char.id)}
+            bagSubWarning={bagSubWarnings?.has(char.id) ?? false}
             onbagsubchange={onbagsubchange
               ? () => onbagsubchange(char.id)
               : undefined}
@@ -110,6 +114,7 @@
             ? (a) => onalignmentchange(char.id, a)
             : undefined}
           bagSubstitution={bagSubstitutions?.get(char.id)}
+          bagSubWarning={bagSubWarnings?.has(char.id) ?? false}
           onbagsubchange={onbagsubchange
             ? () => onbagsubchange(char.id)
             : undefined}

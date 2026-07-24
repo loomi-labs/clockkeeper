@@ -2,6 +2,7 @@ package web
 
 import (
 	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
@@ -40,12 +41,27 @@ var phaseTypeToProto = map[phase.Type]clockkeeperv1.PhaseType{
 	phase.TypeDay:   clockkeeperv1.PhaseType_PHASE_TYPE_DAY,
 }
 
+var deathCauseToProto = map[death.Cause]clockkeeperv1.DeathCause{
+	death.CauseUnspecified: clockkeeperv1.DeathCause_DEATH_CAUSE_UNSPECIFIED,
+	death.CauseExecution:   clockkeeperv1.DeathCause_DEATH_CAUSE_EXECUTION,
+	death.CauseDemon:       clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON,
+	death.CauseOther:       clockkeeperv1.DeathCause_DEATH_CAUSE_OTHER,
+}
+
+var protoToDeathCause = map[clockkeeperv1.DeathCause]death.Cause{
+	clockkeeperv1.DeathCause_DEATH_CAUSE_UNSPECIFIED: death.CauseUnspecified,
+	clockkeeperv1.DeathCause_DEATH_CAUSE_EXECUTION:   death.CauseExecution,
+	clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON:       death.CauseDemon,
+	clockkeeperv1.DeathCause_DEATH_CAUSE_OTHER:       death.CauseOther,
+}
+
 func entDeathToProto(d *ent.Death) *clockkeeperv1.Death {
 	return &clockkeeperv1.Death{
 		Id:        int64(d.ID),
 		RoleId:    d.RoleID,
 		PhaseId:   int64(d.PhaseID),
 		GhostVote: d.GhostVote,
+		Cause:     deathCauseToProto[d.Cause],
 	}
 }
 
@@ -129,6 +145,20 @@ func charactersToProto(chars []*botc.Character) []*clockkeeperv1.Character {
 	return result
 }
 
+func entInfoCardToProto(c *ent.InfoCard, registry *botc.Registry) *clockkeeperv1.InfoCard {
+	proto := &clockkeeperv1.InfoCard{
+		Id:           int64(c.ID),
+		Title:        c.Title,
+		Body:         c.Body,
+		CharacterIds: c.CharacterIds,
+	}
+	if registry != nil {
+		// registry.Characters skips ids no longer in the registry gracefully.
+		proto.Characters = charactersToProto(registry.Characters(c.CharacterIds))
+	}
+	return proto
+}
+
 func entScriptToProto(s *ent.Script, registry *botc.Registry) *clockkeeperv1.Script {
 	proto := &clockkeeperv1.Script{
 		Id:           int64(s.ID),
@@ -174,24 +204,16 @@ func entGameToSummary(g *ent.Game) *clockkeeperv1.GameSummary {
 	return summary
 }
 
-func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
+// buildReminderTokens collects the reminder tokens for a game from its regular,
+// traveller, and extra characters. Tokens are emitted in a stable order: per
+// character (selected roles, then travellers, then extra characters), each
+// character's Reminders first, then its RemindersGlobal. This ordering is the
+// contract behind the stable reminder ids computed by stableReminderIDs.
+func buildReminderTokens(g *ent.Game, registry *botc.Registry) []*clockkeeperv1.ReminderToken {
 	chars := registry.Characters(g.SelectedRoles)
 	travellerChars := registry.Characters(g.SelectedTravellers)
 	extraChars := registry.Characters(g.ExtraCharacters)
-	bluffChars := registry.Characters(g.SelectedBluffs)
 
-	var dist *clockkeeperv1.RoleDistribution
-	if d, err := botc.DistributionForPlayerCount(g.PlayerCount); err == nil {
-		adjusted := botc.ApplySetupModifiers(d, chars).Distribution
-		dist = &clockkeeperv1.RoleDistribution{
-			Townsfolk: int32(adjusted.Townsfolk),
-			Outsiders: int32(adjusted.Outsiders),
-			Minions:   int32(adjusted.Minions),
-			Demons:    int32(adjusted.Demons),
-		}
-	}
-
-	// Collect reminder tokens from regular, traveller, and extra characters.
 	var tokens []*clockkeeperv1.ReminderToken
 	allChars := make([]*botc.Character, 0, len(chars)+len(travellerChars)+len(extraChars))
 	allChars = append(allChars, chars...)
@@ -213,6 +235,28 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 			})
 		}
 	}
+	return tokens
+}
+
+func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
+	chars := registry.Characters(g.SelectedRoles)
+	travellerChars := registry.Characters(g.SelectedTravellers)
+	extraChars := registry.Characters(g.ExtraCharacters)
+	bluffChars := registry.Characters(g.SelectedBluffs)
+
+	var dist *clockkeeperv1.RoleDistribution
+	if d, err := botc.DistributionForPlayerCount(g.PlayerCount); err == nil {
+		adjusted := botc.ApplySetupModifiers(d, chars).Distribution
+		dist = &clockkeeperv1.RoleDistribution{
+			Townsfolk: int32(adjusted.Townsfolk),
+			Outsiders: int32(adjusted.Outsiders),
+			Minions:   int32(adjusted.Minions),
+			Demons:    int32(adjusted.Demons),
+		}
+	}
+
+	// Collect reminder tokens from regular, traveller, and extra characters.
+	tokens := buildReminderTokens(g, registry)
 
 	proto := &clockkeeperv1.Game{
 		Id:                          int64(g.ID),

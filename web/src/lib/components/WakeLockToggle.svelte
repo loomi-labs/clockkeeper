@@ -51,8 +51,12 @@
     class="rounded-lg border border-border p-2 transition-colors {userEnabled
       ? 'bg-amber-100 border-amber-300 text-amber-600 dark:bg-amber-500/20 dark:border-amber-600 dark:text-amber-400'
       : 'text-secondary hover:bg-hover hover:text-medium'}"
-    title={userEnabled ? "Screen will stay on (click to disable)" : "Keep screen on"}
-    aria-label={userEnabled ? "Disable screen wake lock" : "Enable screen wake lock"}
+    title={userEnabled
+      ? "Screen will stay on (click to disable)"
+      : "Keep screen on"}
+    aria-label={userEnabled
+      ? "Disable screen wake lock"
+      : "Enable screen wake lock"}
     aria-pressed={userEnabled}
   >
     <svg

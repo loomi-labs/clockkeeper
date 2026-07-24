@@ -60,7 +60,11 @@
   {@render children()}
 {:else if initialized && auth.isAuthenticated}
   <div class="min-h-dvh text-primary">
-    <nav class="nav-bar relative z-40 border-b border-border bg-surface transition-[margin-left] duration-200 {sidebar.expanded ? 'md:ml-48' : 'md:ml-14'}">
+    <nav
+      class="nav-bar relative z-40 border-b border-border bg-surface transition-[margin-left] duration-200 {sidebar.expanded
+        ? 'md:ml-48'
+        : 'md:ml-14'}"
+    >
       <div class="flex items-center justify-between px-4 py-3">
         <div class="flex min-w-0 flex-1 items-center gap-4">
           <button

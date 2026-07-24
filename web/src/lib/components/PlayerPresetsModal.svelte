@@ -95,14 +95,26 @@
         class="rounded-lg p-1 text-muted transition-colors hover:bg-hover hover:text-primary"
         aria-label="Close"
       >
-        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        <svg
+          class="h-5 w-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 18L18 6M6 6l12 12"
+          />
         </svg>
       </button>
     </div>
 
     {#if error}
-      <div class="mt-3 rounded-lg bg-error-bg border border-error-border px-3 py-2 text-sm text-error-text">
+      <div
+        class="mt-3 rounded-lg bg-error-bg border border-error-border px-3 py-2 text-sm text-error-text"
+      >
         {error}
       </div>
     {/if}
@@ -112,7 +124,9 @@
     {:else}
       <div class="mt-4 space-y-1 max-h-60 overflow-y-auto">
         {#each names as name, i (i)}
-          <div class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-hover group">
+          <div
+            class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-hover group"
+          >
             <span class="w-5 text-xs text-muted text-center">{i + 1}</span>
             <span class="flex-1 text-sm text-primary">{name}</span>
             <button
@@ -121,7 +135,18 @@
               class="rounded p-0.5 text-muted opacity-100 transition-opacity hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 disabled:opacity-40"
               aria-label="Move up"
             >
-              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" /></svg>
+              <svg
+                class="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M5 15l7-7 7 7"
+                /></svg
+              >
             </button>
             <button
               onclick={() => moveName(i, i + 1)}
@@ -129,25 +154,52 @@
               class="rounded p-0.5 text-muted opacity-100 transition-opacity hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 disabled:opacity-40"
               aria-label="Move down"
             >
-              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              <svg
+                class="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M19 9l-7 7-7-7"
+                /></svg
+              >
             </button>
             <button
               onclick={() => removeName(i)}
               class="rounded p-0.5 text-muted opacity-100 transition-opacity hover:text-red-500 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
               aria-label="Remove {name}"
             >
-              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <svg
+                class="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M6 18L18 6M6 6l12 12"
+                /></svg
+              >
             </button>
           </div>
         {/each}
         {#if names.length === 0}
-          <p class="py-4 text-center text-sm text-muted">No player names saved yet.</p>
+          <p class="py-4 text-center text-sm text-muted">
+            No player names saved yet.
+          </p>
         {/if}
       </div>
 
       <form
         class="mt-3 flex gap-2"
-        onsubmit={(e) => { e.preventDefault(); addName(); }}
+        onsubmit={(e) => {
+          e.preventDefault();
+          addName();
+        }}
       >
         <input
           type="text"

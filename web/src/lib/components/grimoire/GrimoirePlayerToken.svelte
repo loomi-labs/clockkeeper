@@ -1,6 +1,11 @@
 <script lang="ts">
   import { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
-  import { teamCardColors, goodColors, evilColors, teamDataAttr } from "~/lib/team-styles";
+  import {
+    teamCardColors,
+    goodColors,
+    evilColors,
+    teamDataAttr,
+  } from "~/lib/team-styles";
   import {
     useComposedGesture,
     panComposition,
@@ -190,7 +195,11 @@
   }}
 >
   <div
-    class="card-slate flex h-32 w-32 flex-col items-center justify-center rounded-full p-1 transition-shadow {colorClass} {highlightAttach ? 'ring-3 ring-primary/40' : ''} {dropHover ? 'ring-3 ring-indigo-500' : ''} {ontap ? 'ring-2 ring-indigo-300/50' : ''}"
+    class="card-slate flex h-32 w-32 flex-col items-center justify-center rounded-full p-1 transition-shadow {colorClass} {highlightAttach
+      ? 'ring-3 ring-primary/40'
+      : ''} {dropHover ? 'ring-3 ring-indigo-500' : ''} {ontap
+      ? 'ring-2 ring-indigo-300/50'
+      : ''}"
     class:token-bezel={!player.isDead}
     class:token-bezel-dead={player.isDead}
     class:token-bezel-drag={dragging}

@@ -24,6 +24,7 @@ func (Death) Fields() []ent.Field {
 		field.Int("phase_id"),
 		field.String("role_id").NotEmpty(),
 		field.Bool("ghost_vote").Default(true),
+		field.Enum("cause").Values("unspecified", "execution", "demon", "other").Default("unspecified"),
 	}
 }
 

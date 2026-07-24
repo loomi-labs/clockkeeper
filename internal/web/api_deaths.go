@@ -33,6 +33,12 @@ func (h *ClockKeeperServiceHandler) RecordDeath(ctx context.Context, req *connec
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("character %s is not in this game", req.Msg.RoleId))
 	}
 
+	// Validate death cause enum at the API boundary.
+	cause, ok := protoToDeathCause[req.Msg.Cause]
+	if !ok {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid death cause: %d", req.Msg.Cause))
+	}
+
 	// Determine target phase.
 	var targetPhaseID int
 	if req.Msg.PhaseId != nil {
@@ -83,6 +89,7 @@ func (h *ClockKeeperServiceHandler) RecordDeath(ctx context.Context, req *connec
 			SetPhaseID(p.ID).
 			SetRoleID(req.Msg.RoleId).
 			SetGhostVote(true).
+			SetCause(cause).
 			Save(ctx)
 		if err != nil {
 			_ = tx.Rollback()

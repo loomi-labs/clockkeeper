@@ -545,8 +545,8 @@ func (h *ClockKeeperServiceHandler) UpdateDemonBluffs(ctx context.Context, req *
 		return nil, err
 	}
 
-	if g.State != game.StateSetup {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is not in setup state"))
+	if g.State == game.StateCompleted {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
 	}
 
 	// Validate all bluff IDs exist in the registry.
