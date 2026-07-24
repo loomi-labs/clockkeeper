@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { computeFortuneTeller } from "~/lib/night-helpers/helpers";
+  import {
+    computeFortuneTeller,
+    findDemonPlayers,
+    type HelperPlayer,
+  } from "~/lib/night-helpers/helpers";
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
   import PlayerPickerPopover from "./PlayerPickerPopover.svelte";
 
@@ -22,11 +26,18 @@
   const status = $derived(playerId ? ctx.statuses.get(playerId) : undefined);
   const impaired = $derived(!!status && (status.poisoned || status.drunk));
 
+  // The demon seat(s) — detected exactly the way `computeFortuneTeller` decides
+  // a pick gives YES, so the display and the answer cannot diverge.
+  const demonPlayers = $derived(findDemonPlayers(ctx.players));
+
   // Popover state for the slot currently being picked.
   let picker = $state<{
     slot: 0 | 1;
     anchor: { top: number; left: number };
   } | null>(null);
+
+  // Popover state for the Set Red Herring picker.
+  let rhPicker = $state<{ anchor: { top: number; left: number } } | null>(null);
 
   // All players are available for the open slot (the Fortune Teller may choose
   // dead players and even themselves); only the other slot's pick is excluded.
@@ -43,9 +54,37 @@
     return p ? p.name || p.characterName : undefined;
   }
 
+  const redHerringName = $derived(playerName(ctx.redHerringPlayerId));
+  const demonNames = $derived(
+    demonPlayers.map((p) => p.name || p.characterName).join(", "),
+  );
+
+  // Advisory alignment badge for the Red Herring picker: good-aligned seats read
+  // as a match (green), evil as a non-match (muted). Everyone stays pickable.
+  function annotateAlignment(p: HelperPlayer) {
+    if (p.alignment === "good") return { label: "good", tone: "ok" as const };
+    if (p.alignment === "evil")
+      return { label: "evil", tone: "muted" as const };
+    return undefined;
+  }
+
   function openPicker(slot: 0 | 1, e: MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     picker = { slot, anchor: { top: rect.bottom + 4, left: rect.left } };
+  }
+
+  function openRhPicker(e: MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    rhPicker = { anchor: { top: rect.bottom + 4, left: rect.left } };
+  }
+
+  function setRedHerring(id: string) {
+    ctx.onattachtoken?.("fortuneteller", "Red Herring", id);
+    rhPicker = null;
+  }
+
+  function clearRedHerring() {
+    ctx.onattachtoken?.("fortuneteller", "Red Herring", undefined);
   }
 
   function setSlot(slot: 0 | 1, id: string) {
@@ -130,7 +169,64 @@
   </div>
 {/if}
 
-{#if ctx.redHerringPlayerId === undefined}
+<!-- Red Herring + Demon info row -->
+<div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+  {#if ctx.onattachtoken}
+    {#if redHerringName}
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          onclick={openRhPicker}
+          class="rounded border border-border px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-hover"
+          title="Change Red Herring"
+        >
+          Red Herring: {redHerringName}
+        </button>
+        <button
+          type="button"
+          onclick={clearRedHerring}
+          class="flex h-5 w-5 items-center justify-center rounded-full text-muted transition-colors hover:bg-hover hover:text-primary"
+          aria-label="Clear Red Herring"
+          title="Clear Red Herring"
+        >
+          <svg
+            class="h-3 w-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2.5"
+            ><path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6 18L18 6M6 6l12 12"
+            /></svg
+          >
+        </button>
+      </div>
+    {:else}
+      <button
+        type="button"
+        onclick={openRhPicker}
+        class="rounded border border-border px-2 py-1 text-xs text-muted transition-colors hover:bg-hover"
+      >
+        Set Red Herring
+      </button>
+    {/if}
+  {:else if redHerringName}
+    <span class="text-secondary"
+      >Red Herring:
+      <span class="font-medium text-primary">{redHerringName}</span></span
+    >
+  {/if}
+
+  {#if demonNames}
+    <span class="text-secondary"
+      >Demon: <span class="font-medium text-primary">{demonNames}</span></span
+    >
+  {/if}
+</div>
+
+{#if ctx.redHerringPlayerId === undefined && !ctx.onattachtoken}
   <p class="mt-1 text-[11px] text-muted">
     No Red Herring assigned &mdash; attach the Fortune Teller's Red Herring
     token to a player in the Grimoire.
@@ -159,5 +255,16 @@
     anchor={picker.anchor}
     onpick={(id) => setSlot(picker!.slot, id)}
     onclose={() => (picker = null)}
+  />
+{/if}
+
+{#if rhPicker}
+  <PlayerPickerPopover
+    title="Set Red Herring"
+    players={pickerPlayers}
+    anchor={rhPicker.anchor}
+    annotate={annotateAlignment}
+    onpick={setRedHerring}
+    onclose={() => (rhPicker = null)}
   />
 {/if}

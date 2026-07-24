@@ -3,6 +3,7 @@ import {
   assignNameInMap,
   unassignName,
   assignInOrder,
+  renameAssignedName,
   shuffled,
 } from "./player-names";
 
@@ -148,6 +149,70 @@ describe("assignInOrder", () => {
     const map = new Map([["s9", "Existing"]]);
     const before = new Map(map);
     assignInOrder(map, ["s1", "s2"], PRESETS);
+    expect([...map.entries()]).toEqual([...before.entries()]);
+  });
+});
+
+describe("renameAssignedName", () => {
+  it("renames a single seat holding the old name", () => {
+    const map = new Map([
+      ["s1", "Alice"],
+      ["s2", "Bob"],
+    ]);
+    const result = renameAssignedName(map, "Alice", "Alicia");
+    expect(result.get("s1")).toBe("Alicia");
+    expect(result.get("s2")).toBe("Bob");
+  });
+
+  it("renames every seat holding the old name (free-text duplicates)", () => {
+    const map = new Map([
+      ["s1", "Guest"],
+      ["s2", "Guest"],
+      ["s3", "Bob"],
+    ]);
+    const result = renameAssignedName(map, "Guest", "Visitor");
+    expect(result.get("s1")).toBe("Visitor");
+    expect(result.get("s2")).toBe("Visitor");
+    expect(result.get("s3")).toBe("Bob");
+  });
+
+  it("trims the new name", () => {
+    const map = new Map([["s1", "Alice"]]);
+    const result = renameAssignedName(map, "Alice", "  Alicia  ");
+    expect(result.get("s1")).toBe("Alicia");
+  });
+
+  it("is a no-op when the old name is absent", () => {
+    const map = new Map([
+      ["s1", "Alice"],
+      ["s2", "Bob"],
+    ]);
+    const result = renameAssignedName(map, "Carol", "Carla");
+    expect([...result.entries()]).toEqual([...map.entries()]);
+  });
+
+  it("unassigns matching seats when the new name is empty", () => {
+    const map = new Map([
+      ["s1", "Guest"],
+      ["s2", "Guest"],
+      ["s3", "Bob"],
+    ]);
+    const result = renameAssignedName(map, "Guest", "");
+    expect(result.has("s1")).toBe(false);
+    expect(result.has("s2")).toBe(false);
+    expect(result.get("s3")).toBe("Bob");
+  });
+
+  it("unassigns matching seats when the new name is whitespace-only", () => {
+    const map = new Map([["s1", "Alice"]]);
+    const result = renameAssignedName(map, "Alice", "   ");
+    expect(result.has("s1")).toBe(false);
+  });
+
+  it("does not mutate the input map (immutability)", () => {
+    const map = new Map([["s1", "Alice"]]);
+    const before = new Map(map);
+    renameAssignedName(map, "Alice", "Alicia");
     expect([...map.entries()]).toEqual([...before.entries()]);
   });
 });

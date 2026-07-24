@@ -89,6 +89,33 @@ export function assignInOrder(
 }
 
 /**
+ * Rename every seat assignment whose value equals `oldName` to `newName`,
+ * returning a new map.
+ *
+ * - `newName` is trimmed. A whitespace-only / empty `newName` unassigns the
+ *   matching seats instead (deletes their keys).
+ * - Seats not currently holding `oldName` are left untouched, so this is a
+ *   no-op when `oldName` is absent.
+ */
+export function renameAssignedName(
+  map: ReadonlyMap<string, string>,
+  oldName: string,
+  newName: string,
+): Map<string, string> {
+  const next = new Map(map);
+  const trimmed = newName.trim();
+  for (const [id, existingName] of next) {
+    if (existingName !== oldName) continue;
+    if (trimmed === "") {
+      next.delete(id);
+    } else {
+      next.set(id, trimmed);
+    }
+  }
+  return next;
+}
+
+/**
  * Returns a new array with the elements of `arr` in a uniformly random order
  * (Fisher-Yates). The input is never mutated. Used to randomize which preset
  * name lands on which seat before delegating to {@link assignInOrder}.

@@ -42,16 +42,38 @@
   // Librarian's "no Outsiders in play" mode (replaces the pickers).
   let noOutsiders = $state(false);
 
+  // Ephemeral shown-character override. The revealed character is normally the
+  // "right" seat's DISPLAYED character, but the ST may override it (e.g. to show
+  // a category-appropriate character that differs from the seat's token). Reset
+  // whenever the picked "right" seat changes, so a stale override never leaks.
+  let overrideChar = $state<{
+    id: string;
+    name: string;
+    team: Team;
+    edition: string;
+  } | null>(null);
+  $effect(() => {
+    rightId;
+    overrideChar = null;
+  });
+
   const status = $derived(
     helperPlayerId ? ctx.statuses.get(helperPlayerId) : undefined,
   );
   const impaired = $derived(!!status && (status.poisoned || status.drunk));
 
-  // The shown character is whatever the picked "right" seat DISPLAYS — bag-sub
-  // aware and NOT team-filtered. A drunk/poisoned info character can legitimately
-  // be shown any character, so we never restrict the pick by team.
+  // The shown character is the manual override when set, else whatever the
+  // picked "right" seat DISPLAYS — bag-sub aware and NOT team-filtered. A
+  // drunk/poisoned info character can legitimately be shown any character, so we
+  // never restrict the DERIVED pick by team (the override picker does, below).
   const shownChar = $derived(
-    rightId ? ctx.displayedCharacterOf?.(rightId) : undefined,
+    overrideChar ?? (rightId ? ctx.displayedCharacterOf?.(rightId) : undefined),
+  );
+
+  // Override candidates: the script's characters of the helper's category
+  // (Washerwoman → Townsfolk, Librarian → Outsider, Investigator → Minion).
+  const overrideCandidates = $derived(
+    (ctx.scriptCharacters ?? []).filter((c) => cfg && c.team === cfg.team),
   );
 
   // Both slots list ALL seats (alive or dead), excluding only the helper's own
@@ -123,6 +145,58 @@
     }
     if (!shownChar || !rightId || !wrongId) return;
     ctx.onshowcard?.(firstNightInfoCard(shownChar));
+  }
+
+  // ── Shown-character override picker ──
+  // A small popover listing the category's script characters. Portalled to
+  // <body> (same rationale as PlayerPickerPopover): rendered inline its
+  // `position: fixed` would resolve against a transformed/clipped night row.
+  const CHAR_VIEWPORT_MARGIN = 8;
+  let charPicker = $state<{ top: number; left: number } | null>(null);
+  let charMenuEl = $state<HTMLDivElement | null>(null);
+  let charResolvedTop = $state<number | null>(null);
+
+  function openCharPicker(e: MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    charPicker = { top: rect.bottom + 4, left: rect.left };
+  }
+
+  function pickOverride(c: {
+    id: string;
+    name: string;
+    team: Team;
+    edition: string;
+  }) {
+    overrideChar = { id: c.id, name: c.name, team: c.team, edition: c.edition };
+    charPicker = null;
+  }
+
+  // Clamp/flip the popover so it stays within the viewport.
+  $effect(() => {
+    if (!charMenuEl || !charPicker) return;
+    const height = charMenuEl.offsetHeight;
+    const vh = window.innerHeight;
+    if (charPicker.top + height > vh - CHAR_VIEWPORT_MARGIN) {
+      charResolvedTop = Math.max(CHAR_VIEWPORT_MARGIN, charPicker.top - height);
+    } else {
+      charResolvedTop = charPicker.top;
+    }
+  });
+
+  // Outside pointerdown closes the override picker.
+  $effect(() => {
+    if (!charPicker) return;
+    function onWindowPointerDown(e: PointerEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-char-picker]")) charPicker = null;
+    }
+    window.addEventListener("pointerdown", onWindowPointerDown);
+    return () => window.removeEventListener("pointerdown", onWindowPointerDown);
+  });
+
+  function portalToBody(node: HTMLElement) {
+    document.body.appendChild(node);
+    return () => node.remove();
   }
 </script>
 
@@ -241,6 +315,40 @@
             ((e.target as HTMLImageElement).style.display = "none")}
         />
         <span class="text-xs font-medium text-primary">{shownChar.name}</span>
+        {#if overrideChar}
+          <span class="text-[11px] italic text-secondary">(override)</span>
+        {/if}
+        {#if ctx.scriptCharacters}
+          <button
+            type="button"
+            onclick={openCharPicker}
+            class="rounded border border-border px-1.5 py-0.5 text-[11px] text-muted transition-colors hover:bg-hover"
+          >
+            Change
+          </button>
+        {/if}
+        {#if overrideChar}
+          <button
+            type="button"
+            onclick={() => (overrideChar = null)}
+            class="flex h-5 w-5 items-center justify-center rounded-full text-muted transition-colors hover:bg-hover hover:text-primary"
+            aria-label="Reset to derived character"
+            title="Reset to derived character"
+          >
+            <svg
+              class="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2.5"
+              ><path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              /></svg
+            >
+          </button>
+        {/if}
       </div>
     {/if}
 
@@ -282,5 +390,51 @@
       onpick={(id) => setSlot(picker!.slot, id)}
       onclose={() => (picker = null)}
     />
+  {/if}
+
+  {#if charPicker}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      bind:this={charMenuEl}
+      {@attach portalToBody}
+      class="fixed z-50 max-h-[min(60vh,20rem)] w-56 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-lg"
+      style="top: {charResolvedTop ??
+        charPicker.top}px; left: {charPicker.left}px"
+      data-char-picker
+      onpointerdown={(e: PointerEvent) => e.stopPropagation()}
+      role="menu"
+      tabindex="-1"
+      aria-label="Shows the {cfg.teamLabel}"
+    >
+      <div
+        class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted"
+      >
+        Shows the {cfg.teamLabel}
+      </div>
+      {#if overrideCandidates.length === 0}
+        <div class="px-3 py-2 text-sm text-muted">No characters available</div>
+      {:else}
+        {#each overrideCandidates as c (c.id)}
+          <button
+            type="button"
+            role="menuitem"
+            onclick={() => pickOverride(c)}
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-hover"
+          >
+            <img
+              src="/characters/{c.edition}/{c.id}{iconSuffix(c.team)}.webp"
+              alt=""
+              draggable="false"
+              class="h-8 w-8 shrink-0 rounded-full"
+              onerror={(e: Event) =>
+                ((e.target as HTMLImageElement).style.display = "none")}
+            />
+            <span class="block truncate text-sm font-medium text-primary">
+              {c.name}
+            </span>
+          </button>
+        {/each}
+      {/if}
+    </div>
   {/if}
 {/if}

@@ -41,6 +41,7 @@ service ClockKeeperService {
   rpc UpdateDemonBluffs(UpdateDemonBluffsRequest) returns (UpdateDemonBluffsResponse) {}
   rpc UpdateBagSubstitutions(UpdateBagSubstitutionsRequest) returns (UpdateBagSubstitutionsResponse) {}
   rpc ReassignBagSubstitution(ReassignBagSubstitutionRequest) returns (ReassignBagSubstitutionResponse) {}
+  rpc StarPass(StarPassRequest) returns (StarPassResponse) {}
   rpc GetSetupChecklist(GetSetupChecklistRequest) returns (GetSetupChecklistResponse) {}
   rpc GetDistribution(GetDistributionRequest) returns (GetDistributionResponse) {}
   rpc DeleteGame(DeleteGameRequest) returns (DeleteGameResponse) {}
@@ -595,6 +596,17 @@ message ReassignBagSubstitutionRequest {
 }
 
 message ReassignBagSubstitutionResponse {
+  Game game = 1;
+}
+
+// StarPass promotes a Minion to the Imp when the Imp kills himself at night.
+// Implemented as an atomic two-seat role swap between "imp" and minion_role_id.
+message StarPassRequest {
+  int64 game_id = 1;
+  string minion_role_id = 2;
+}
+
+message StarPassResponse {
   Game game = 1;
 }
 

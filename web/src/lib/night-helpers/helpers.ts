@@ -201,6 +201,20 @@ export function computeChef(
 }
 
 /**
+ * The seats that register as the Demon to a Fortune Teller check — those whose
+ * (night-scoped) team is Demon. This is the single source of truth for the
+ * demon side of {@link computeFortuneTeller}, so the "which picks give YES"
+ * detection and the demon display in the helper cannot diverge. Team is taken
+ * as-is (never the displayed `characterId`), exactly as the Fortune Teller
+ * computation treats it. Returns an empty array when no seat is a Demon.
+ */
+export function findDemonPlayers(
+  players: ReadonlyMap<string, HelperPlayer>,
+): HelperPlayer[] {
+  return [...players.values()].filter((p) => p.team === Team.DEMON);
+}
+
+/**
  * Fortune Teller: does either of the two picked players register as the Demon?
  *
  * Returns `undefined` until two players are picked. The answer is "yes" when a
@@ -223,7 +237,8 @@ export function computeFortuneTeller(
   | undefined {
   if (picks.length < 2) return undefined;
 
-  const demonPicked = picks.some((id) => players.get(id)?.team === Team.DEMON);
+  const demonIds = new Set(findDemonPlayers(players).map((p) => p.id));
+  const demonPicked = picks.some((id) => demonIds.has(id));
   const redHerringPicked =
     redHerringPlayerId !== undefined && picks.includes(redHerringPlayerId);
 

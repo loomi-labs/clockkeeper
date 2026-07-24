@@ -15,7 +15,11 @@ control:
   Demon (or Red Herring) is among them.
 - The **Washerwoman / Librarian / Investigator** helper lets you pick the
   "shown" player and a decoy, then attaches the reminder tokens and shows the
-  matching info card.
+  matching info card. The shown character defaults to the seat's token but can
+  be overridden from the script's characters of that category.
+- The **Butler** and **Poisoner** helpers are single-player token pickers
+  (`TokenPickHelper`): pick a seat to attach the "Master" / "Poisoned" reminder
+  token, kept in sync with manual grimoire attachment.
 
 Helpers are advisory. They read game state (seating, deaths, alignments,
 poisoned/drunk status, bag substitutions) and never mutate real roles on their
@@ -59,12 +63,12 @@ good) make counting helpers ambiguous. Registration is decided per check at
 Storyteller discretion, so each ambiguous player varies independently. The
 exact semantics differ per helper:
 
-- **Empath** (numeric range): counts evil among the two nearest *alive*
+- **Empath** (numeric range): counts evil among the two nearest _alive_
   neighbours - dead players never count and the walk continues to the next
   alive player. Ambiguity yields a `{ min, max }` range (rendered "N" when
   `min === max`, else "N-M") with a hint naming the cause ("Recluse may
   register evil" / "Spy may register good").
-- **Chef** (numeric range): counts adjacent evil *pairs* among alive players
+- **Chef** (numeric range): counts adjacent evil _pairs_ among alive players
   around the circle (first night, so usually everyone is alive). Same range
   and hint treatment as the Empath.
 - **Fortune Teller** (boolean, not a range): the two chosen players may be
@@ -81,12 +85,12 @@ Legend for "Night": F = has a first-night action, O = has an other-night action,
 
 | Character     | Team      | Night | Helper today         | Proposal / rationale                                                                                                                                                                                 |
 | ------------- | --------- | ----- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Washerwoman   | Townsfolk | F     | FirstNightInfoHelper | Implemented. Pick shown + decoy, attach "Townsfolk"/"Wrong" tokens, show card.                                                                                                                       |
-| Librarian     | Townsfolk | F     | FirstNightInfoHelper | Implemented. As Washerwoman, plus a "No Outsiders" card mode.                                                                                                                                        |
-| Investigator  | Townsfolk | F     | FirstNightInfoHelper | Implemented. As Washerwoman, with "Minion"/"Wrong" tokens.                                                                                                                                           |
+| Washerwoman   | Townsfolk | F     | FirstNightInfoHelper | Implemented. Pick shown + decoy, attach "Townsfolk"/"Wrong" tokens, show card. Shown character defaults to the seat's token but can be overridden from the Townsfolk in the script.                  |
+| Librarian     | Townsfolk | F     | FirstNightInfoHelper | Implemented. As Washerwoman, plus a "No Outsiders" card mode; the shown-character override is limited to the script's Outsiders.                                                                     |
+| Investigator  | Townsfolk | F     | FirstNightInfoHelper | Implemented. As Washerwoman, with "Minion"/"Wrong" tokens; the shown-character override is limited to the script's Minions.                                                                          |
 | Chef          | Townsfolk | F     | ChefHelper           | Implemented. Counts adjacent evil pairs; range under Recluse/Spy.                                                                                                                                    |
 | Empath        | Townsfolk | FO    | EmpathHelper         | Implemented. Counts evil neighbours; range under Recluse/Spy.                                                                                                                                        |
-| Fortuneteller | Townsfolk | FO    | FortuneTellerHelper  | Implemented. Two-player pick; Red Herring aware; Recluse-may-yes.                                                                                                                                    |
+| Fortuneteller | Townsfolk | FO    | FortuneTellerHelper  | Implemented. Two-player pick; Red Herring aware (Set-Red-Herring button attaches the token) plus a compact "Demon: …" display; Recluse-may-yes.                                                      |
 | Undertaker    | Townsfolk | O     | UndertakerHelper     | Implemented. Names yesterday's execution.                                                                                                                                                            |
 | Monk          | Townsfolk | O     | none                 | Proposed: single-player picker that attaches the "Safe" (protected) reminder token to the chosen player. Same pattern as the Fortune Teller pick plus `onattachreminder`.                            |
 | Ravenkeeper   | Townsfolk | O     | none                 | Proposed: conditional helper, only when the Ravenkeeper died this night. Picker to choose a player, then reveal that player's real role and offer the "This player is" card.                         |
@@ -94,11 +98,11 @@ Legend for "Night": F = has a first-night action, O = has an other-night action,
 | Slayer        | Townsfolk | -     | none                 | No helper. Day-time public ability; nothing at night.                                                                                                                                                |
 | Soldier       | Townsfolk | -     | none                 | No helper. Passive Demon immunity; no ST input.                                                                                                                                                      |
 | Mayor         | Townsfolk | -     | none                 | No helper. Passive win/bounce condition; no night action.                                                                                                                                            |
-| Butler        | Outsider  | FO    | none                 | Proposed: single-player picker that attaches the "Master" reminder token. Same pattern as Monk.                                                                                                      |
+| Butler        | Outsider  | FO    | TokenPickHelper      | Implemented. Single-player picker (excludes the Butler's own seat) that attaches the "Master" reminder token; bidirectional with manual grimoire attachment.                                         |
 | Drunk         | Outsider  | -     | none (bag sub)       | No standalone helper. Handled by the bag-substitution flow: the Drunk shows a Townsfolk token, and the "Is the Drunk" grimoire token can be dragged onto a Townsfolk seat to reassign the real role. |
 | Recluse       | Outsider  | -     | none                 | No helper. Passive misregistration; surfaced as ranges in the Empath/Chef/FT helpers rather than its own widget.                                                                                     |
 | Saint         | Outsider  | -     | none                 | No helper. Passive execution-loss condition; no night action.                                                                                                                                        |
-| Poisoner      | Minion    | FO    | none                 | Proposed: single-player picker that attaches the "Poisoned" reminder token, which the state-aware night sheet already reads to flag impaired info.                                                   |
+| Poisoner      | Minion    | FO    | TokenPickHelper      | Implemented. Single-player picker (may target anyone, including the Poisoner) that attaches the "Poisoned" reminder token, which the state-aware night sheet already reads to flag impaired info.    |
 | Spy           | Minion    | FO    | none                 | Proposed: a deliberate "show grimoire" no-op note (the Spy sees the grimoire; there is nothing to compute). Also surfaced as ranges in Empath/Chef/FT via its may-register-good treatment.           |
 | Scarletwoman  | Minion    | O     | none                 | Proposed: an alert that fires when the Demon dies with 5+ players alive, prompting the ST to promote the Scarlet Woman to Demon (attach "Is the Demon").                                             |
 | Baron         | Minion    | -     | none                 | No helper. Passive setup modifier (+2 Outsiders); affects the bag at setup, not at night.                                                                                                            |
@@ -111,10 +115,11 @@ Legend for "Night": F = has a first-night action, O = has an other-night action,
 
 ## Summary
 
-- **Implemented (7):** Empath, Chef, Undertaker, Fortune Teller, Washerwoman,
-  Librarian, Investigator.
-- **Proposed (single-player token pickers):** Monk, Butler, Poisoner (and,
-  later, the Traveller pickers Bureaucrat and Thief).
+- **Implemented (9):** Empath, Chef, Undertaker, Fortune Teller, Washerwoman,
+  Librarian, Investigator, Butler, Poisoner (the last two via the shared
+  `TokenPickHelper`).
+- **Proposed (single-player token pickers):** Monk (and, later, the Traveller
+  pickers Bureaucrat and Thief).
 - **Proposed (conditional / event-driven):** Ravenkeeper (died-at-night reveal),
   Scarlet Woman (Demon-death promotion alert), Imp (star-pass flow), Spy
   ("show grimoire" note).

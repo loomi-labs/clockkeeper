@@ -37,6 +37,10 @@
   let openPlayerId = $state<string | null>(null);
   let freeText = $state("");
 
+  // Inline rename of an already-assigned seat (pencil -> text input).
+  let editingPlayerId = $state<string | null>(null);
+  let editText = $state("");
+
   // Preset names already assigned to some seat (so the dropdown only offers
   // the ones still free).
   const assignedNames = $derived(
@@ -68,6 +72,25 @@
     if (!trimmed) return;
     onassign(id, trimmed);
     closeDropdown();
+  }
+
+  function startEdit(id: string, name: string) {
+    editingPlayerId = id;
+    editText = name;
+  }
+  function cancelEdit() {
+    editingPlayerId = null;
+    editText = "";
+  }
+  // Commit an inline rename: trimmed text re-assigns, empty text unassigns.
+  // Guarded on id so the input's blur handler is a no-op after Escape cancels.
+  function commitEdit(id: string) {
+    if (editingPlayerId !== id) return;
+    const trimmed = editText.trim();
+    if (trimmed) onassign(id, trimmed);
+    else onunassign(id);
+    editingPlayerId = null;
+    editText = "";
   }
 
   // Close the open dropdown on outside click / Escape.
@@ -117,30 +140,70 @@
 
           <div class="relative shrink-0" data-assign-menu>
             {#if p.name}
-              <span
-                class="inline-flex items-center gap-1 rounded-full border border-border bg-element pl-2.5 pr-1 py-0.5 text-xs font-medium text-primary"
-              >
-                {p.name}
-                <button
-                  onclick={() => onunassign(p.id)}
-                  class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-red-500"
-                  aria-label="Unassign {p.name}"
-                  title="Unassign {p.name}"
+              {#if editingPlayerId === p.id}
+                <!-- svelte-ignore a11y_autofocus -->
+                <input
+                  type="text"
+                  bind:value={editText}
+                  autofocus
+                  onblur={() => commitEdit(p.id)}
+                  onkeydown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitEdit(p.id);
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      cancelEdit();
+                    }
+                  }}
+                  aria-label="Rename {p.name}"
+                  class="w-32 rounded-full border border-border bg-transparent px-2.5 py-0.5 text-xs text-primary outline-none focus:border-indigo-500"
+                />
+              {:else}
+                <span
+                  class="inline-flex items-center gap-1 rounded-full border border-border bg-element pl-2.5 pr-1 py-0.5 text-xs font-medium text-primary"
                 >
-                  <svg
-                    class="h-3 w-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    ><path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    /></svg
+                  {p.name}
+                  <button
+                    onclick={() => startEdit(p.id, p.name ?? "")}
+                    class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-indigo-500"
+                    aria-label="Rename {p.name}"
+                    title="Rename {p.name}"
                   >
-                </button>
-              </span>
+                    <svg
+                      class="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      ><path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                      /></svg
+                    >
+                  </button>
+                  <button
+                    onclick={() => onunassign(p.id)}
+                    class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-red-500"
+                    aria-label="Unassign {p.name}"
+                    title="Unassign {p.name}"
+                  >
+                    <svg
+                      class="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      ><path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M6 18L18 6M6 6l12 12"
+                      /></svg
+                    >
+                  </button>
+                </span>
+              {/if}
             {:else}
               <button
                 onclick={() => toggleDropdown(p.id)}

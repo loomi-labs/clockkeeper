@@ -232,7 +232,11 @@ func TestReassignBagSubstitution_FullRemap(t *testing.T) {
 	setBagSub(t, handler, ownerID, gameID, &clockkeeperv1.BagSubstitution{CausedById: "drunk", CharacterId: "fortuneteller"})
 
 	// Start and advance to round 2 (phases: r1 night, r1 day, r2 night, r2 day).
+	// AdvancePhase is step-wise (night -> day -> next round's night), so
+	// reaching round 2 takes two advances.
 	_, err := handler.StartGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.StartGameRequest{GameId: gameID}))
+	require.NoError(t, err)
+	_, err = handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: gameID}))
 	require.NoError(t, err)
 	_, err = handler.AdvancePhase(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AdvancePhaseRequest{GameId: gameID}))
 	require.NoError(t, err)

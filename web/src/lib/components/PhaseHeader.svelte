@@ -20,6 +20,7 @@
     isFullscreen = false,
     ontogglefullscreen,
     onshowcards,
+    dayActive = false,
   }: {
     game: Game;
     viewingRoundIndex: number;
@@ -32,11 +33,18 @@
     isFullscreen?: boolean;
     ontogglefullscreen?: () => void;
     onshowcards?: () => void;
+    // True when the current round's active step is its Day (phases advance
+    // step-wise: Night N → Day N → Night N+1). Only meaningful for the current
+    // round; past rounds always read as "Night N" in the breadcrumbs.
+    dayActive?: boolean;
   } = $props();
 
   const viewingRound = $derived(rounds[viewingRoundIndex]);
   const isViewingCurrent = $derived(viewingRoundIndex === rounds.length - 1);
   const roundNumber = $derived(viewingRound?.roundNumber ?? 1);
+
+  // Show "Day N" only while viewing the current round and its Day step is active.
+  const showDay = $derived(isViewingCurrent && dayActive);
 
   const canGoBack = $derived(viewingRoundIndex > 0);
   const canGoForward = $derived(viewingRoundIndex < rounds.length - 1);
@@ -106,8 +114,27 @@
               />
             </svg>
           </button>
-          <h2 class="text-xl font-bold text-primary sm:text-2xl">
-            Night {roundNumber}
+          <h2
+            class="flex items-center gap-1.5 text-xl font-bold text-primary sm:text-2xl"
+          >
+            {#if showDay}
+              <svg
+                class="h-5 w-5 shrink-0 text-amber-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path
+                  stroke-linecap="round"
+                  d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+                />
+              </svg>
+              Day {roundNumber}
+            {:else}
+              Night {roundNumber}
+            {/if}
           </h2>
           <button
             onclick={() => onnavigate(viewingRoundIndex + 1)}
@@ -278,7 +305,7 @@
               onclick={onadvance}
               class="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
             >
-              Finish Night
+              {showDay ? `Begin Night ${roundNumber + 1}` : "Finish Night"}
             </button>
             <button
               onclick={onend}

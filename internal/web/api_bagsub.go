@@ -147,16 +147,10 @@ func (h *ClockKeeperServiceHandler) ReassignBagSubstitution(ctx context.Context,
 		}
 	}
 
-	// Seat rename f: causedBy -> shownChar, targetRoleID -> causedBy, identity otherwise.
-	f := func(id string) string {
-		switch id {
-		case causedBy:
-			return shownChar
-		case targetRoleID:
-			return causedBy
-		default:
-			return id
-		}
+	// Seat rename mapping: causedBy -> shownChar, targetRoleID -> causedBy.
+	mapping := map[string]string{
+		causedBy:     shownChar,
+		targetRoleID: causedBy,
 	}
 
 	tx, err := h.db.Tx(ctx)
@@ -178,22 +172,18 @@ func (h *ClockKeeperServiceHandler) ReassignBagSubstitution(ctx context.Context,
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	// Compute stable reminder ids from the OLD token list (before mutating roles)
-	// so legacy positional reminder keys can be canonicalized correctly.
-	oldStableIDs := stableReminderIDs(buildReminderTokens(g, h.registry))
-
+	// The synthesized "Is the Drunk" reminder token re-attaches to the new Drunk
+	// seat via its derived default, so its stored keys are dropped. The target
+	// role stops being in play after the swap (its seat becomes the real Drunk),
+	// so its reminder tokens vanish too.
 	bagsubKey := "bagsub-reminder-" + causedBy
-	// Prefix identifying reminder tokens of the target role, which stops being in
-	// play after the swap (its real role becomes the Drunk), so its tokens vanish.
 	droppedReminderPrefix := "reminder-" + targetRoleID + "-"
-
-	// selected_roles: elementwise f, preserving order.
-	newRoles := make([]string, len(g.SelectedRoles))
-	for i, id := range g.SelectedRoles {
-		newRoles[i] = f(id)
+	dropReminderKey := func(ck string) bool {
+		return ck == bagsubKey || strings.HasPrefix(ck, droppedReminderPrefix)
 	}
 
-	// Bag substitution: the seat now shows the target's (former) role.
+	// Bag substitution: the seat now shows the target's (former) role. Computed
+	// from the OLD subs; applySeatRename never touches bag_substitutions.
 	newSubs := make([]schema.GameBagSubstitution, len(g.BagSubstitutions))
 	copy(newSubs, g.BagSubstitutions)
 	for i := range newSubs {
@@ -203,10 +193,93 @@ func (h *ClockKeeperServiceHandler) ReassignBagSubstitution(ctx context.Context,
 		}
 	}
 
-	// grimoire_positions: canonicalize legacy keys, drop the synthesized bagsub
-	// token key and the target's now-defunct reminder keys, then f-remap keys.
-	// Player keys (real role ids) are relabelled by f; reminder keys are left as
-	// they are (f is identity on them).
+	// Apply the seat rename across all seat-keyed state (roles, grimoire,
+	// alignments, deaths).
+	if err = h.applySeatRename(ctx, tx, g, mapping, dropReminderKey); err != nil {
+		_ = tx.Rollback()
+		slog.Error("apply seat rename failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// completed_actions: intentionally NOT remapped. Night-entry ids are keyed by
+	// the SHOWN character id, and the set of shown characters is invariant under
+	// the swap (the shown X moves seats, the target's shown role moves seats, but
+	// both remain shown), so completed night actions stay valid as-is.
+	//
+	// selected_bluffs: left untouched. If X (now a real role) was also a bluff,
+	// the existing "bluff in play" warning surfaces it; no rewrite is needed.
+
+	if _, err = tx.Game.UpdateOneID(g.ID).SetBagSubstitutions(newSubs).Save(ctx); err != nil {
+		_ = tx.Rollback()
+		slog.Error("update bag substitutions failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	if err = tx.Commit(); err != nil {
+		slog.Error("commit failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&clockkeeperv1.ReassignBagSubstitutionResponse{
+		Game: entGameToProto(g, h.registry),
+	}), nil
+}
+
+// seatRenameTmpPrefix namespaces the transient role ids used while remapping
+// death rows. No real character id starts with this, so temp ids never collide
+// with in-play roles during the two-phase swap.
+const seatRenameTmpPrefix = "__seatrename_tmp__"
+
+// applySeatRename applies a seat-key rename (mapping used as the function f: an
+// id present in the map becomes its value, ids absent are unchanged) atomically
+// across every seat-keyed piece of game state: selected_roles, grimoire
+// positions/player-names/game-notes/round-notes, reminder-attachment values,
+// phase character_alignments on ALL phases, and death rows. It does NOT touch
+// bag_substitutions, completed_actions or selected_bluffs — callers own those.
+//
+// Reminder-attachment KEYS and reminder-typed grimoire_position KEYS are
+// canonicalized (legacy positional `reminder-<n>` -> stable `reminder-<charId>-<n>`
+// against the OLD token list) but are never remapped by f, since they are
+// reminder ids rather than player keys; the playerId segment of an attachment
+// VALUE ("playerId:angle", split at the last colon) IS remapped. round-notes
+// keys ("round:roleId", split at the first colon) have only the roleId remapped.
+//
+// dropReminderKey, when non-nil, is consulted with each canonicalized reminder
+// key found in grimoire_positions / grimoire_reminder_attachments; matching keys
+// are dropped.
+//
+// The rename is computed from the OLD state (a simultaneous transformation), so
+// swaps/cycles like {imp: X, X: imp} apply atomically without intermediate
+// collisions — including on the unique (role_id, phase) death index, which is
+// kept collision-free by staging affected rows through unique temp ids.
+//
+// `g` must have been queried within `tx` with phases + deaths eager-loaded.
+func (h *ClockKeeperServiceHandler) applySeatRename(ctx context.Context, tx *ent.Tx, g *ent.Game, mapping map[string]string, dropReminderKey func(canonicalKey string) bool) error {
+	f := func(id string) string {
+		if nid, ok := mapping[id]; ok {
+			return nid
+		}
+		return id
+	}
+
+	// Compute stable reminder ids from the OLD token list (before mutating roles)
+	// so legacy positional reminder keys can be canonicalized correctly.
+	oldStableIDs := stableReminderIDs(buildReminderTokens(g, h.registry))
+
+	// selected_roles: elementwise f, preserving order.
+	newRoles := make([]string, len(g.SelectedRoles))
+	for i, id := range g.SelectedRoles {
+		newRoles[i] = f(id)
+	}
+
+	// grimoire_positions: canonicalize legacy keys, apply drop predicate, then
+	// f-remap keys. Player keys (real role ids) are relabelled by f; reminder
+	// keys are left as they are (f is identity on them).
 	// Two passes so collision semantics match the TS canonicalizeReminderKeys:
 	// native (non-legacy) keys are authoritative; a canonicalized legacy key
 	// only fills a slot no native key already claimed.
@@ -221,7 +294,7 @@ func (h *ClockKeeperServiceHandler) ReassignBagSubstitution(ctx context.Context,
 			if !keep {
 				continue
 			}
-			if ck == bagsubKey || strings.HasPrefix(ck, droppedReminderPrefix) {
+			if dropReminderKey != nil && dropReminderKey(ck) {
 				continue
 			}
 			nk := f(ck)
@@ -246,7 +319,7 @@ func (h *ClockKeeperServiceHandler) ReassignBagSubstitution(ctx context.Context,
 			if !keep {
 				continue
 			}
-			if ck == bagsubKey || strings.HasPrefix(ck, droppedReminderPrefix) {
+			if dropReminderKey != nil && dropReminderKey(ck) {
 				continue
 			}
 			if _, taken := newAttachments[ck]; isLegacy && taken {
@@ -278,26 +351,15 @@ func (h *ClockKeeperServiceHandler) ReassignBagSubstitution(ctx context.Context,
 		newRoundNotes[k[:idx+1]+f(k[idx+1:])] = v
 	}
 
-	// completed_actions: intentionally NOT remapped. Night-entry ids are keyed by
-	// the SHOWN character id, and the set of shown characters is invariant under
-	// the swap (the shown X moves seats, the target's shown role moves seats, but
-	// both remain shown), so completed night actions stay valid as-is.
-	//
-	// selected_bluffs: left untouched. If X (now a real role) was also a bluff,
-	// the existing "bluff in play" warning surfaces it; no rewrite is needed.
-
-	if _, err = tx.Game.UpdateOneID(g.ID).
+	if _, err := tx.Game.UpdateOneID(g.ID).
 		SetSelectedRoles(newRoles).
-		SetBagSubstitutions(newSubs).
 		SetGrimoirePositions(newPositions).
 		SetGrimoirePlayerNames(newNames).
 		SetGrimoireGameNotes(newGameNotes).
 		SetGrimoireRoundNotes(newRoundNotes).
 		SetGrimoireReminderAttachments(newAttachments).
 		Save(ctx); err != nil {
-		_ = tx.Rollback()
-		slog.Error("update game for reassignment failed", "err", err)
-		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		return fmt.Errorf("update game for seat rename: %w", err)
 	}
 
 	// Phase.character_alignments keys on ALL phases.
@@ -311,47 +373,39 @@ func (h *ClockKeeperServiceHandler) ReassignBagSubstitution(ctx context.Context,
 		for k, v := range p.CharacterAlignments {
 			na[f(k)] = v
 		}
-		if _, err = tx.Phase.UpdateOneID(p.ID).SetCharacterAlignments(na).Save(ctx); err != nil {
-			_ = tx.Rollback()
-			slog.Error("update phase alignments failed", "err", err)
-			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		if _, err := tx.Phase.UpdateOneID(p.ID).SetCharacterAlignments(na).Save(ctx); err != nil {
+			return fmt.Errorf("update phase alignments: %w", err)
 		}
 	}
 
-	// Death.role_id rows. Order matters for the unique (role_id, phase) index:
-	// first move causedBy -> shownChar (freeing the causedBy slot), then move
-	// targetRoleID -> causedBy. If both seats are dead in the same phase the
-	// freed slot avoids a unique-index collision.
+	// Death.role_id rows. To stay collision-free on the unique (role_id, phase)
+	// index for an arbitrary bijective mapping (renames AND swaps/cycles), stage
+	// every affected row through a unique temp id first, then move each temp to
+	// its final id. After the temp pass every real target slot is free.
 	if len(phaseIDs) > 0 {
-		if _, err = tx.Death.Update().
-			Where(death.PhaseIDIn(phaseIDs...), death.RoleIDEQ(causedBy)).
-			SetRoleID(shownChar).
-			Save(ctx); err != nil {
-			_ = tx.Rollback()
-			slog.Error("remap causedBy deaths failed", "err", err)
-			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		sources := make([]string, 0, len(mapping))
+		for old, nid := range mapping {
+			if old != nid {
+				sources = append(sources, old)
+			}
 		}
-		if _, err = tx.Death.Update().
-			Where(death.PhaseIDIn(phaseIDs...), death.RoleIDEQ(targetRoleID)).
-			SetRoleID(causedBy).
-			Save(ctx); err != nil {
-			_ = tx.Rollback()
-			slog.Error("remap target deaths failed", "err", err)
-			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		for _, old := range sources {
+			if _, err := tx.Death.Update().
+				Where(death.PhaseIDIn(phaseIDs...), death.RoleIDEQ(old)).
+				SetRoleID(seatRenameTmpPrefix + old).
+				Save(ctx); err != nil {
+				return fmt.Errorf("stage death rename: %w", err)
+			}
+		}
+		for _, old := range sources {
+			if _, err := tx.Death.Update().
+				Where(death.PhaseIDIn(phaseIDs...), death.RoleIDEQ(seatRenameTmpPrefix+old)).
+				SetRoleID(mapping[old]).
+				Save(ctx); err != nil {
+				return fmt.Errorf("finalize death rename: %w", err)
+			}
 		}
 	}
 
-	if err = tx.Commit(); err != nil {
-		slog.Error("commit failed", "err", err)
-		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
-	}
-
-	g, err = h.getOwnedGame(ctx, g.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return connect.NewResponse(&clockkeeperv1.ReassignBagSubstitutionResponse{
-		Game: entGameToProto(g, h.registry),
-	}), nil
+	return nil
 }

@@ -12,6 +12,7 @@ import {
   computeChef,
   chefPairs,
   computeFortuneTeller,
+  findDemonPlayers,
   chefRangeCauses,
   classifyRegistration,
   findExecutedToday,
@@ -525,6 +526,55 @@ describe("computeFortuneTeller", () => {
     expect(
       computeFortuneTeller(["recluse", "imp"], players, "herring"),
     ).toEqual({ answer: "yes", viaRedHerring: false, recluseMayYes: false });
+  });
+});
+
+describe("findDemonPlayers", () => {
+  it("returns the seats whose team is Demon", () => {
+    const players = playerMap([
+      player("ft"),
+      player("imp", { team: Team.DEMON, alignment: "evil" }),
+      player("poisoner", { team: Team.MINION, alignment: "evil" }),
+    ]);
+    expect(findDemonPlayers(players).map((p) => p.id)).toEqual(["imp"]);
+  });
+
+  it("returns empty when no demon is present", () => {
+    const players = playerMap([
+      player("a"),
+      player("b", { team: Team.MINION, alignment: "evil" }),
+    ]);
+    expect(findDemonPlayers(players)).toEqual([]);
+  });
+
+  it("classifies by team, not the displayed characterId (bag-sub aware)", () => {
+    // A seat whose displayed characterId differs from its real id is still a
+    // Demon when its team is Demon — matching computeFortuneTeller exactly.
+    const players = playerMap([
+      player("imp", {
+        characterId: "recluse",
+        team: Team.DEMON,
+        alignment: "evil",
+      }),
+    ]);
+    expect(findDemonPlayers(players).map((p) => p.id)).toEqual(["imp"]);
+  });
+
+  it("agrees with computeFortuneTeller's demon detection", () => {
+    const players = playerMap([
+      player("ft"),
+      player("imp", { team: Team.DEMON, alignment: "evil" }),
+      player("tf", { alignment: "good" }),
+    ]);
+    const demonIds = findDemonPlayers(players).map((p) => p.id);
+    expect(demonIds).toEqual(["imp"]);
+    // A pick that includes a demon seat gives YES; two non-demons give NO.
+    expect(
+      computeFortuneTeller(["imp", "tf"], players, undefined)?.answer,
+    ).toBe("yes");
+    expect(computeFortuneTeller(["ft", "tf"], players, undefined)?.answer).toBe(
+      "no",
+    );
   });
 });
 

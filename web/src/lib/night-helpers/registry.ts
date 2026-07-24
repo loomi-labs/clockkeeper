@@ -16,6 +16,7 @@ import ChefHelper from "~/lib/components/night-helpers/ChefHelper.svelte";
 import UndertakerHelper from "~/lib/components/night-helpers/UndertakerHelper.svelte";
 import FortuneTellerHelper from "~/lib/components/night-helpers/FortuneTellerHelper.svelte";
 import FirstNightInfoHelper from "~/lib/components/night-helpers/FirstNightInfoHelper.svelte";
+import TokenPickHelper from "~/lib/components/night-helpers/TokenPickHelper.svelte";
 import type { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 import type { DisplayCard } from "~/lib/info-cards";
 import type { HelperPlayer } from "./helpers";
@@ -79,6 +80,33 @@ export interface NightHelperContext {
   ) => void;
   /** Show a fully-built dynamic info card fullscreen. */
   onshowcard?: (card: DisplayCard) => void;
+
+  // ── Reminder-token pickers (Fortune Teller Red Herring, Poisoner, Butler) ──
+  // All optional: the page wires them in for the relevant nights. Helpers that
+  // need them render nothing (or a passive hint) when they are absent.
+
+  /**
+   * Attach (playerId set) or detach (undefined) the reminder token identified
+   * by (characterId, tokenText) — the same action as dragging that token onto a
+   * seat in the grimoire, so picks stay in sync with manual grimoire edits.
+   */
+  onattachtoken?: (
+    characterId: string,
+    tokenText: string,
+    playerId: string | undefined,
+  ) => void;
+  /**
+   * Current holder of the reminder token identified by (characterId,
+   * tokenText), if attached. Bidirectional with manual grimoire attachment.
+   */
+  tokenHolder?: (characterId: string, tokenText: string) => string | undefined;
+  /** The current script's characters (for pickers that offer characters). */
+  scriptCharacters?: ReadonlyArray<{
+    id: string;
+    name: string;
+    team: Team;
+    edition: string;
+  }>;
 }
 
 /**
@@ -102,4 +130,6 @@ export const NIGHT_HELPERS: Record<string, NightHelperDef> = {
   washerwoman: { nights: ["first"], component: FirstNightInfoHelper },
   librarian: { nights: ["first"], component: FirstNightInfoHelper },
   investigator: { nights: ["first"], component: FirstNightInfoHelper },
+  poisoner: { nights: ["first", "other"], component: TokenPickHelper },
+  butler: { nights: ["first", "other"], component: TokenPickHelper },
 };
