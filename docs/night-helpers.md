@@ -55,16 +55,24 @@ Two nuances worth knowing:
 ## Registration ranges (Recluse / Spy)
 
 The Recluse (good, may register as evil) and the Spy (evil, may register as
-good) make neighbour- and pair-counting helpers ambiguous. Registration is
-decided per check at Storyteller discretion, so each ambiguous player varies
-independently and the honest answer is a contiguous range rather than a single
-number. The Empath, Chef, and Fortune Teller helpers therefore compute a
-`{ min, max }` (rendered as "N" when `min === max`, else "N-M") and, when
-`min !== max`, show a short hint naming the cause ("Recluse may register evil" /
-"Spy may register good"). The Fortune Teller additionally reports
-"NO (Recluse could register YES)" when a picked seat's real character is the
-Recluse. Dead players never count and are skipped when walking to the next alive
-neighbour.
+good) make counting helpers ambiguous. Registration is decided per check at
+Storyteller discretion, so each ambiguous player varies independently. The
+exact semantics differ per helper:
+
+- **Empath** (numeric range): counts evil among the two nearest *alive*
+  neighbours - dead players never count and the walk continues to the next
+  alive player. Ambiguity yields a `{ min, max }` range (rendered "N" when
+  `min === max`, else "N-M") with a hint naming the cause ("Recluse may
+  register evil" / "Spy may register good").
+- **Chef** (numeric range): counts adjacent evil *pairs* among alive players
+  around the circle (first night, so usually everyone is alive). Same range
+  and hint treatment as the Empath.
+- **Fortune Teller** (boolean, not a range): the two chosen players may be
+  alive or dead. The answer is YES when a pick is the Demon or the Red
+  Herring; otherwise NO. A Recluse pick never forces a result - when the
+  answer would be NO, the helper adds "NO (Recluse could register YES)" so
+  the Storyteller can choose either legally; an actual Demon or Red Herring
+  among the picks stays YES regardless.
 
 ## The 27 Trouble Brewing characters
 

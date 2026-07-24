@@ -6,11 +6,16 @@
   let { entryId, ctx }: { entryId: string; ctx: NightHelperContext } = $props();
 
   // Positional pick slots; ftPicks[0] -> slot 0, ftPicks[1] -> slot 1.
-  const slot0 = $derived(ctx.ftPicks[0]);
-  const slot1 = $derived(ctx.ftPicks[1]);
+  // Empty slots are stored as "" so clearing one slot never shifts the other.
+  const slot0 = $derived(ctx.ftPicks[0] || undefined);
+  const slot1 = $derived(ctx.ftPicks[1] || undefined);
 
   const result = $derived(
-    computeFortuneTeller(ctx.ftPicks, ctx.players, ctx.redHerringPlayerId),
+    computeFortuneTeller(
+      ctx.ftPicks.filter((id) => !!id),
+      ctx.players,
+      ctx.redHerringPlayerId,
+    ),
   );
 
   const playerId = $derived(ctx.playerIdForEntry(entryId));
@@ -23,10 +28,9 @@
     anchor: { top: number; left: number };
   } | null>(null);
 
-  // Alive players available for the open slot, excluding the other slot's pick.
-  const pickerPlayers = $derived(
-    [...ctx.players.values()].filter((p) => !p.isDead),
-  );
+  // All players are available for the open slot (the Fortune Teller may choose
+  // dead players and even themselves); only the other slot's pick is excluded.
+  const pickerPlayers = $derived([...ctx.players.values()]);
   const pickerExclude = $derived.by(() => {
     if (!picker) return new Set<string>();
     const other = picker.slot === 0 ? slot1 : slot0;
@@ -45,16 +49,16 @@
   }
 
   function setSlot(slot: 0 | 1, id: string) {
-    const next: (string | undefined)[] = [slot0, slot1];
+    const next = [slot0 ?? "", slot1 ?? ""];
     next[slot] = id;
-    ctx.onftpick(next.filter((x): x is string => !!x));
+    ctx.onftpick(next);
     picker = null;
   }
 
   function clearSlot(slot: 0 | 1) {
-    const next: (string | undefined)[] = [slot0, slot1];
-    next[slot] = undefined;
-    ctx.onftpick(next.filter((x): x is string => !!x));
+    const next = [slot0 ?? "", slot1 ?? ""];
+    next[slot] = "";
+    ctx.onftpick(next);
   }
 </script>
 
