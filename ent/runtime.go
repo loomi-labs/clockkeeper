@@ -7,6 +7,7 @@ import (
 
 	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
@@ -133,6 +134,37 @@ func init() {
 	gameDescGrimoireReminderAttachments := gameFields[15].Descriptor()
 	// game.DefaultGrimoireReminderAttachments holds the default value on creation for the grimoire_reminder_attachments field.
 	game.DefaultGrimoireReminderAttachments = gameDescGrimoireReminderAttachments.Default.(map[string]string)
+	infocardMixin := schema.InfoCard{}.Mixin()
+	infocardMixinFields0 := infocardMixin[0].Fields()
+	_ = infocardMixinFields0
+	infocardFields := schema.InfoCard{}.Fields()
+	_ = infocardFields
+	// infocardDescCreatedAt is the schema descriptor for created_at field.
+	infocardDescCreatedAt := infocardMixinFields0[0].Descriptor()
+	// infocard.DefaultCreatedAt holds the default value on creation for the created_at field.
+	infocard.DefaultCreatedAt = infocardDescCreatedAt.Default.(func() time.Time)
+	// infocardDescUpdatedAt is the schema descriptor for updated_at field.
+	infocardDescUpdatedAt := infocardMixinFields0[1].Descriptor()
+	// infocard.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	infocard.DefaultUpdatedAt = infocardDescUpdatedAt.Default.(func() time.Time)
+	// infocard.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	infocard.UpdateDefaultUpdatedAt = infocardDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// infocardDescTitle is the schema descriptor for title field.
+	infocardDescTitle := infocardFields[0].Descriptor()
+	// infocard.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	infocard.TitleValidator = infocardDescTitle.Validators[0].(func(string) error)
+	// infocardDescBody is the schema descriptor for body field.
+	infocardDescBody := infocardFields[1].Descriptor()
+	// infocard.DefaultBody holds the default value on creation for the body field.
+	infocard.DefaultBody = infocardDescBody.Default.(string)
+	// infocardDescCharacterIds is the schema descriptor for character_ids field.
+	infocardDescCharacterIds := infocardFields[2].Descriptor()
+	// infocard.DefaultCharacterIds holds the default value on creation for the character_ids field.
+	infocard.DefaultCharacterIds = infocardDescCharacterIds.Default.([]string)
+	// infocardDescSortOrder is the schema descriptor for sort_order field.
+	infocardDescSortOrder := infocardFields[4].Descriptor()
+	// infocard.DefaultSortOrder holds the default value on creation for the sort_order field.
+	infocard.DefaultSortOrder = infocardDescSortOrder.Default.(int)
 	phaseMixin := schema.Phase{}.Mixin()
 	phaseMixinFields0 := phaseMixin[0].Fields()
 	_ = phaseMixinFields0

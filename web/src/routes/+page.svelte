@@ -45,7 +45,11 @@
 <div class="mx-auto max-w-2xl py-12">
   <div class="flex flex-col items-center text-center">
     <img src="/logo.webp" alt="" class="h-56 w-56 rounded-xl" />
-    <h1 class="mt-4 font-[Goudy_Stout] text-3xl text-[#8b1520] dark:text-[#e04e5e]">Clock Keeper</h1>
+    <h1
+      class="mt-4 font-[Goudy_Stout] text-3xl text-[#8b1520] dark:text-[#e04e5e]"
+    >
+      Clock Keeper
+    </h1>
     <p class="mt-1 text-secondary">
       Your digital companion for Blood on the Clocktower
     </p>
@@ -104,7 +108,10 @@
         </p>
       {:else}
         <div class="mt-3">
-          <GamesList games={displayedGames} ondeleted={(id) => (games = games.filter((g) => g.id !== id))} />
+          <GamesList
+            games={displayedGames}
+            ondeleted={(id) => (games = games.filter((g) => g.id !== id))}
+          />
         </div>
       {/if}
     </section>

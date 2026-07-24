@@ -2,6 +2,7 @@ package web
 
 import (
 	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
@@ -40,12 +41,27 @@ var phaseTypeToProto = map[phase.Type]clockkeeperv1.PhaseType{
 	phase.TypeDay:   clockkeeperv1.PhaseType_PHASE_TYPE_DAY,
 }
 
+var deathCauseToProto = map[death.Cause]clockkeeperv1.DeathCause{
+	death.CauseUnspecified: clockkeeperv1.DeathCause_DEATH_CAUSE_UNSPECIFIED,
+	death.CauseExecution:   clockkeeperv1.DeathCause_DEATH_CAUSE_EXECUTION,
+	death.CauseDemon:       clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON,
+	death.CauseOther:       clockkeeperv1.DeathCause_DEATH_CAUSE_OTHER,
+}
+
+var protoToDeathCause = map[clockkeeperv1.DeathCause]death.Cause{
+	clockkeeperv1.DeathCause_DEATH_CAUSE_UNSPECIFIED: death.CauseUnspecified,
+	clockkeeperv1.DeathCause_DEATH_CAUSE_EXECUTION:   death.CauseExecution,
+	clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON:       death.CauseDemon,
+	clockkeeperv1.DeathCause_DEATH_CAUSE_OTHER:       death.CauseOther,
+}
+
 func entDeathToProto(d *ent.Death) *clockkeeperv1.Death {
 	return &clockkeeperv1.Death{
 		Id:        int64(d.ID),
 		RoleId:    d.RoleID,
 		PhaseId:   int64(d.PhaseID),
 		GhostVote: d.GhostVote,
+		Cause:     deathCauseToProto[d.Cause],
 	}
 }
 
@@ -127,6 +143,20 @@ func charactersToProto(chars []*botc.Character) []*clockkeeperv1.Character {
 		result[i] = characterToProto(c)
 	}
 	return result
+}
+
+func entInfoCardToProto(c *ent.InfoCard, registry *botc.Registry) *clockkeeperv1.InfoCard {
+	proto := &clockkeeperv1.InfoCard{
+		Id:           int64(c.ID),
+		Title:        c.Title,
+		Body:         c.Body,
+		CharacterIds: c.CharacterIds,
+	}
+	if registry != nil {
+		// registry.Characters skips ids no longer in the registry gracefully.
+		proto.Characters = charactersToProto(registry.Characters(c.CharacterIds))
+	}
+	return proto
 }
 
 func entScriptToProto(s *ent.Script, registry *botc.Registry) *clockkeeperv1.Script {

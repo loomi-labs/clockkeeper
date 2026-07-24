@@ -28,6 +28,8 @@ type Death struct {
 	RoleID string `json:"role_id,omitempty"`
 	// GhostVote holds the value of the "ghost_vote" field.
 	GhostVote bool `json:"ghost_vote,omitempty"`
+	// Cause holds the value of the "cause" field.
+	Cause death.Cause `json:"cause,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the DeathQuery when eager-loading is set.
 	Edges        DeathEdges `json:"edges"`
@@ -63,7 +65,7 @@ func (*Death) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case death.FieldID, death.FieldPhaseID:
 			values[i] = new(sql.NullInt64)
-		case death.FieldRoleID:
+		case death.FieldRoleID, death.FieldCause:
 			values[i] = new(sql.NullString)
 		case death.FieldCreatedAt, death.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -117,6 +119,12 @@ func (_m *Death) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field ghost_vote", values[i])
 			} else if value.Valid {
 				_m.GhostVote = value.Bool
+			}
+		case death.FieldCause:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field cause", values[i])
+			} else if value.Valid {
+				_m.Cause = death.Cause(value.String)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -173,6 +181,9 @@ func (_m *Death) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("ghost_vote=")
 	builder.WriteString(fmt.Sprintf("%v", _m.GhostVote))
+	builder.WriteString(", ")
+	builder.WriteString("cause=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Cause))
 	builder.WriteByte(')')
 	return builder.String()
 }

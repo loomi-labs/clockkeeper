@@ -3,7 +3,11 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { client } from "~/lib/api";
-  import { setToken, setAnonymous, validateOAuthState } from "~/lib/auth.svelte";
+  import {
+    setToken,
+    setAnonymous,
+    validateOAuthState,
+  } from "~/lib/auth.svelte";
   import { getErrorMessage } from "~/lib/errors";
   import { initTheme } from "~/lib/theme";
 

@@ -16,6 +16,8 @@ type Tx struct {
 	Death *DeathClient
 	// Game is the client for interacting with the Game builders.
 	Game *GameClient
+	// InfoCard is the client for interacting with the InfoCard builders.
+	InfoCard *InfoCardClient
 	// Phase is the client for interacting with the Phase builders.
 	Phase *PhaseClient
 	// Script is the client for interacting with the Script builders.
@@ -155,6 +157,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Death = NewDeathClient(tx.config)
 	tx.Game = NewGameClient(tx.config)
+	tx.InfoCard = NewInfoCardClient(tx.config)
 	tx.Phase = NewPhaseClient(tx.config)
 	tx.Script = NewScriptClient(tx.config)
 	tx.User = NewUserClient(tx.config)

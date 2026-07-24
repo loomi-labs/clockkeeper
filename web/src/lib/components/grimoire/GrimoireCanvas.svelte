@@ -158,11 +158,7 @@
     return nearest;
   }
 
-  function handleReminderMoveEnd(
-    reminderId: string,
-    x: number,
-    y: number,
-  ) {
+  function handleReminderMoveEnd(reminderId: string, x: number, y: number) {
     const reminder = reminders.find((r) => r.id === reminderId);
     const wasAttached = reminder?.attachedTo;
 
@@ -259,7 +255,8 @@
       <GrimoireReminderToken
         {reminder}
         {zoom}
-        onmove={(x: number, y: number) => handleReminderMoveEnd(reminder.id, x, y)}
+        onmove={(x: number, y: number) =>
+          handleReminderMoveEnd(reminder.id, x, y)}
         ondragmove={(x: number, y: number) => handleReminderDragMove(x, y)}
       />
     {/each}
@@ -278,7 +275,9 @@
         onalignment={(alignment: string) =>
           onplayeralignment?.(player.id, alignment)}
         ontap={onplayertap ? () => onplayertap?.(player.id) : undefined}
-        ondropname={ondropname ? (name: string) => ondropname?.(player.id, name) : undefined}
+        ondropname={ondropname
+          ? (name: string) => ondropname?.(player.id, name)
+          : undefined}
       />
     {/each}
   </div>

@@ -36,6 +36,8 @@ const (
 	EdgeScripts = "scripts"
 	// EdgeGames holds the string denoting the games edge name in mutations.
 	EdgeGames = "games"
+	// EdgeInfoCards holds the string denoting the info_cards edge name in mutations.
+	EdgeInfoCards = "info_cards"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// ScriptsTable is the table that holds the scripts relation/edge.
@@ -52,6 +54,13 @@ const (
 	GamesInverseTable = "games"
 	// GamesColumn is the table column denoting the games relation/edge.
 	GamesColumn = "user_id"
+	// InfoCardsTable is the table that holds the info_cards relation/edge.
+	InfoCardsTable = "info_cards"
+	// InfoCardsInverseTable is the table name for the InfoCard entity.
+	// It exists in this package in order to avoid circular dependency with the "infocard" package.
+	InfoCardsInverseTable = "info_cards"
+	// InfoCardsColumn is the table column denoting the info_cards relation/edge.
+	InfoCardsColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -172,6 +181,20 @@ func ByGames(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newGamesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByInfoCardsCount orders the results by info_cards count.
+func ByInfoCardsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newInfoCardsStep(), opts...)
+	}
+}
+
+// ByInfoCards orders the results by info_cards terms.
+func ByInfoCards(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newInfoCardsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newScriptsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -184,5 +207,12 @@ func newGamesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(GamesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, GamesTable, GamesColumn),
+	)
+}
+func newInfoCardsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(InfoCardsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, InfoCardsTable, InfoCardsColumn),
 	)
 }

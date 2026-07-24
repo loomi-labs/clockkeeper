@@ -75,6 +75,20 @@ func (_c *DeathCreate) SetNillableGhostVote(v *bool) *DeathCreate {
 	return _c
 }
 
+// SetCause sets the "cause" field.
+func (_c *DeathCreate) SetCause(v death.Cause) *DeathCreate {
+	_c.mutation.SetCause(v)
+	return _c
+}
+
+// SetNillableCause sets the "cause" field if the given value is not nil.
+func (_c *DeathCreate) SetNillableCause(v *death.Cause) *DeathCreate {
+	if v != nil {
+		_c.SetCause(*v)
+	}
+	return _c
+}
+
 // SetPhase sets the "phase" edge to the Phase entity.
 func (_c *DeathCreate) SetPhase(v *Phase) *DeathCreate {
 	return _c.SetPhaseID(v.ID)
@@ -127,6 +141,10 @@ func (_c *DeathCreate) defaults() {
 		v := death.DefaultGhostVote
 		_c.mutation.SetGhostVote(v)
 	}
+	if _, ok := _c.mutation.Cause(); !ok {
+		v := death.DefaultCause
+		_c.mutation.SetCause(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -150,6 +168,14 @@ func (_c *DeathCreate) check() error {
 	}
 	if _, ok := _c.mutation.GhostVote(); !ok {
 		return &ValidationError{Name: "ghost_vote", err: errors.New(`ent: missing required field "Death.ghost_vote"`)}
+	}
+	if _, ok := _c.mutation.Cause(); !ok {
+		return &ValidationError{Name: "cause", err: errors.New(`ent: missing required field "Death.cause"`)}
+	}
+	if v, ok := _c.mutation.Cause(); ok {
+		if err := death.CauseValidator(v); err != nil {
+			return &ValidationError{Name: "cause", err: fmt.Errorf(`ent: validator failed for field "Death.cause": %w`, err)}
+		}
 	}
 	if len(_c.mutation.PhaseIDs()) == 0 {
 		return &ValidationError{Name: "phase", err: errors.New(`ent: missing required edge "Death.phase"`)}
@@ -195,6 +221,10 @@ func (_c *DeathCreate) createSpec() (*Death, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GhostVote(); ok {
 		_spec.SetField(death.FieldGhostVote, field.TypeBool, value)
 		_node.GhostVote = value
+	}
+	if value, ok := _c.mutation.Cause(); ok {
+		_spec.SetField(death.FieldCause, field.TypeEnum, value)
+		_node.Cause = value
 	}
 	if nodes := _c.mutation.PhaseIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

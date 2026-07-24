@@ -571,6 +571,29 @@ func HasGamesWith(preds ...predicate.Game) predicate.User {
 	})
 }
 
+// HasInfoCards applies the HasEdge predicate on the "info_cards" edge.
+func HasInfoCards() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, InfoCardsTable, InfoCardsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasInfoCardsWith applies the HasEdge predicate on the "info_cards" edge with a given conditions (other predicates).
+func HasInfoCardsWith(preds ...predicate.InfoCard) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newInfoCardsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.User) predicate.User {
 	return predicate.User(sql.AndPredicates(predicates...))

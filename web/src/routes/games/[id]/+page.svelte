@@ -16,6 +16,7 @@
     GameState,
     PhaseType,
     TravellerAlignment,
+    DeathCause,
   } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import { teamLabels } from "~/lib/team-styles";
   import CharacterCard from "~/lib/components/CharacterCard.svelte";
@@ -24,7 +25,10 @@
   import DeathTracker from "~/lib/components/DeathTracker.svelte";
   import DistributionBar from "~/lib/components/DistributionBar.svelte";
   import GrimoireCanvas from "~/lib/components/grimoire/GrimoireCanvas.svelte";
-  import { circleLayout, orbitPosition } from "~/lib/components/grimoire/layout";
+  import {
+    circleLayout,
+    orbitPosition,
+  } from "~/lib/components/grimoire/layout";
   import type {
     GrimoirePlayer,
     GrimoireReminder,
@@ -37,6 +41,30 @@
   import CharacterPreviewPopup from "~/lib/components/CharacterPreviewPopup.svelte";
   import PlayerPresetsModal from "~/lib/components/PlayerPresetsModal.svelte";
   import WakeLockToggle from "~/lib/components/WakeLockToggle.svelte";
+  import PlayerAssignmentPanel from "~/lib/components/PlayerAssignmentPanel.svelte";
+  import NameChipsBar from "~/lib/components/NameChipsBar.svelte";
+  import InfoCardPicker from "~/lib/components/InfoCardPicker.svelte";
+  import InfoCardDisplay from "~/lib/components/InfoCardDisplay.svelte";
+  import {
+    getStartGameWarnings as computeStartGameWarnings,
+    bluffCharactersInPlay,
+  } from "~/lib/game-warnings";
+  import {
+    assignNameInMap,
+    unassignName,
+    assignInOrder,
+  } from "~/lib/player-names";
+  import { derivePlayerStatuses } from "~/lib/night-helpers/status";
+  import { seatingOrder } from "~/lib/night-helpers/seating";
+  import { effectiveAlignment } from "~/lib/night-helpers/alignment";
+  import { findExecutedToday } from "~/lib/night-helpers/helpers";
+  import type { HelperPlayer } from "~/lib/night-helpers/helpers";
+  import type { NightHelperContext } from "~/lib/night-helpers/registry";
+  import {
+    generateStandardCards,
+    type DisplayCard,
+    type DisplayCharacter,
+  } from "~/lib/info-cards";
 
   // --- Tab definitions (setup only) ---
   type GameTab = "setup" | "nightorder" | "grimoire";
@@ -77,6 +105,9 @@
   }
   function onFullscreenChange() {
     isFullscreen = !!document.fullscreenElement;
+  }
+  function exitFullscreenIfActive() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 
   // Confirm dialog state.
@@ -233,6 +264,12 @@
   const canStartGame = $derived(
     isSetup && (game?.selectedRoleIds?.length ?? 0) > 0,
   );
+
+  // Ensure the browser leaves fullscreen whenever the game becomes completed
+  // (the completed view has no PhaseHeader / exit-fullscreen control).
+  $effect(() => {
+    if (isCompleted) exitFullscreenIfActive();
+  });
 
   // --- Round-based navigation (in-progress) ---
   // Phases are grouped by round: each round has a Night + Day pair.
@@ -598,56 +635,12 @@
   }
 
   // --- Game lifecycle actions ---
+  // Demon bluffs that are actually in play (advisory — see game-warnings.ts).
+  const bluffsInPlay = $derived(game ? bluffCharactersInPlay(game) : []);
+
   function getStartGameWarnings(): string[] {
     if (!game) return [];
-    const warnings: string[] = [];
-
-    // Check bag substitutions (e.g., Drunk hasn't picked a townsfolk token)
-    for (const bs of game.bagSubstitutions ?? []) {
-      if (!bs.characterId) {
-        warnings.push(
-          `${bs.causedByName} has not picked a substitute token.`,
-        );
-      }
-    }
-
-    // Check demon bluffs for games with 7+ players
-    if (game.playerCount >= 7) {
-      const bluffCount = (game.selectedBluffIds ?? []).length;
-      if (bluffCount < 3) {
-        warnings.push(
-          `Only ${bluffCount} of 3 demon bluffs selected.`,
-        );
-      }
-    }
-
-    // Check distribution match
-    const totalSelected = (game.selectedRoleIds ?? []).length;
-    if (totalSelected !== game.playerCount) {
-      warnings.push(
-        `${totalSelected} roles selected but ${game.playerCount} players expected.`,
-      );
-    }
-    if (game.distribution) {
-      if (currentDist.townsfolk !== game.distribution.townsfolk)
-        warnings.push(
-          `Townsfolk: ${currentDist.townsfolk} selected, ${game.distribution.townsfolk} expected.`,
-        );
-      if (currentDist.outsiders !== game.distribution.outsiders)
-        warnings.push(
-          `Outsiders: ${currentDist.outsiders} selected, ${game.distribution.outsiders} expected.`,
-        );
-      if (currentDist.minions !== game.distribution.minions)
-        warnings.push(
-          `Minions: ${currentDist.minions} selected, ${game.distribution.minions} expected.`,
-        );
-      if (currentDist.demons !== game.distribution.demons)
-        warnings.push(
-          `Demons: ${currentDist.demons} selected, ${game.distribution.demons} expected.`,
-        );
-    }
-
-    return warnings;
+    return computeStartGameWarnings(game, currentDist);
   }
 
   async function doStartGame() {
@@ -748,6 +741,7 @@
           const resp = await client.endGame({ gameId: game.id });
           game = resp.game;
           invalidateSidebar();
+          exitFullscreenIfActive();
         } catch (err) {
           error = getErrorMessage(err, "Failed to end game");
         }
@@ -785,6 +779,7 @@
     roleId: string,
     phaseId: bigint,
     propagate: boolean,
+    cause: DeathCause = DeathCause.UNSPECIFIED,
   ) {
     if (!game) return;
     error = "";
@@ -794,6 +789,7 @@
         roleId,
         phaseId,
         propagate,
+        cause,
       });
       game = resp.game;
     } catch (err) {
@@ -826,8 +822,9 @@
 
   function recordDeathOnDay(roleId: string) {
     if (!game || !dayPhase) return;
+    // Day-phase kills come from the grimoire / death tracker — an execution.
     if (isViewingCurrent) {
-      doRecordDeath(roleId, dayPhase.id, true);
+      doRecordDeath(roleId, dayPhase.id, true, DeathCause.EXECUTION);
       return;
     }
     const charName = characterById.get(roleId)?.name ?? roleId;
@@ -838,11 +835,11 @@
       cancelLabel: "This phase only",
       onconfirm: () => {
         confirmDialog = null;
-        doRecordDeath(roleId, dayPhase!.id, true);
+        doRecordDeath(roleId, dayPhase!.id, true, DeathCause.EXECUTION);
       },
       oncancel: () => {
         confirmDialog = null;
-        doRecordDeath(roleId, dayPhase!.id, false);
+        doRecordDeath(roleId, dayPhase!.id, false, DeathCause.EXECUTION);
       },
     };
   }
@@ -928,7 +925,9 @@
   // --- Editable game name ---
   let editingName = $state(false);
   let nameInput = $state("");
-  let previewCharacter = $state<import("~/lib/gen/clockkeeper/v1/clockkeeper_pb").Character | null>(null);
+  let previewCharacter = $state<
+    import("~/lib/gen/clockkeeper/v1/clockkeeper_pb").Character | null
+  >(null);
 
   async function updateGameName() {
     if (!game || !nameInput.trim() || nameInput === game.name) {
@@ -974,7 +973,9 @@
   let grimoirePositions = $state(new Map<string, { x: number; y: number }>());
   let grimoireNames = $state(new Map<string, string>());
   let reminderPositions = $state(new Map<string, { x: number; y: number }>());
-  let reminderAttachments = $state(new Map<string, { playerId: string; angle: number }>());
+  let reminderAttachments = $state(
+    new Map<string, { playerId: string; angle: number }>(),
+  );
   let grimoireGameNotes = $state(new Map<string, string>());
   let grimoireRoundNotes = $state(new Map<string, string>());
   let grimoireInitialized = $state(false);
@@ -1056,7 +1057,10 @@
 
     // Load persisted reminder attachments (encoded as "playerId:angle")
     const serverAttachments = game?.grimoireReminderAttachments ?? {};
-    const newAttachments = new Map<string, { playerId: string; angle: number }>();
+    const newAttachments = new Map<
+      string,
+      { playerId: string; angle: number }
+    >();
     for (const [rid, encoded] of Object.entries(serverAttachments)) {
       const colonIdx = encoded.lastIndexOf(":");
       if (colonIdx > 0) {
@@ -1132,38 +1136,40 @@
   // Derive grimoire reminders from game data + local state
   const grimoireReminders = $derived.by((): GrimoireReminder[] => {
     if (!game) return [];
-    const reminders: GrimoireReminder[] = (game.reminderTokens ?? []).map((token, i) => {
-      const rid = `reminder-${i}`;
-      const char = characterById.get(token.characterId);
-      const attachment = reminderAttachments.get(rid);
-      let pos: { x: number; y: number };
-      if (attachment) {
-        const playerPos = grimoirePositions.get(attachment.playerId);
-        if (playerPos) {
-          pos = orbitPosition(playerPos.x, playerPos.y, attachment.angle);
+    const reminders: GrimoireReminder[] = (game.reminderTokens ?? []).map(
+      (token, i) => {
+        const rid = `reminder-${i}`;
+        const char = characterById.get(token.characterId);
+        const attachment = reminderAttachments.get(rid);
+        let pos: { x: number; y: number };
+        if (attachment) {
+          const playerPos = grimoirePositions.get(attachment.playerId);
+          if (playerPos) {
+            pos = orbitPosition(playerPos.x, playerPos.y, attachment.angle);
+          } else {
+            pos = reminderPositions.get(rid) ?? { x: 0, y: 0 };
+          }
         } else {
           pos = reminderPositions.get(rid) ?? { x: 0, y: 0 };
         }
-      } else {
-        pos = reminderPositions.get(rid) ?? { x: 0, y: 0 };
-      }
-      return {
-        id: rid,
-        characterId: token.characterId,
-        characterName: token.characterName,
-        text: token.text,
-        team: char?.team ?? Team.UNSPECIFIED,
-        edition: char?.edition ?? "",
-        x: pos.x,
-        y: pos.y,
-        alignment: dayAlignments.get(token.characterId) as
-          | "good"
-          | "evil"
-          | undefined,
-        attachedTo: attachment?.playerId,
-        orbitAngle: attachment?.angle,
-      };
-    });
+        return {
+          id: rid,
+          characterId: token.characterId,
+          characterName: token.characterName,
+          text: token.text,
+          team: char?.team ?? Team.UNSPECIFIED,
+          edition: char?.edition ?? "",
+          x: pos.x,
+          y: pos.y,
+          alignment: dayAlignments.get(token.characterId) as
+            | "good"
+            | "evil"
+            | undefined,
+          attachedTo: attachment?.playerId,
+          orbitAngle: attachment?.angle,
+        };
+      },
+    );
 
     // Auto-add reminder tokens for bag substitutions (e.g., "Is the Drunk")
     for (const bs of game.bagSubstitutions ?? []) {
@@ -1243,8 +1249,14 @@
     reminderPositions = new Map(reminderPositions.set(id, { x, y }));
     saveGrimoireState();
   }
-  function handleReminderAttach(reminderId: string, playerId: string, angle: number) {
-    reminderAttachments = new Map(reminderAttachments.set(reminderId, { playerId, angle }));
+  function handleReminderAttach(
+    reminderId: string,
+    playerId: string,
+    angle: number,
+  ) {
+    reminderAttachments = new Map(
+      reminderAttachments.set(reminderId, { playerId, angle }),
+    );
     // Clear the free-floating position since it's now orbit-derived
     reminderPositions.delete(reminderId);
     reminderPositions = new Map(reminderPositions);
@@ -1266,7 +1278,9 @@
     saveGrimoireState();
   }
   function handleGrimoirePlayerRename(id: string, name: string) {
-    grimoireNames = new Map(grimoireNames.set(id, name));
+    // Empty/whitespace name unassigns the seat (deletes the key) instead of
+    // storing an empty string; preset-name duplicates steal from other seats.
+    grimoireNames = assignNameInMap(grimoireNames, id, name, presetNames);
     saveGrimoireState();
   }
   function handleGrimoirePlayerToggleDeath(id: string) {
@@ -1323,11 +1337,150 @@
     updateCharacterAlignmentOnPhase(id, alignment, nightPhase.id);
   }
 
+  // --- State-aware night sheet (Feature E) ---
+  // Poisoned/drunk derived from reminder-token attachments (client-owned state;
+  // see night-helpers/status.ts for the single-source-of-truth escape hatch).
+  const playerStatuses = $derived(
+    derivePlayerStatuses(grimoireReminders, game?.bagSubstitutions ?? []),
+  );
+
+  // Reverse bag-sub map: shown character id (night entry) -> underlying seat id.
+  const bagSubEntryToSeat = $derived.by(() => {
+    const map = new Map<string, string>();
+    for (const bs of game?.bagSubstitutions ?? []) {
+      if (bs.characterId) map.set(bs.characterId, bs.causedById);
+    }
+    return map;
+  });
+
+  // Night-scoped players: NIGHT deaths + NIGHT alignments (distinct from the
+  // day-scoped versions used by the grimoire).
+  const nightHelperPlayers = $derived.by(() => {
+    const map = new Map<string, HelperPlayer>();
+    if (!game) return map;
+    const chars = [
+      ...(game.selectedCharacters ?? []),
+      ...(game.selectedTravellerCharacters ?? []),
+    ];
+    for (const c of chars) {
+      const sub = bagSubByRole.get(c.id);
+      map.set(c.id, {
+        id: c.id,
+        name: grimoireNames.get(c.id) ?? "",
+        characterId: sub?.characterId || c.id,
+        characterName: sub?.characterName || c.name,
+        team: c.team,
+        edition: c.edition,
+        isDead: nightDeadRoleIds.has(c.id),
+        alignment: effectiveAlignment(
+          c.id,
+          c.team,
+          nightAlignments,
+          game.travellerAlignments,
+        ),
+      });
+    }
+    return map;
+  });
+
+  // Clockwise seating order derived from grimoire positions.
+  const seatingIds = $derived.by(() => {
+    if (!game) return [] as string[];
+    const chars = [
+      ...(game.selectedCharacters ?? []),
+      ...(game.selectedTravellerCharacters ?? []),
+    ];
+    const ids = chars.map((c) => c.id);
+    const positions = new Map<string, { x: number; y: number }>();
+    for (const c of chars) {
+      positions.set(c.id, grimoirePositions.get(c.id) ?? { x: 0, y: 0 });
+    }
+    return seatingOrder(positions, ids);
+  });
+
+  // Fortune Teller's Red Herring token holder, if the token is attached.
+  const redHerringPlayerId = $derived(
+    grimoireReminders.find(
+      (r) =>
+        r.characterId === "fortuneteller" &&
+        r.text.trim().toLowerCase() === "red herring",
+    )?.attachedTo,
+  );
+
+  // Player executed on the previous day (for the Undertaker).
+  const executedToday = $derived.by(
+    (): { player: HelperPlayer; heuristic: boolean } | undefined => {
+      const prev = rounds[viewingRoundIndex - 1];
+      const found = findExecutedToday(prev);
+      if (!found) return undefined;
+      const player = nightHelperPlayers.get(found.roleId);
+      if (!player) return undefined;
+      return { player, heuristic: found.heuristic };
+    },
+  );
+
+  // Ephemeral Fortune Teller picks, keyed by night phase id (lost on reload).
+  let ftPicksByPhase = $state(new Map<bigint, string[]>());
+
+  const nightHelperContext = $derived.by((): NightHelperContext | undefined => {
+    if (!nightPhase) return undefined;
+    const phaseId = nightPhase.id;
+    return {
+      night: (viewingRound?.roundNumber ?? 1) === 1 ? "first" : "other",
+      order: seatingIds,
+      players: nightHelperPlayers,
+      statuses: playerStatuses,
+      playerIdForEntry: (entryId: string) => {
+        const seat = bagSubEntryToSeat.get(entryId) ?? entryId;
+        return nightHelperPlayers.has(seat) ? seat : undefined;
+      },
+      redHerringPlayerId,
+      executedToday,
+      ftPicks: ftPicksByPhase.get(phaseId) ?? [],
+      onftpick: (picks: string[]) => {
+        const next = new Map(ftPicksByPhase);
+        next.set(phaseId, picks);
+        ftPicksByPhase = next;
+      },
+    };
+  });
+
+  // Demon kill: record the victim's death on the night phase (cause DEMON) and
+  // mark the demon's night action complete.
+  async function handleDemonKill(demonRoleId: string, victimRoleId: string) {
+    if (!game || !nightPhase) return;
+    await doRecordDeath(victimRoleId, nightPhase.id, true, DeathCause.DEMON);
+    await toggleNightAction(demonRoleId, true);
+  }
+
+  // --- Info cards (Feature C) ---
+  let infoCardPickerOpen = $state(false);
+  let activeInfoCard = $state<{
+    card: DisplayCard;
+    character?: DisplayCharacter;
+  } | null>(null);
+
+  function showInfoCard(
+    card: DisplayCard,
+    character?: DisplayCharacter | null,
+  ) {
+    activeInfoCard = { card, character: character ?? undefined };
+    infoCardPickerOpen = false;
+  }
+
+  // Show a standard card by its "std:*" id (night-sheet shortcut buttons).
+  function showStandardCardById(cardId: string) {
+    if (!game) return;
+    const card = generateStandardCards(game).find((c) => c.id === cardId);
+    if (card) activeInfoCard = { card };
+  }
+
   // --- Player presets ---
   let showPlayerPresets = $state(false);
   let showNameChips = $state(false);
   let presetNames = $state<string[]>([]);
   let selectedChipName = $state<string | null>(null);
+  let presetsLoaded = $state(false);
 
   async function loadPresets() {
     try {
@@ -1338,13 +1491,28 @@
     }
   }
 
-  // Track which preset names are already assigned to players
-  const usedPresetNames = $derived.by(() => {
-    const used = new Set<string>();
-    for (const name of grimoireNames.values()) {
-      if (presetNames.includes(name)) used.add(name);
+  // Load presets eagerly during setup so the assignment panel is ready.
+  $effect(() => {
+    if (isSetup && !presetsLoaded) {
+      presetsLoaded = true;
+      loadPresets();
     }
-    return used;
+  });
+
+  // Seats (roles in play) shown in the setup Players panel.
+  const assignmentPanelPlayers = $derived.by(() => {
+    if (!game) return [];
+    const chars = [
+      ...(game.selectedCharacters ?? []),
+      ...(game.selectedTravellerCharacters ?? []),
+    ];
+    return chars.map((c) => ({
+      id: c.id,
+      characterName: c.name,
+      edition: c.edition,
+      team: c.team,
+      name: grimoireNames.get(c.id),
+    }));
   });
 
   function handleAssignPresets(names: string[]) {
@@ -1353,28 +1521,42 @@
       ...(game.selectedCharacters ?? []),
       ...(game.selectedTravellerCharacters ?? []),
     ];
-    const newNames = new Map(grimoireNames);
-    for (let i = 0; i < chars.length && i < names.length; i++) {
-      newNames.set(chars[i].id, names[i]);
-    }
-    grimoireNames = newNames;
+    grimoireNames = assignInOrder(
+      grimoireNames,
+      chars.map((c) => c.id),
+      names,
+    );
     saveGrimoireState();
   }
 
   function assignNameToPlayer(playerId: string, name: string) {
-    // If this preset name is already assigned to another player, unassign it first
-    if (presetNames.includes(name)) {
-      for (const [id, existingName] of grimoireNames) {
-        if (existingName === name && id !== playerId) {
-          grimoireNames.delete(id);
-          break;
-        }
-      }
-    }
-    grimoireNames = new Map(grimoireNames.set(playerId, name));
+    grimoireNames = assignNameInMap(grimoireNames, playerId, name, presetNames);
     saveGrimoireState();
     selectedChipName = null;
   }
+
+  function unassignPlayerName(playerId: string) {
+    grimoireNames = unassignName(grimoireNames, playerId);
+    saveGrimoireState();
+  }
+
+  function clearAllPlayerNames() {
+    grimoireNames = new Map();
+    saveGrimoireState();
+  }
+
+  // Unassign whichever seat currently holds `name` (used by the name chip bar).
+  function unassignNameByValue(name: string) {
+    for (const [id, existingName] of grimoireNames) {
+      if (existingName === name) {
+        unassignPlayerName(id);
+        return;
+      }
+    }
+  }
+
+  // Set of assigned name values (for the name chip bar's used-name detection).
+  const assignedNameValues = $derived(new Set(grimoireNames.values()));
 
   function handleChipTap(name: string) {
     if (selectedChipName === name) {
@@ -1419,41 +1601,127 @@
     {error}
   </div>
 {:else if game}
-  <div class="space-y-6 {isFullscreen ? 'pb-0' : 'pb-40 2xl:pb-0'} {isSetup ? '2xl:mr-72' : ''}">
+  <div
+    class="space-y-6 {isFullscreen ? 'pb-0' : 'pb-40 2xl:pb-0'} {isSetup
+      ? '2xl:mr-72'
+      : ''}"
+  >
     <!-- Header -->
-    {#if !isFullscreen}
+    {#if !isFullscreen || isCompleted}
       <div
         class="no-print {isSetup
           ? 'sticky top-[57px] z-10 bg-surface border border-border rounded-lg px-4 pt-2 pb-2 shadow-sm'
           : ''}"
       >
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0">
-          <div class="flex items-center gap-3">
-            {#if editingName}
-              <input
-                type="text"
-                bind:value={nameInput}
-                onblur={updateGameName}
-                onkeydown={(e) => {
-                  if (e.key === "Enter") updateGameName();
-                  if (e.key === "Escape") editingName = false;
-                }}
-                class="text-2xl font-bold text-primary bg-transparent border-b-2 border-indigo-500 outline-none min-w-0 max-w-md"
-                autofocus
-              />
-            {:else}
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-3">
+              {#if editingName}
+                <input
+                  type="text"
+                  bind:value={nameInput}
+                  onblur={updateGameName}
+                  onkeydown={(e) => {
+                    if (e.key === "Enter") updateGameName();
+                    if (e.key === "Escape") editingName = false;
+                  }}
+                  class="text-2xl font-bold text-primary bg-transparent border-b-2 border-indigo-500 outline-none min-w-0 max-w-md"
+                  autofocus
+                />
+              {:else}
+                <button
+                  onclick={() => {
+                    nameInput = game?.name ?? "";
+                    editingName = true;
+                  }}
+                  class="flex items-center gap-2 text-2xl font-bold text-primary hover:text-indigo-500 transition-colors text-left"
+                  title="Click to edit name"
+                >
+                  {game.name || "Untitled Game"}
+                  <svg
+                    class="h-5 w-5 shrink-0 text-muted"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+                    />
+                  </svg>
+                </button>
+              {/if}
+              {#if stateBadge.label}
+                <span
+                  class="shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium {stateBadge.class}"
+                  >{stateBadge.label}</span
+                >
+              {/if}
+            </div>
+            <div class="mt-1 flex items-center gap-1 text-secondary">
+              {#if isSetup}
+                <button
+                  onclick={() => updatePlayerCount(-1)}
+                  disabled={game.playerCount <= 5}
+                  class="rounded p-0.5 transition-colors hover:bg-hover disabled:opacity-30 disabled:cursor-default"
+                  aria-label="Decrease player count"
+                >
+                  <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    ><path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M20 12H4"
+                    /></svg
+                  >
+                </button>
+              {/if}
+              <span>{game.playerCount} players</span>
+              {#if isSetup}
+                <button
+                  onclick={() => updatePlayerCount(1)}
+                  disabled={game.playerCount >= 15}
+                  class="rounded p-0.5 transition-colors hover:bg-hover disabled:opacity-30 disabled:cursor-default"
+                  aria-label="Increase player count"
+                >
+                  <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    ><path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 4v16m8-8H4"
+                    /></svg
+                  >
+                </button>
+              {/if}
+              {#if game.travellerCount > 0}
+                <span
+                  >+ {game.travellerCount}
+                  {game.travellerCount === 1 ? "traveller" : "travellers"}
+                  = {game.playerCount + game.travellerCount} total</span
+                >
+              {/if}
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            {#if isSetup}
               <button
-                onclick={() => {
-                  nameInput = game?.name ?? "";
-                  editingName = true;
-                }}
-                class="flex items-center gap-2 text-2xl font-bold text-primary hover:text-indigo-500 transition-colors text-left"
-                title="Click to edit name"
+                onclick={deleteGame}
+                class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-800 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                title="Delete game"
               >
-                {game.name || "Untitled Game"}
                 <svg
-                  class="h-5 w-5 shrink-0 text-muted"
+                  class="h-4 w-4"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1462,53 +1730,59 @@
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
-                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                   />
                 </svg>
               </button>
             {/if}
-            {#if stateBadge.label}
-              <span
-                class="shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium {stateBadge.class}"
-                >{stateBadge.label}</span
-              >
-            {/if}
-          </div>
-          <div class="mt-1 flex items-center gap-1 text-secondary">
-            {#if isSetup}
+            {#if isInProgress}
               <button
-                onclick={() => updatePlayerCount(-1)}
-                disabled={game.playerCount <= 5}
-                class="rounded p-0.5 transition-colors hover:bg-hover disabled:opacity-30 disabled:cursor-default"
-                aria-label="Decrease player count"
+                onclick={() => openCharacterPicker()}
+                class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+                title="Add character"
               >
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" /></svg>
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  ><path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 4v16m8-8H4"
+                  /></svg
+                >
               </button>
             {/if}
-            <span>{game.playerCount} players</span>
-            {#if isSetup}
-              <button
-                onclick={() => updatePlayerCount(1)}
-                disabled={game.playerCount >= 15}
-                class="rounded p-0.5 transition-colors hover:bg-hover disabled:opacity-30 disabled:cursor-default"
-                aria-label="Increase player count"
-              >
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-              </button>
-            {/if}
-            {#if game.travellerCount > 0}
-              <span>+ {game.travellerCount}
-              {game.travellerCount === 1 ? "traveller" : "travellers"}
-              = {game.playerCount + game.travellerCount} total</span>
-            {/if}
-          </div>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          {#if isSetup}
+            <WakeLockToggle />
             <button
-              onclick={deleteGame}
-              class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-800 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-              title="Delete game"
+              onclick={() => {
+                showNameChips = !showNameChips;
+                if (showNameChips && presetNames.length === 0) loadPresets();
+              }}
+              class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors {showNameChips
+                ? 'bg-indigo-100 border-indigo-300 text-indigo-600 dark:bg-indigo-500/20 dark:border-indigo-600 dark:text-indigo-400'
+                : 'text-secondary hover:bg-hover hover:text-primary'}"
+              title="Player names"
+            >
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                /></svg
+              >
+            </button>
+            <button
+              onclick={duplicateGame}
+              class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+              title="Duplicate game"
             >
               <svg
                 class="h-4 w-4"
@@ -1520,87 +1794,45 @@
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
                 />
               </svg>
             </button>
-          {/if}
-          {#if isInProgress}
-            <button
-              onclick={() => openCharacterPicker()}
-              class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
-              title="Add character"
-            >
-              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-            </button>
-          {/if}
-          <WakeLockToggle />
-          <button
-            onclick={() => {
-              showNameChips = !showNameChips;
-              if (showNameChips && presetNames.length === 0) loadPresets();
-            }}
-            class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors {showNameChips
-              ? 'bg-indigo-100 border-indigo-300 text-indigo-600 dark:bg-indigo-500/20 dark:border-indigo-600 dark:text-indigo-400'
-              : 'text-secondary hover:bg-hover hover:text-primary'}"
-            title="Player names"
-          >
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-          </button>
-          <button
-            onclick={duplicateGame}
-            class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
-            title="Duplicate game"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
-          {#if isSetup && activeTab === "setup"}
-            <button
-              onclick={randomize}
-              disabled={randomizing}
-              class="rounded-lg border border-indigo-500 px-4 py-2.5 text-sm font-medium text-indigo-500 transition-colors hover:bg-indigo-500 hover:text-white disabled:opacity-50"
-            >
-              {randomizing ? "Randomizing..." : "Randomize Roles"}
-            </button>
-          {/if}
-          {#if canStartGame}
-            <button
-              onclick={startGame}
-              class="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-500"
-            >
-              Start Game
-            </button>
-          {/if}
+            {#if isSetup && activeTab === "setup"}
+              <button
+                onclick={randomize}
+                disabled={randomizing}
+                class="rounded-lg border border-indigo-500 px-4 py-2.5 text-sm font-medium text-indigo-500 transition-colors hover:bg-indigo-500 hover:text-white disabled:opacity-50"
+              >
+                {randomizing ? "Randomizing..." : "Randomize Roles"}
+              </button>
+            {/if}
+            {#if canStartGame}
+              <button
+                onclick={startGame}
+                class="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-500"
+              >
+                Start Game
+              </button>
+            {/if}
+          </div>
         </div>
-      </div>
-      <!-- Tab bar (setup only, inside sticky wrapper) -->
-      {#if isSetup}
-        <div class="mt-4 flex gap-1 rounded-lg bg-element p-1">
-          {#each setupTabs as t}
-            <button
-              onclick={() => setTab(t.id)}
-              class="rounded-md px-4 py-2 text-sm font-medium transition-colors {activeTab ===
-              t.id
-                ? 'bg-surface text-primary shadow-sm'
-                : 'text-secondary hover:text-medium'}"
-            >
-              {t.label}
-            </button>
-          {/each}
-        </div>
-      {/if}
+        <!-- Tab bar (setup only, inside sticky wrapper) -->
+        {#if isSetup}
+          <div class="mt-4 flex gap-1 rounded-lg bg-element p-1">
+            {#each setupTabs as t}
+              <button
+                onclick={() => setTab(t.id)}
+                class="rounded-md px-4 py-2 text-sm font-medium transition-colors {activeTab ===
+                t.id
+                  ? 'bg-surface text-primary shadow-sm'
+                  : 'text-secondary hover:text-medium'}"
+              >
+                {t.label}
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -1701,6 +1933,7 @@
           onviewchange={(v) => (inProgressView = v)}
           {isFullscreen}
           ontogglefullscreen={toggleFullscreen}
+          onshowcards={() => (infoCardPickerOpen = true)}
         />
 
         {#if inProgressView === "nightsheet"}
@@ -1722,6 +1955,11 @@
             playerNames={grimoireNames}
             bluffs={game.selectedBluffCharacters}
             onalignment={handleNightSheetAlignment}
+            oneditbluffs={openBluffPicker}
+            onshowcard={showStandardCardById}
+            {playerStatuses}
+            helperContext={nightHelperContext}
+            ondemonkill={handleDemonKill}
           />
 
           <!-- Death tracker -->
@@ -1736,45 +1974,15 @@
         {:else}
           <!-- Name chips bar -->
           {#if showNameChips && !isFullscreen}
-            <div class="no-print rounded-lg border border-border bg-surface px-3 py-2">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-xs font-medium text-muted shrink-0">Names:</span>
-                {#if presetNames.length === 0}
-                  <span class="text-xs text-muted">No presets saved.</span>
-                {:else}
-                  {#each presetNames as name (name)}
-                    {@const isUsed = usedPresetNames.has(name)}
-                    {@const isSelected = selectedChipName === name}
-                    <button
-                      class="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors {isSelected
-                        ? 'border-indigo-500 bg-indigo-500 text-white'
-                        : isUsed
-                          ? 'border-border text-muted line-through opacity-50'
-                          : 'border-border text-primary hover:border-indigo-400 hover:text-indigo-500 cursor-grab'}"
-                      draggable={true}
-                      ondragstart={(e) => {
-                        e.dataTransfer?.setData("text/plain", name);
-                        e.dataTransfer!.effectAllowed = "copy";
-                      }}
-                      onclick={() => handleChipTap(name)}
-                    >
-                      {name}
-                    </button>
-                  {/each}
-                {/if}
-                <button
-                  onclick={() => (showPlayerPresets = true)}
-                  class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                  title="Edit player presets"
-                >
-                  <svg class="inline h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-                  Edit
-                </button>
-                {#if selectedChipName}
-                  <span class="text-xs text-indigo-500 ml-auto">Tap a player to assign "{selectedChipName}"</span>
-                {/if}
-              </div>
-            </div>
+            <NameChipsBar
+              {presetNames}
+              assignedNames={assignedNameValues}
+              onpickname={handleChipTap}
+              onunassignname={unassignNameByValue}
+              onmanagepresets={() => (showPlayerPresets = true)}
+              onclose={() => (showNameChips = false)}
+              selectedName={selectedChipName}
+            />
           {/if}
           <!-- Grimoire view -->
           <div
@@ -1795,7 +2003,9 @@
               onplayergamenote={handleGrimoireGameNote}
               onplayerroundnote={handleGrimoireRoundNote}
               onplayeralignment={handleGrimoireAlignment}
-              onplayertap={selectedChipName ? handlePlayerTapForAssign : undefined}
+              onplayertap={selectedChipName
+                ? handlePlayerTapForAssign
+                : undefined}
               ondropname={assignNameToPlayer}
             />
           </div>
@@ -1819,6 +2029,17 @@
               }))}
             />
           </div>
+
+          <!-- Players — assign names to the seats (roles) in play -->
+          <PlayerAssignmentPanel
+            players={assignmentPanelPlayers}
+            {presetNames}
+            onassign={assignNameToPlayer}
+            onunassign={unassignPlayerName}
+            onassigninorder={() => handleAssignPresets(presetNames)}
+            onclearall={clearAllPlayerNames}
+            onmanagepresets={() => (showPlayerPresets = true)}
+          />
 
           <!-- Characters — click to toggle selection (script + extra merged) -->
           {#if script}
@@ -1856,9 +2077,16 @@
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                       {#each game.selectedBluffCharacters ?? [] as char (char.id)}
+                        {@const isInPlay = bluffsInPlay.some(
+                          (b) => b.id === char.id,
+                        )}
                         <button
-                          class="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 transition-colors hover:border-red-300 hover:bg-red-50 dark:hover:border-red-700 dark:hover:bg-red-950/30"
-                          title="Remove {char.name}"
+                          class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors {isInPlay
+                            ? 'border-amber-400 bg-amber-50 dark:border-amber-600 dark:bg-amber-950/30'
+                            : 'border-border bg-surface'} hover:border-red-300 hover:bg-red-50 dark:hover:border-red-700 dark:hover:bg-red-950/30"
+                          title={isInPlay
+                            ? `${char.name} is in play — remove?`
+                            : `Remove ${char.name}`}
                           onclick={() =>
                             updateDemonBluffs(
                               (game?.selectedBluffIds ?? []).filter(
@@ -1874,9 +2102,25 @@
                               ((e.target as HTMLImageElement).style.display =
                                 "none")}
                           />
-                          <span class="text-xs font-medium text-primary"
-                            >{char.name}</span
+                          <span
+                            class="text-xs font-medium {isInPlay
+                              ? 'text-amber-700 dark:text-amber-300'
+                              : 'text-primary'}">{char.name}</span
                           >
+                          {#if isInPlay}
+                            <svg
+                              class="h-3.5 w-3.5 text-amber-500"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              ><path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                              /></svg
+                            >
+                          {/if}
                           <svg
                             class="h-3 w-3 text-muted"
                             fill="none"
@@ -1912,6 +2156,29 @@
                         </button>
                       {/if}
                     </div>
+                    {#if bluffsInPlay.length > 0}
+                      <p
+                        class="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"
+                      >
+                        <svg
+                          class="mt-0.5 h-3.5 w-3.5 shrink-0"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          ><path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                          /></svg
+                        >
+                        <span>
+                          {bluffsInPlay.map((b) => b.name).join(", ")}
+                          {bluffsInPlay.length === 1 ? "is" : "are"} in play — the
+                          demon would be bluffing a character actually in the game.
+                        </span>
+                      </p>
+                    {/if}
                   </div>
                 {/if}
               {/each}
@@ -1985,49 +2252,20 @@
           bagSubstitutions={game.bagSubstitutions}
           playerNames={grimoireNames}
           bluffs={game.selectedBluffCharacters}
+          {playerStatuses}
         />
       {:else if activeTab === "grimoire"}
         <!-- Name chips bar (setup grimoire) -->
         {#if showNameChips}
-          <div class="no-print rounded-lg border border-border bg-surface px-3 py-2">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-xs font-medium text-muted shrink-0">Names:</span>
-              {#if presetNames.length === 0}
-                <span class="text-xs text-muted">No presets saved.</span>
-              {:else}
-                {#each presetNames as name (name)}
-                  {@const isUsed = usedPresetNames.has(name)}
-                  {@const isSelected = selectedChipName === name}
-                  <button
-                    class="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors {isSelected
-                      ? 'border-indigo-500 bg-indigo-500 text-white'
-                      : isUsed
-                        ? 'border-border text-muted line-through opacity-50'
-                        : 'border-border text-primary hover:border-indigo-400 hover:text-indigo-500 cursor-grab'}"
-                    draggable={true}
-                    ondragstart={(e) => {
-                      e.dataTransfer?.setData("text/plain", name);
-                      e.dataTransfer!.effectAllowed = "copy";
-                    }}
-                    onclick={() => handleChipTap(name)}
-                  >
-                    {name}
-                  </button>
-                {/each}
-              {/if}
-              <button
-                onclick={() => (showPlayerPresets = true)}
-                class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                title="Edit player presets"
-              >
-                <svg class="inline h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-                Edit
-              </button>
-              {#if selectedChipName}
-                <span class="text-xs text-indigo-500 ml-auto">Tap a player to assign "{selectedChipName}"</span>
-              {/if}
-            </div>
-          </div>
+          <NameChipsBar
+            {presetNames}
+            assignedNames={assignedNameValues}
+            onpickname={handleChipTap}
+            onunassignname={unassignNameByValue}
+            onmanagepresets={() => (showPlayerPresets = true)}
+            onclose={() => (showNameChips = false)}
+            selectedName={selectedChipName}
+          />
         {/if}
         <div
           class="-mx-4 h-[calc(100dvh-200px)] sm:mx-0 sm:rounded-lg sm:border sm:border-border overflow-hidden"
@@ -2043,7 +2281,9 @@
             onplayertoggledeath={handleGrimoirePlayerToggleDeath}
             onplayergamenote={handleGrimoireGameNote}
             onplayerroundnote={handleGrimoireRoundNote}
-            onplayertap={selectedChipName ? handlePlayerTapForAssign : undefined}
+            onplayertap={selectedChipName
+              ? handlePlayerTapForAssign
+              : undefined}
             ondropname={assignNameToPlayer}
           />
         </div>
@@ -2136,6 +2376,24 @@
         loadPresets();
       }}
       onassign={handleAssignPresets}
+    />
+  {/if}
+
+  <!-- Info card picker -->
+  {#if infoCardPickerOpen}
+    <InfoCardPicker
+      {game}
+      onshow={showInfoCard}
+      onclose={() => (infoCardPickerOpen = false)}
+    />
+  {/if}
+
+  <!-- Info card fullscreen display -->
+  {#if activeInfoCard}
+    <InfoCardDisplay
+      card={activeInfoCard.card}
+      character={activeInfoCard.character}
+      onclose={() => (activeInfoCard = null)}
     />
   {/if}
 

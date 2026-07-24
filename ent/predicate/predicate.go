@@ -12,6 +12,9 @@ type Death func(*sql.Selector)
 // Game is the predicate function for game builders.
 type Game func(*sql.Selector)
 
+// InfoCard is the predicate function for infocard builders.
+type InfoCard func(*sql.Selector)
+
 // Phase is the predicate function for phase builders.
 type Phase func(*sql.Selector)
 

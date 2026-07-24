@@ -15,6 +15,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "role_id", Type: field.TypeString},
 		{Name: "ghost_vote", Type: field.TypeBool, Default: true},
+		{Name: "cause", Type: field.TypeEnum, Enums: []string{"unspecified", "execution", "demon", "other"}, Default: "unspecified"},
 		{Name: "phase_id", Type: field.TypeInt},
 	}
 	// DeathsTable holds the schema information for the "deaths" table.
@@ -25,7 +26,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "deaths_phases_deaths",
-				Columns:    []*schema.Column{DeathsColumns[5]},
+				Columns:    []*schema.Column{DeathsColumns[6]},
 				RefColumns: []*schema.Column{PhasesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -34,7 +35,7 @@ var (
 			{
 				Name:    "death_role_id_phase_id",
 				Unique:  true,
-				Columns: []*schema.Column{DeathsColumns[3], DeathsColumns[5]},
+				Columns: []*schema.Column{DeathsColumns[3], DeathsColumns[6]},
 			},
 		},
 	}
@@ -76,6 +77,31 @@ var (
 			{
 				Symbol:     "games_users_games",
 				Columns:    []*schema.Column{GamesColumns[19]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// InfoCardsColumns holds the columns for the "info_cards" table.
+	InfoCardsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "title", Type: field.TypeString},
+		{Name: "body", Type: field.TypeString, Default: ""},
+		{Name: "character_ids", Type: field.TypeJSON, Nullable: true},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "user_id", Type: field.TypeInt},
+	}
+	// InfoCardsTable holds the schema information for the "info_cards" table.
+	InfoCardsTable = &schema.Table{
+		Name:       "info_cards",
+		Columns:    InfoCardsColumns,
+		PrimaryKey: []*schema.Column{InfoCardsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "info_cards_users_info_cards",
+				Columns:    []*schema.Column{InfoCardsColumns[7]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -156,6 +182,7 @@ var (
 	Tables = []*schema.Table{
 		DeathsTable,
 		GamesTable,
+		InfoCardsTable,
 		PhasesTable,
 		ScriptsTable,
 		UsersTable,
@@ -166,6 +193,7 @@ func init() {
 	DeathsTable.ForeignKeys[0].RefTable = PhasesTable
 	GamesTable.ForeignKeys[0].RefTable = ScriptsTable
 	GamesTable.ForeignKeys[1].RefTable = UsersTable
+	InfoCardsTable.ForeignKeys[0].RefTable = UsersTable
 	PhasesTable.ForeignKeys[0].RefTable = GamesTable
 	ScriptsTable.ForeignKeys[0].RefTable = UsersTable
 }

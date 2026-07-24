@@ -32,3 +32,6 @@ docs/tmp/
 
 # Security review
 SECURITY-REVIEW.md
+
+# jj workspaces (per-developer)
+/.workspaces/

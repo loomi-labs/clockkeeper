@@ -100,7 +100,10 @@
   tabindex="0"
 >
   <div
-    class="card-slate token-bezel-sm flex h-16 w-16 flex-col items-center justify-center rounded-full p-0.5 {colorClass} {isAttached && !dragging ? 'ring-2 ring-primary/20' : ''}"
+    class="card-slate token-bezel-sm flex h-16 w-16 flex-col items-center justify-center rounded-full p-0.5 {colorClass} {isAttached &&
+    !dragging
+      ? 'ring-2 ring-primary/20'
+      : ''}"
     data-team={teamDataAttr[reminder.team] ?? ""}
   >
     {#if !imgError && reminder.edition}

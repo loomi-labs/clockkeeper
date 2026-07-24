@@ -33,6 +33,18 @@ func (f GameFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GameMutation", m)
 }
 
+// The InfoCardFunc type is an adapter to allow the use of ordinary
+// function as InfoCard mutator.
+type InfoCardFunc func(context.Context, *ent.InfoCardMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f InfoCardFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.InfoCardMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InfoCardMutation", m)
+}
+
 // The PhaseFunc type is an adapter to allow the use of ordinary
 // function as Phase mutator.
 type PhaseFunc func(context.Context, *ent.PhaseMutation) (ent.Value, error)

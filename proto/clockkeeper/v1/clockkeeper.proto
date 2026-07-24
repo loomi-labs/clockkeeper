@@ -64,6 +64,12 @@ service ClockKeeperService {
   // Player presets
   rpc GetPlayerPresets(GetPlayerPresetsRequest) returns (GetPlayerPresetsResponse) {}
   rpc UpdatePlayerPresets(UpdatePlayerPresetsRequest) returns (UpdatePlayerPresetsResponse) {}
+
+  // Info cards (user-created custom player-facing cards)
+  rpc ListInfoCards(ListInfoCardsRequest) returns (ListInfoCardsResponse) {}
+  rpc CreateInfoCard(CreateInfoCardRequest) returns (CreateInfoCardResponse) {}
+  rpc UpdateInfoCard(UpdateInfoCardRequest) returns (UpdateInfoCardResponse) {}
+  rpc DeleteInfoCard(DeleteInfoCardRequest) returns (DeleteInfoCardResponse) {}
 }
 
 // --- Enums ---
@@ -96,6 +102,13 @@ enum PhaseType {
   PHASE_TYPE_UNSPECIFIED = 0;
   PHASE_TYPE_NIGHT = 1;
   PHASE_TYPE_DAY = 2;
+}
+
+enum DeathCause {
+  DEATH_CAUSE_UNSPECIFIED = 0;
+  DEATH_CAUSE_EXECUTION = 1;
+  DEATH_CAUSE_DEMON = 2;
+  DEATH_CAUSE_OTHER = 3;
 }
 
 // --- Auth ---
@@ -400,6 +413,7 @@ message Death {
   string role_id = 2;
   int64 phase_id = 3;
   bool ghost_vote = 4;
+  DeathCause cause = 5;
 }
 
 message GamePlayState {
@@ -442,6 +456,7 @@ message RecordDeathRequest {
   string role_id = 2;
   optional int64 phase_id = 3;
   bool propagate = 4;
+  DeathCause cause = 5;
 }
 
 message RecordDeathResponse {
@@ -612,3 +627,46 @@ message UpdatePlayerPresetsRequest {
 message UpdatePlayerPresetsResponse {
   repeated string names = 1;
 }
+
+// --- Info Cards ---
+
+message InfoCard {
+  int64 id = 1;
+  string title = 2;
+  string body = 3;
+  repeated string character_ids = 4;
+  repeated Character characters = 5;
+}
+
+message ListInfoCardsRequest {}
+
+message ListInfoCardsResponse {
+  repeated InfoCard cards = 1;
+}
+
+message CreateInfoCardRequest {
+  string title = 1;
+  string body = 2;
+  repeated string character_ids = 3;
+}
+
+message CreateInfoCardResponse {
+  InfoCard card = 1;
+}
+
+message UpdateInfoCardRequest {
+  int64 id = 1;
+  string title = 2;
+  string body = 3;
+  repeated string character_ids = 4;
+}
+
+message UpdateInfoCardResponse {
+  InfoCard card = 1;
+}
+
+message DeleteInfoCardRequest {
+  int64 id = 1;
+}
+
+message DeleteInfoCardResponse {}

@@ -48,9 +48,11 @@ type UserEdges struct {
 	Scripts []*Script `json:"scripts,omitempty"`
 	// Games holds the value of the games edge.
 	Games []*Game `json:"games,omitempty"`
+	// InfoCards holds the value of the info_cards edge.
+	InfoCards []*InfoCard `json:"info_cards,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // ScriptsOrErr returns the Scripts value or an error if the edge
@@ -69,6 +71,15 @@ func (e UserEdges) GamesOrErr() ([]*Game, error) {
 		return e.Games, nil
 	}
 	return nil, &NotLoadedError{edge: "games"}
+}
+
+// InfoCardsOrErr returns the InfoCards value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) InfoCardsOrErr() ([]*InfoCard, error) {
+	if e.loadedTypes[2] {
+		return e.InfoCards, nil
+	}
+	return nil, &NotLoadedError{edge: "info_cards"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -187,6 +198,11 @@ func (_m *User) QueryScripts() *ScriptQuery {
 // QueryGames queries the "games" edge of the User entity.
 func (_m *User) QueryGames() *GameQuery {
 	return NewUserClient(_m.config).QueryGames(_m)
+}
+
+// QueryInfoCards queries the "info_cards" edge of the User entity.
+func (_m *User) QueryInfoCards() *InfoCardQuery {
+	return NewUserClient(_m.config).QueryInfoCards(_m)
 }
 
 // Update returns a builder for updating this User.
