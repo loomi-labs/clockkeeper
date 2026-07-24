@@ -42,6 +42,7 @@ service ClockKeeperService {
   rpc UpdateBagSubstitutions(UpdateBagSubstitutionsRequest) returns (UpdateBagSubstitutionsResponse) {}
   rpc ReassignBagSubstitution(ReassignBagSubstitutionRequest) returns (ReassignBagSubstitutionResponse) {}
   rpc StarPass(StarPassRequest) returns (StarPassResponse) {}
+  rpc UndoStarPass(UndoStarPassRequest) returns (UndoStarPassResponse) {}
   rpc GetSetupChecklist(GetSetupChecklistRequest) returns (GetSetupChecklistResponse) {}
   rpc GetDistribution(GetDistributionRequest) returns (GetDistributionResponse) {}
   rpc DeleteGame(DeleteGameRequest) returns (DeleteGameResponse) {}
@@ -289,6 +290,13 @@ message BagSubstitution {
   string team = 5;
 }
 
+// A seat that ACTS AS another role while keeping its real role id
+// (Imp star pass / Scarlet Woman promotion). Revert = remove the entry.
+message RolePromotion {
+  string role_id = 1;          // promoted seat's REAL role id, e.g. "baron"
+  string acts_as_role_id = 2;  // role it now acts/displays as, e.g. "imp"
+}
+
 message Game {
   int64 id = 1;
   int64 script_id = 2;
@@ -314,6 +322,7 @@ message Game {
   repeated Character selected_bluff_characters = 22;
   repeated BagSubstitution bag_substitutions = 23;
   map<string, string> grimoire_reminder_attachments = 24;
+  repeated RolePromotion role_promotions = 25;
 }
 
 message CreateGameRequest {
@@ -599,14 +608,26 @@ message ReassignBagSubstitutionResponse {
   Game game = 1;
 }
 
-// StarPass promotes a Minion to the Imp when the Imp kills himself at night.
-// Implemented as an atomic two-seat role swap between "imp" and minion_role_id.
+// StarPass promotes a Minion to act as the demon when the demon dies (Imp star
+// pass). Recorded as a revertible promotion overlay: the seat keeps its real
+// role id and the game gains a "seat X acts as role Y" marker.
 message StarPassRequest {
   int64 game_id = 1;
   string minion_role_id = 2;
 }
 
 message StarPassResponse {
+  Game game = 1;
+}
+
+// UndoStarPass removes a promotion overlay entry, reverting the seat to its real
+// role. role_id is the promoted seat's REAL role id.
+message UndoStarPassRequest {
+  int64 game_id = 1;
+  string role_id = 2;
+}
+
+message UndoStarPassResponse {
   Game game = 1;
 }
 

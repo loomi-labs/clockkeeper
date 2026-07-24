@@ -134,6 +134,10 @@ func init() {
 	gameDescGrimoireReminderAttachments := gameFields[15].Descriptor()
 	// game.DefaultGrimoireReminderAttachments holds the default value on creation for the grimoire_reminder_attachments field.
 	game.DefaultGrimoireReminderAttachments = gameDescGrimoireReminderAttachments.Default.(map[string]string)
+	// gameDescRolePromotions is the schema descriptor for role_promotions field.
+	gameDescRolePromotions := gameFields[16].Descriptor()
+	// game.DefaultRolePromotions holds the default value on creation for the role_promotions field.
+	game.DefaultRolePromotions = gameDescRolePromotions.Default.([]schema.GameRolePromotion)
 	infocardMixin := schema.InfoCard{}.Mixin()
 	infocardMixinFields0 := infocardMixin[0].Fields()
 	_ = infocardMixinFields0

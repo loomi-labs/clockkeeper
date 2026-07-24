@@ -283,3 +283,52 @@ export function findExecutedToday(
 
   return undefined;
 }
+
+/**
+ * Ravenkeeper: which role ids died for the FIRST time in tonight's phase.
+ *
+ * Deaths propagate forward (a night death reappears in later phases' `deaths`),
+ * so a role that is in the current night's deaths but was NOT in the previous
+ * round's day deaths is one that first died this night — i.e. died tonight.
+ * On the first night `prevDayDeaths` is empty, so every night death qualifies.
+ */
+export function newDeathsTonight(
+  nightDeaths: readonly { roleId: string }[],
+  prevDayDeaths: readonly { roleId: string }[],
+): Set<string> {
+  const carried = new Set(prevDayDeaths.map((d) => d.roleId));
+  const fresh = new Set<string>();
+  for (const d of nightDeaths) if (!carried.has(d.roleId)) fresh.add(d.roleId);
+  return fresh;
+}
+
+/**
+ * Scarlet Woman: whether the "you are now the Demon" promotion alert should
+ * show.
+ *
+ * Fires when every demon-team seat is dead (and there IS at least one), an alive
+ * scarletwoman minion seat exists that has not already been promoted (a promoted
+ * seat reads as team Demon, so an alive Demon-team Scarlet Woman fails the
+ * "all demons dead" gate), and at least 4 non-Traveller seats are still alive.
+ * The count is taken AFTER the Demon's death, so >= 4 alive ⇔ 5+ were alive when
+ * the Demon died.
+ */
+export function scarletWomanPromotionAlert(
+  players: ReadonlyMap<string, HelperPlayer>,
+): boolean {
+  const all = [...players.values()];
+
+  const demons = all.filter((p) => p.team === Team.DEMON);
+  if (demons.length === 0) return false;
+  if (demons.some((p) => !p.isDead)) return false;
+
+  const hasAliveScarletWoman = all.some(
+    (p) => p.id === "scarletwoman" && p.team === Team.MINION && !p.isDead,
+  );
+  if (!hasAliveScarletWoman) return false;
+
+  const aliveNonTravellers = all.filter(
+    (p) => !p.isDead && p.team !== Team.TRAVELLER,
+  ).length;
+  return aliveNonTravellers >= 4;
+}

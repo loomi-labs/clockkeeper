@@ -58,6 +58,7 @@ var (
 		{Name: "grimoire_round_notes", Type: field.TypeJSON, Nullable: true},
 		{Name: "bag_substitutions", Type: field.TypeJSON, Nullable: true},
 		{Name: "grimoire_reminder_attachments", Type: field.TypeJSON, Nullable: true},
+		{Name: "role_promotions", Type: field.TypeJSON, Nullable: true},
 		{Name: "state", Type: field.TypeEnum, Enums: []string{"setup", "in_progress", "completed"}, Default: "setup"},
 		{Name: "script_id", Type: field.TypeInt},
 		{Name: "user_id", Type: field.TypeInt},
@@ -70,13 +71,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "games_scripts_games",
-				Columns:    []*schema.Column{GamesColumns[18]},
+				Columns:    []*schema.Column{GamesColumns[19]},
 				RefColumns: []*schema.Column{ScriptsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "games_users_games",
-				Columns:    []*schema.Column{GamesColumns[19]},
+				Columns:    []*schema.Column{GamesColumns[20]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

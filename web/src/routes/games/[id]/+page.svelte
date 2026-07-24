@@ -10,6 +10,7 @@
     Character,
     Script,
     Phase,
+    Death,
   } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import {
     Team,
@@ -70,8 +71,12 @@
   import { derivePlayerStatuses } from "~/lib/night-helpers/status";
   import { seatingOrder } from "~/lib/night-helpers/seating";
   import { effectiveAlignment } from "~/lib/night-helpers/alignment";
-  import { findExecutedToday } from "~/lib/night-helpers/helpers";
+  import {
+    findExecutedToday,
+    newDeathsTonight,
+  } from "~/lib/night-helpers/helpers";
   import type { HelperPlayer } from "~/lib/night-helpers/helpers";
+  import { buildPromotionsByRole } from "~/lib/promotions";
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
   import {
     generateStandardCards,
@@ -285,6 +290,13 @@
     }
     return map;
   });
+
+  // Role-promotion overlay (star pass / Scarlet Woman): original role id -> how
+  // that seat now displays ("Imp (ex Baron)", team Demon, …). Never renames a
+  // grimoire key — it only overrides how the promoted seat reads downstream.
+  const promotionsByRole = $derived(
+    buildPromotionsByRole(game?.rolePromotions ?? [], characterById),
+  );
 
   // --- Game state derived values ---
   const isSetup = $derived(game?.state === GameState.SETUP);
@@ -926,8 +938,13 @@
     };
   }
 
-  async function removeDeath(deathId: bigint, propagate = false) {
-    if (!game) return;
+  // Resolves to whether the removal reached the server, so callers with
+  // follow-up writes (moveDeath) can gate on it.
+  async function removeDeath(
+    deathId: bigint,
+    propagate = false,
+  ): Promise<boolean> {
+    if (!game) return false;
     error = "";
     try {
       const resp = await client.removeDeath({
@@ -936,8 +953,10 @@
         propagate,
       });
       game = resp.game;
+      return true;
     } catch (err) {
       error = getErrorMessage(err, "Failed to remove death");
+      return false;
     }
   }
 
@@ -991,6 +1010,31 @@
         removeDeath(phaseDeath.id, false);
       },
     };
+  }
+
+  // Move a death to the sibling phase of the SAME round (Night N <-> Day N):
+  // remove it, then re-record on the sibling with a phase-appropriate cause
+  // (execution on a day; DEMON preserved, else UNSPECIFIED, on a night).
+  async function moveDeath(death: Death) {
+    if (!game) return;
+    const phase = (game.playState?.phases ?? []).find(
+      (p) => p.id === death.phaseId,
+    );
+    if (!phase) return;
+    const round = rounds.find((r) => r.roundNumber === phase.roundNumber);
+    if (!round) return;
+    const sibling = phase.type === PhaseType.NIGHT ? round.day : round.night;
+    if (!sibling) return;
+    const cause =
+      sibling.type === PhaseType.DAY
+        ? DeathCause.EXECUTION
+        : death.cause === DeathCause.DEMON
+          ? DeathCause.DEMON
+          : DeathCause.UNSPECIFIED;
+    // Only re-record once the removal reached the server — otherwise the
+    // death would end up on BOTH sibling phases.
+    const removed = await removeDeath(death.id, true);
+    if (removed) await doRecordDeath(death.roleId, sibling.id, true, cause);
   }
 
   async function useGhostVote(deathId: bigint) {
@@ -1241,20 +1285,28 @@
     return chars.map((c, i) => {
       const pos = grimoirePositions.get(c.id) ?? { x: 0, y: 0 };
       const death = deathByRole.get(c.id);
-      // Show substituted character in grimoire (e.g., Empath instead of Drunk)
-      const sub = bagSubByRole.get(c.id);
-      const displayCharId = sub?.characterId || c.id;
-      const displayCharName = sub?.characterName || c.name;
+      // A promotion wins over a bag substitution (they can't coexist): a promoted
+      // seat reads as its acts-as character/team/edition and "Imp (ex Baron)".
+      const promo = promotionsByRole.get(c.id);
+      const sub = promo ? undefined : bagSubByRole.get(c.id);
+      const displayCharId = promo ? promo.actsAsId : sub?.characterId || c.id;
+      const displayCharName = promo
+        ? promo.label
+        : sub?.characterName || c.name;
+      const displayTeam = promo ? promo.actsAsTeam : c.team;
+      const displayEdition = promo ? promo.actsAsEdition : c.edition;
       return {
         id: c.id,
         name: grimoireNames.get(c.id) ?? `Player ${i + 1}`,
         characterId: displayCharId,
         characterName: displayCharName,
-        team: c.team,
-        edition: c.edition,
+        team: displayTeam,
+        edition: displayEdition,
         x: pos.x,
         y: pos.y,
-        isDead: dayDeadRoleIds.has(c.id),
+        // Dead set follows the ACTIVE phase so the grimoire skull toggle and the
+        // displayed dead state always agree (day = executions, night = kills).
+        isDead: (activeIsDay ? dayDeadRoleIds : nightDeadRoleIds).has(c.id),
         ghostVoteUsed: death ? !death.ghostVote : false,
         gameNote: grimoireGameNotes.get(c.id) ?? "",
         roundNote: currentRoundNotes.get(c.id) ?? "",
@@ -1515,10 +1567,14 @@
     saveGrimoireState();
   }
   function handleGrimoirePlayerToggleDeath(id: string) {
-    if (dayDeadRoleIds.has(id)) {
-      undoDeathByRoleOnDay(id);
+    // Route to the ACTIVE phase: a day-phase toggle is an execution, a
+    // night-phase toggle is a night kill (cause UNSPECIFIED).
+    if (activeIsDay) {
+      if (dayDeadRoleIds.has(id)) undoDeathByRoleOnDay(id);
+      else recordDeathOnDay(id);
     } else {
-      recordDeathOnDay(id);
+      if (nightDeadRoleIds.has(id)) undoDeathByRoleOnNight(id);
+      else recordDeathOnNight(id);
     }
   }
   function handleGrimoireGameNote(id: string, note: string) {
@@ -1594,14 +1650,18 @@
       ...(game.selectedTravellerCharacters ?? []),
     ];
     for (const c of chars) {
-      const sub = bagSubByRole.get(c.id);
+      // Promotion wins over bag substitution: a promoted seat classifies as its
+      // acts-as character (team Demon), so it drops out of the Minion-only star
+      // pass list and registers as the Demon to Fortune Teller / Scarlet Woman.
+      const promo = promotionsByRole.get(c.id);
+      const sub = promo ? undefined : bagSubByRole.get(c.id);
       map.set(c.id, {
         id: c.id,
         name: grimoireNames.get(c.id) ?? "",
-        characterId: sub?.characterId || c.id,
-        characterName: sub?.characterName || c.name,
-        team: c.team,
-        edition: c.edition,
+        characterId: promo ? promo.actsAsId : sub?.characterId || c.id,
+        characterName: promo ? promo.label : sub?.characterName || c.name,
+        team: promo ? promo.actsAsTeam : c.team,
+        edition: promo ? promo.actsAsEdition : c.edition,
         isDead: nightDeadRoleIds.has(c.id),
         alignment: effectiveAlignment(
           c.id,
@@ -1745,6 +1805,17 @@
   // its shown character (e.g. the Drunk shown as the Empath), else its own role.
   function displayedCharacterOf(playerId: string) {
     if (!game) return undefined;
+    // Promotions win over bag substitutions: a promoted seat shows its acts-as
+    // character (e.g. a Ravenkeeper learns a promoted Baron as the Imp).
+    const promo = promotionsByRole.get(playerId);
+    if (promo) {
+      return {
+        id: promo.actsAsId,
+        name: promo.actsAsName,
+        edition: promo.actsAsEdition,
+        team: promo.actsAsTeam,
+      };
+    }
     const sub = bagSubByRole.get(playerId);
     if (sub?.characterId) {
       const c = characterById.get(sub.characterId);
@@ -1767,6 +1838,15 @@
       };
     return undefined;
   }
+
+  // Seats whose death was FIRST recorded in the current night phase (not carried
+  // forward from a previous round). Drives the Ravenkeeper wake.
+  const diedTonight = $derived(
+    newDeathsTonight(
+      nightPhase?.deaths ?? [],
+      rounds[viewingRoundIndex - 1]?.day?.deaths ?? [],
+    ),
+  );
 
   const nightHelperContext = $derived.by((): NightHelperContext | undefined => {
     if (!nightPhase) return undefined;
@@ -1816,6 +1896,9 @@
         team: c.team,
         edition: c.edition,
       })),
+      // Event-driven / promotion helpers (Ravenkeeper wake, Scarlet Woman promote).
+      diedTonight,
+      onstarpass: openStarPass,
     };
   });
 
@@ -1825,8 +1908,10 @@
     if (!game || !nightPhase) return;
     await doRecordDeath(victimRoleId, nightPhase.id, true, DeathCause.DEMON);
     await toggleNightAction(demonRoleId, true);
-    // Imp self-kill triggers a Star Pass — a Minion becomes the new Imp.
-    if (victimRoleId === demonRoleId && demonRoleId === "imp") openStarPass();
+    // Imp self-kill triggers a Star Pass — a Minion becomes the new Imp. Works
+    // for a promoted seat too (a Baron acting as the Imp killing itself).
+    const actsAs = promotionsByRole.get(demonRoleId)?.actsAsId ?? demonRoleId;
+    if (victimRoleId === demonRoleId && actsAs === "imp") openStarPass();
   }
 
   // --- Star pass (Imp self-kill) ---
@@ -1847,16 +1932,24 @@
     if (!game) return;
     starPassOpen = false;
     error = "";
-    // Cancel any pending debounced grimoire save so a stale full-map save can't
-    // clobber the server-side seat remap (mirrors the bag-sub reassign path).
-    clearTimeout(grimoireSaveTimeout);
     try {
+      // A star pass now only APPENDS a promotion marker — no seat renames, so no
+      // grimoire-key rehydration or save-cancel dance is needed (unlike bag subs).
       const resp = await client.starPass({ gameId: game.id, minionRoleId });
-      // Re-init local grimoire maps from the server-remapped state.
-      grimoireInitialized = false;
       game = resp.game;
     } catch (err) {
       error = getErrorMessage(err, "Failed to perform star pass");
+    }
+  }
+
+  async function doUndoStarPass(roleId: string) {
+    if (!game) return;
+    error = "";
+    try {
+      const resp = await client.undoStarPass({ gameId: game.id, roleId });
+      game = resp.game;
+    } catch (err) {
+      error = getErrorMessage(err, "Failed to undo star pass");
     }
   }
 
@@ -2369,15 +2462,19 @@
             helperContext={nightHelperContext}
             ondemonkill={handleDemonKill}
             onstarpass={openStarPass}
+            promotions={promotionsByRole}
+            onundostarpass={doUndoStarPass}
           />
 
           <!-- Death tracker -->
           <DeathTracker
             {game}
             viewedPhaseDeaths={newDeathsThisRound}
-            onrecord={recordDeathOnDay}
+            onrecord={(id) =>
+              activeIsDay ? recordDeathOnDay(id) : recordDeathOnNight(id)}
             onremove={removeDeath}
             onuseghostvote={useGhostVote}
+            onmove={moveDeath}
             readonly={!isViewingCurrent}
           />
         {:else}
@@ -2731,6 +2828,8 @@
           playerNames={grimoireNames}
           bluffs={game.selectedBluffCharacters}
           {playerStatuses}
+          promotions={promotionsByRole}
+          onundostarpass={doUndoStarPass}
         />
       {:else if activeTab === "grimoire"}
         <!-- Name chips bar (setup grimoire) -->

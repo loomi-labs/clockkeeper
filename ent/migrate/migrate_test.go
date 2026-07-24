@@ -47,7 +47,8 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260406182402_add_player_presets":                validatePlayerPresets,
 	"20260414094150_add_discord_and_anonymous":         validateDiscordAndAnonymous,
 	"20260724121222_add_death_cause":                   validateDeathCause,
-	"20260724121808_add_info_cards":                     validateInfoCards,
+	"20260724121808_add_info_cards":                    validateInfoCards,
+	"20260724195230_add_role_promotions":               validateRolePromotions,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -679,6 +680,21 @@ func validateInfoCards(t *testing.T, ctx context.Context, _ *sql.DB, client *ent
 	}
 	if c.UserID == 0 {
 		t.Error("expected info card to have a user_id")
+	}
+}
+
+// validateRolePromotions checks that the role_promotions column exists on games.
+func validateRolePromotions(t *testing.T, ctx context.Context, _ *sql.DB, client *ent.Client) {
+	t.Helper()
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.RolePromotions != nil && len(g.RolePromotions) != 0 {
+		t.Errorf("expected nil or empty role_promotions, got %v", g.RolePromotions)
 	}
 }
 

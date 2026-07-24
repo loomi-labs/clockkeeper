@@ -52,6 +52,8 @@ const (
 	FieldBagSubstitutions = "bag_substitutions"
 	// FieldGrimoireReminderAttachments holds the string denoting the grimoire_reminder_attachments field in the database.
 	FieldGrimoireReminderAttachments = "grimoire_reminder_attachments"
+	// FieldRolePromotions holds the string denoting the role_promotions field in the database.
+	FieldRolePromotions = "role_promotions"
 	// FieldState holds the string denoting the state field in the database.
 	FieldState = "state"
 	// EdgeOwner holds the string denoting the owner edge name in mutations.
@@ -106,6 +108,7 @@ var Columns = []string{
 	FieldGrimoireRoundNotes,
 	FieldBagSubstitutions,
 	FieldGrimoireReminderAttachments,
+	FieldRolePromotions,
 	FieldState,
 }
 
@@ -152,6 +155,8 @@ var (
 	DefaultBagSubstitutions []schema.GameBagSubstitution
 	// DefaultGrimoireReminderAttachments holds the default value on creation for the "grimoire_reminder_attachments" field.
 	DefaultGrimoireReminderAttachments map[string]string
+	// DefaultRolePromotions holds the default value on creation for the "role_promotions" field.
+	DefaultRolePromotions []schema.GameRolePromotion
 )
 
 // State defines the type for the "state" enum field.

@@ -17,6 +17,8 @@ import UndertakerHelper from "~/lib/components/night-helpers/UndertakerHelper.sv
 import FortuneTellerHelper from "~/lib/components/night-helpers/FortuneTellerHelper.svelte";
 import FirstNightInfoHelper from "~/lib/components/night-helpers/FirstNightInfoHelper.svelte";
 import TokenPickHelper from "~/lib/components/night-helpers/TokenPickHelper.svelte";
+import RavenkeeperHelper from "~/lib/components/night-helpers/RavenkeeperHelper.svelte";
+import ScarletWomanHelper from "~/lib/components/night-helpers/ScarletWomanHelper.svelte";
 import type { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 import type { DisplayCard } from "~/lib/info-cards";
 import type { HelperPlayer } from "./helpers";
@@ -107,6 +109,15 @@ export interface NightHelperContext {
     team: Team;
     edition: string;
   }>;
+
+  // ── Event-driven / promotion helpers (Ravenkeeper, Scarlet Woman, Imp) ──
+  // All optional: the page wires them in for the relevant nights. Helpers that
+  // need them render nothing when they are absent.
+
+  /** Seats whose death was first recorded in the CURRENT night phase (not carried forward). */
+  diedTonight?: ReadonlySet<string>;
+  /** Open the star-pass / promotion prompt (Imp dead → promote a Minion). */
+  onstarpass?: () => void;
 }
 
 /**
@@ -132,4 +143,7 @@ export const NIGHT_HELPERS: Record<string, NightHelperDef> = {
   investigator: { nights: ["first"], component: FirstNightInfoHelper },
   poisoner: { nights: ["first", "other"], component: TokenPickHelper },
   butler: { nights: ["first", "other"], component: TokenPickHelper },
+  monk: { nights: ["other"], component: TokenPickHelper },
+  ravenkeeper: { nights: ["other"], component: RavenkeeperHelper },
+  scarletwoman: { nights: ["other"], component: ScarletWomanHelper },
 };

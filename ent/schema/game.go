@@ -25,6 +25,12 @@ type GameBagSubstitution struct {
 	Team          string `json:"team"`
 }
 
+// GameRolePromotion marks a seat that acts as another role (star pass).
+type GameRolePromotion struct {
+	RoleID       string `json:"role_id"`
+	ActsAsRoleID string `json:"acts_as_role_id"`
+}
+
 const (
 	AlignmentUnset TravellerAlignment = ""
 	AlignmentGood  TravellerAlignment = "good"
@@ -60,6 +66,7 @@ func (Game) Fields() []ent.Field {
 		field.JSON("grimoire_round_notes", map[string]string{}).Optional().Default(map[string]string{}),
 		field.JSON("bag_substitutions", []GameBagSubstitution{}).Optional().Default([]GameBagSubstitution{}),
 		field.JSON("grimoire_reminder_attachments", map[string]string{}).Optional().Default(map[string]string{}),
+		field.JSON("role_promotions", []GameRolePromotion{}).Optional().Default([]GameRolePromotion{}),
 		field.Enum("state").
 			Values("setup", "in_progress", "completed").
 			Default("setup"),

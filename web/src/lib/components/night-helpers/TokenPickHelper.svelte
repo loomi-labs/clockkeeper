@@ -26,6 +26,12 @@
       label: "Master",
       excludeSelf: true,
     },
+    monk: {
+      characterId: "monk",
+      tokenText: "Safe",
+      label: "Safe",
+      excludeSelf: true,
+    },
   };
 
   const cfg = $derived(CONFIG[entryId]);

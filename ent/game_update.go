@@ -273,6 +273,24 @@ func (_u *GameUpdate) ClearGrimoireReminderAttachments() *GameUpdate {
 	return _u
 }
 
+// SetRolePromotions sets the "role_promotions" field.
+func (_u *GameUpdate) SetRolePromotions(v []schema.GameRolePromotion) *GameUpdate {
+	_u.mutation.SetRolePromotions(v)
+	return _u
+}
+
+// AppendRolePromotions appends value to the "role_promotions" field.
+func (_u *GameUpdate) AppendRolePromotions(v []schema.GameRolePromotion) *GameUpdate {
+	_u.mutation.AppendRolePromotions(v)
+	return _u
+}
+
+// ClearRolePromotions clears the value of the "role_promotions" field.
+func (_u *GameUpdate) ClearRolePromotions() *GameUpdate {
+	_u.mutation.ClearRolePromotions()
+	return _u
+}
+
 // SetState sets the "state" field.
 func (_u *GameUpdate) SetState(v game.State) *GameUpdate {
 	_u.mutation.SetState(v)
@@ -532,6 +550,17 @@ func (_u *GameUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.GrimoireReminderAttachmentsCleared() {
 		_spec.ClearField(game.FieldGrimoireReminderAttachments, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.RolePromotions(); ok {
+		_spec.SetField(game.FieldRolePromotions, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedRolePromotions(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, game.FieldRolePromotions, value)
+		})
+	}
+	if _u.mutation.RolePromotionsCleared() {
+		_spec.ClearField(game.FieldRolePromotions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
@@ -899,6 +928,24 @@ func (_u *GameUpdateOne) ClearGrimoireReminderAttachments() *GameUpdateOne {
 	return _u
 }
 
+// SetRolePromotions sets the "role_promotions" field.
+func (_u *GameUpdateOne) SetRolePromotions(v []schema.GameRolePromotion) *GameUpdateOne {
+	_u.mutation.SetRolePromotions(v)
+	return _u
+}
+
+// AppendRolePromotions appends value to the "role_promotions" field.
+func (_u *GameUpdateOne) AppendRolePromotions(v []schema.GameRolePromotion) *GameUpdateOne {
+	_u.mutation.AppendRolePromotions(v)
+	return _u
+}
+
+// ClearRolePromotions clears the value of the "role_promotions" field.
+func (_u *GameUpdateOne) ClearRolePromotions() *GameUpdateOne {
+	_u.mutation.ClearRolePromotions()
+	return _u
+}
+
 // SetState sets the "state" field.
 func (_u *GameUpdateOne) SetState(v game.State) *GameUpdateOne {
 	_u.mutation.SetState(v)
@@ -1188,6 +1235,17 @@ func (_u *GameUpdateOne) sqlSave(ctx context.Context) (_node *Game, err error) {
 	}
 	if _u.mutation.GrimoireReminderAttachmentsCleared() {
 		_spec.ClearField(game.FieldGrimoireReminderAttachments, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.RolePromotions(); ok {
+		_spec.SetField(game.FieldRolePromotions, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedRolePromotions(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, game.FieldRolePromotions, value)
+		})
+	}
+	if _u.mutation.RolePromotionsCleared() {
+		_spec.ClearField(game.FieldRolePromotions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
