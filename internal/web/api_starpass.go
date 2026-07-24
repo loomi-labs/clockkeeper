@@ -84,6 +84,22 @@ func (h *ClockKeeperServiceHandler) StarPass(ctx context.Context, req *connect.R
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// A dead Minion cannot be promoted — the star pass hands the Imp to a LIVING
+	// Minion. Deaths propagate forward, so the active phase's death list is the
+	// authoritative "currently dead" set. Checked inside the tx for a consistent
+	// read (the client also filters dead Minions, but the RPC must not rely on it).
+	for _, p := range g.Edges.Phases {
+		if !p.IsActive {
+			continue
+		}
+		for _, d := range p.Edges.Deaths {
+			if d.RoleID == minionRoleID {
+				_ = tx.Rollback()
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%s is dead — only a living minion can become the imp", minionRoleID))
+			}
+		}
+	}
+
 	// Both roles remain in play (they just swap seats), so no reminder tokens are
 	// dropped — pass a nil drop predicate.
 	if err = h.applySeatRename(ctx, tx, g, mapping, nil); err != nil {

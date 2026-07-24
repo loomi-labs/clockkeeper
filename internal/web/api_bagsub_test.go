@@ -300,13 +300,13 @@ func TestReassignBagSubstitution_FullRemap(t *testing.T) {
 	_, err = handler.UpdateGrimoireState(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGrimoireStateRequest{
 		GameId: gameID,
 		Positions: map[string]*clockkeeperv1.Position{
-			"drunk":                  {X: 10, Y: 10},
-			"washerwoman":            {X: 20, Y: 20},
-			"chef":                   {X: 30, Y: 30},
-			"reminder-drunk-0":       {X: 1, Y: 1},
-			"reminder-washerwoman-0": {X: 2, Y: 2},
-			"reminder-washerwoman-1": {X: 3, Y: 3},
-			"bagsub-reminder-drunk":  {X: 4, Y: 4},
+			"drunk":                               {X: 10, Y: 10},
+			"washerwoman":                         {X: 20, Y: 20},
+			"chef":                                {X: 30, Y: 30},
+			"reminder-drunk-0":                    {X: 1, Y: 1},
+			"reminder-washerwoman-0":              {X: 2, Y: 2},
+			"reminder-washerwoman-1":              {X: 3, Y: 3},
+			"bagsub-reminder-drunk":               {X: 4, Y: 4},
 			"reminder-" + strconv.Itoa(legacyIdx): {X: 99, Y: 99}, // legacy positional key
 		},
 		PlayerNames: map[string]string{"drunk": "Alice", "washerwoman": "Bob", "chef": "Carol"},

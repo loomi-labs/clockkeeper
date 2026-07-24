@@ -37,22 +37,27 @@
     }
   }
 
-  let saveChain = Promise.resolve();
+  let saveChain: Promise<unknown> = Promise.resolve();
 
-  async function save() {
-    saveChain = saveChain.then(async () => {
+  // Resolves to whether THIS save reached the server, so callers can gate
+  // follow-up effects (e.g. propagating a rename into the current game).
+  async function save(): Promise<boolean> {
+    const attempt = saveChain.then(async () => {
       saving = true;
       error = "";
       try {
         const resp = await client.updatePlayerPresets({ names });
         names = [...resp.names];
+        return true;
       } catch (err) {
         error = getErrorMessage(err, "Failed to save player presets");
+        return false;
       } finally {
         saving = false;
       }
     });
-    return saveChain;
+    saveChain = attempt;
+    return attempt;
   }
 
   function addName() {
@@ -79,7 +84,10 @@
   // Commit an inline rename. Guarded on index so the input's blur handler is a
   // no-op after Escape cancels. Skips empty, unchanged, or duplicate names
   // (presets are deduped server-side, mirroring addName's client-side guard).
-  function commitEdit(index: number) {
+  // The rename only propagates to the current game (onrenamed) once the preset
+  // save reached the server; on failure the local edit is rolled back so the
+  // list never shows a name that was never persisted.
+  async function commitEdit(index: number) {
     if (editingIndex !== index) return;
     const trimmed = editText.trim();
     const oldName = names[index];
@@ -90,8 +98,12 @@
     names = names.map((n, i) => (i === index ? trimmed : n));
     editingIndex = null;
     editText = "";
-    save();
-    onrenamed?.(oldName, trimmed);
+    const saved = await save();
+    if (saved) {
+      onrenamed?.(oldName, trimmed);
+    } else {
+      names = names.map((n) => (n === trimmed ? oldName : n));
+    }
   }
 
   function moveName(from: number, to: number) {

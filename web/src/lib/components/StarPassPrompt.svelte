@@ -20,6 +20,15 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") onskip();
   }
+
+  // Seed keyboard focus on the first action so Escape works immediately, and
+  // restore focus to the previously focused element when the prompt closes.
+  let dialogEl = $state<HTMLDivElement | undefined>();
+  $effect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    dialogEl?.querySelector<HTMLElement>("button")?.focus();
+    return () => previous?.focus?.();
+  });
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -38,11 +47,15 @@
 
   <!-- Dialog -->
   <div
+    bind:this={dialogEl}
     role="dialog"
     aria-modal="true"
+    aria-labelledby="starpass-title"
     class="relative z-10 w-full max-w-sm rounded-xl border border-border bg-surface p-6 shadow-xl"
   >
-    <h3 class="text-lg font-semibold text-primary">Who becomes the new Imp?</h3>
+    <h3 id="starpass-title" class="text-lg font-semibold text-primary">
+      Who becomes the new Imp?
+    </h3>
     <p class="mt-1 text-sm text-secondary">
       The Imp killed itself — a Minion becomes the Imp (Star Pass).
     </p>

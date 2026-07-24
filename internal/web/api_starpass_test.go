@@ -137,9 +137,9 @@ func TestStarPass_FullSwap(t *testing.T) {
 	assert.True(t, proto.Equal(g, fresh), "star pass response should equal fresh GetGame")
 }
 
-// --- Both dead in the same phase (unique-index safety on a swap) ---
+// --- Dead promotion target is rejected (only a living Minion can be promoted) ---
 
-func TestStarPass_BothDeadSamePhase(t *testing.T) {
+func TestStarPass_DeadMinionRejected(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -153,7 +153,8 @@ func TestStarPass_BothDeadSamePhase(t *testing.T) {
 	before := getGame(t, handler, ownerID, gameID)
 	night := nightPhase(t, before)
 
-	// Both imp and poisoner are dead in the same phase before the swap.
+	// The imp self-kills AND the poisoner is already dead in the active phase —
+	// a dead Minion must not be promotable, even though the client filters it.
 	_, err = handler.RecordDeath(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RecordDeathRequest{
 		GameId: gameID, RoleId: "imp", PhaseId: &night.Id, Cause: clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON,
 	}))
@@ -163,21 +164,22 @@ func TestStarPass_BothDeadSamePhase(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	g, err := starPass(t, handler, ownerID, gameID, "poisoner")
-	require.NoError(t, err)
+	_, err = starPass(t, handler, ownerID, gameID, "poisoner")
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
 
-	byRole := map[string]*clockkeeperv1.Death{}
-	for _, p := range g.PlayState.Phases {
+	// Nothing was swapped: the imp's seat still holds its death row.
+	after := getGame(t, handler, ownerID, gameID)
+	for _, p := range after.PlayState.Phases {
 		if p.Id == night.Id {
+			causes := map[string]clockkeeperv1.DeathCause{}
 			for _, d := range p.Deaths {
-				byRole[d.RoleId] = d
+				causes[d.RoleId] = d.Cause
 			}
+			assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON, causes["imp"])
+			assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_EXECUTION, causes["poisoner"])
 		}
 	}
-	require.Len(t, byRole, 2)
-	// Swap: imp's death -> poisoner (DEMON), poisoner's death -> imp (EXECUTION).
-	assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_DEMON, byRole["poisoner"].Cause)
-	assert.Equal(t, clockkeeperv1.DeathCause_DEATH_CAUSE_EXECUTION, byRole["imp"].Cause)
 }
 
 // --- Validation / errors ---
