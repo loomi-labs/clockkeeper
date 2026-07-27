@@ -32,6 +32,18 @@
       label: "Safe",
       excludeSelf: true,
     },
+    bureaucrat: {
+      characterId: "bureaucrat",
+      tokenText: "3 Votes",
+      label: "3 Votes",
+      excludeSelf: true,
+    },
+    thief: {
+      characterId: "thief",
+      tokenText: "Negative Vote",
+      label: "Negative Vote",
+      excludeSelf: true,
+    },
   };
 
   const cfg = $derived(CONFIG[entryId]);

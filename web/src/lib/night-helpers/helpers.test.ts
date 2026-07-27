@@ -18,6 +18,7 @@ import {
   findExecutedToday,
   newDeathsTonight,
   scarletWomanPromotionAlert,
+  resolveTrueCharacter,
   type HelperPlayer,
 } from "./helpers";
 
@@ -34,6 +35,7 @@ function player(
     edition: "tb",
     isDead: false,
     alignment: "good",
+    trueCharacter: { id, name: id, edition: "tb", team: Team.TOWNSFOLK },
     ...overrides,
   };
 }
@@ -770,5 +772,72 @@ describe("scarletWomanPromotionAlert", () => {
     ]);
     // Travellers do not count: sw, a, b -> 3 -> false.
     expect(scarletWomanPromotionAlert(players)).toBe(false);
+  });
+});
+
+describe("resolveTrueCharacter", () => {
+  const drunkSeat = {
+    id: "drunk",
+    name: "Drunk",
+    edition: "tb",
+    team: Team.OUTSIDER,
+  };
+
+  it("passes a plain seat through unchanged", () => {
+    const own = {
+      id: "empath",
+      name: "Empath",
+      edition: "tb",
+      team: Team.TOWNSFOLK,
+    };
+    expect(resolveTrueCharacter({ own })).toEqual(own);
+  });
+
+  it("ignores the bag-substitution facade (a Drunk is really the Drunk)", () => {
+    expect(
+      resolveTrueCharacter({
+        own: drunkSeat,
+        bagSub: { characterId: "empath", characterName: "Empath" },
+      }),
+    ).toEqual(drunkSeat);
+  });
+
+  it("keeps the real character's team, not the facade's", () => {
+    const resolved = resolveTrueCharacter({
+      own: drunkSeat,
+      bagSub: { characterId: "chef", characterName: "Chef" },
+    });
+    expect(resolved.team).toBe(Team.OUTSIDER);
+  });
+
+  it("respects a promotion (a star-passed Baron really is the Imp)", () => {
+    expect(
+      resolveTrueCharacter({
+        own: { id: "baron", name: "Baron", edition: "tb", team: Team.MINION },
+        promotion: {
+          actsAsId: "imp",
+          actsAsName: "Imp",
+          actsAsEdition: "tb",
+          actsAsTeam: Team.DEMON,
+          label: "Imp (ex Baron)",
+        },
+      }),
+    ).toEqual({ id: "imp", name: "Imp", edition: "tb", team: Team.DEMON });
+  });
+
+  it("prefers the promotion over a bag substitution", () => {
+    const resolved = resolveTrueCharacter({
+      own: drunkSeat,
+      promotion: {
+        actsAsId: "imp",
+        actsAsName: "Imp",
+        actsAsEdition: "tb",
+        actsAsTeam: Team.DEMON,
+        label: "Imp (ex Drunk)",
+      },
+      bagSub: { characterId: "empath", characterName: "Empath" },
+    });
+    expect(resolved.id).toBe("imp");
+    expect(resolved.team).toBe(Team.DEMON);
   });
 });

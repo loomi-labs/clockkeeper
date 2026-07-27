@@ -35,6 +35,7 @@
     GrimoireReminder,
   } from "~/lib/components/grimoire/types";
   import NightOrder from "~/lib/components/NightOrder.svelte";
+  import OverflowMenu from "~/lib/components/OverflowMenu.svelte";
   import PhaseHeader from "~/lib/components/PhaseHeader.svelte";
   import ReminderToken from "~/lib/components/ReminderToken.svelte";
   import SetupSidebar from "~/lib/components/SetupSidebar.svelte";
@@ -74,6 +75,7 @@
   import {
     findExecutedToday,
     newDeathsTonight,
+    resolveTrueCharacter,
   } from "~/lib/night-helpers/helpers";
   import type { HelperPlayer } from "~/lib/night-helpers/helpers";
   import { buildPromotionsByRole } from "~/lib/promotions";
@@ -155,16 +157,18 @@
   const charactersByTeam = $derived.by(() => {
     const grouped: Record<number, Character[]> = {};
     const skip = new Set([Team.TRAVELLER, Team.FABLED, Team.LORIC]);
-    for (const char of script?.characters ?? []) {
-      if (skip.has(char.team)) continue;
+    const seen = new Set<string>();
+    const add = (char: Character) => {
+      if (skip.has(char.team) || seen.has(char.id)) return;
+      seen.add(char.id);
       if (!grouped[char.team]) grouped[char.team] = [];
       grouped[char.team].push(char);
-    }
-    for (const char of game?.extraCharacterDetails ?? []) {
-      if (skip.has(char.team)) continue;
-      if (!grouped[char.team]) grouped[char.team] = [];
-      grouped[char.team].push(char);
-    }
+    };
+    for (const char of script?.characters ?? []) add(char);
+    for (const char of game?.extraCharacterDetails ?? []) add(char);
+    // Seats added mid-game from off the script live only on the game, but must
+    // still show in the setup grid and count towards the distribution bar.
+    for (const char of game?.selectedCharacters ?? []) add(char);
     return grouped;
   });
 
@@ -176,10 +180,8 @@
     ]),
   );
 
-  // Track which IDs belong to the script vs extra (for toggle behavior).
-  const scriptCharIdSet = $derived(
-    new Set(script?.characters?.map((c) => c.id) ?? []),
-  );
+  // Track which IDs are extras (fabled / loric / legacy off-script picks) so
+  // toggling routes them to the extra-characters API instead of the roles API.
   const extraCharIdSet = $derived(new Set(game?.extraCharacterIds ?? []));
 
   const selectedTravellerIdSet = $derived(
@@ -251,12 +253,12 @@
     optionalTeams.filter((o) => o.chars.length === 0),
   );
 
-  // Combined selectedIds for the character picker modal.
+  // Combined selectedIds for the character picker modal. Only what is actually
+  // selected — being on the script is not a selection.
   const pickerSelectedIds = $derived(
     new Set([
       ...(game?.selectedRoleIds ?? []),
       ...(game?.extraCharacterIds ?? []),
-      ...(script?.characterIds ?? []),
       ...(game?.selectedTravellerIds ?? []),
     ]),
   );
@@ -304,6 +306,22 @@
   const isCompleted = $derived(game?.state === GameState.COMPLETED);
   const canStartGame = $derived(
     isSetup && (game?.selectedRoleIds?.length ?? 0) > 0,
+  );
+
+  // Header summary counts (display only). During setup `playerCount` /
+  // `travellerCount` are the configured targets that drive the distribution and
+  // randomization. Once the game has started, seats can be added mid-game (the
+  // character picker) without touching those setup-time values, so show the
+  // ACTUAL number of seats instead.
+  const displayPlayerCount = $derived(
+    isSetup
+      ? (game?.playerCount ?? 0)
+      : (game?.selectedCharacters?.length ?? 0),
+  );
+  const displayTravellerCount = $derived(
+    isSetup
+      ? (game?.travellerCount ?? 0)
+      : (game?.selectedTravellerCharacters?.length ?? 0),
   );
 
   // Ensure the browser leaves fullscreen whenever the game becomes completed
@@ -449,7 +467,12 @@
     randomizing = true;
     error = "";
     try {
-      const resp = await client.randomizeRoles({ gameId: game.id });
+      // Padlocked seats keep their role (and their name, which is keyed by role
+      // id) — the backend re-randomizes only the rest.
+      const resp = await client.randomizeRoles({
+        gameId: game.id,
+        lockedRoleIds: [...lockedNameIds],
+      });
       game = resp.game;
     } catch (err) {
       error = getErrorMessage(err, "Failed to randomize roles");
@@ -575,20 +598,22 @@
   function handlePickerSelect(char: Character) {
     if (char.team === Team.TRAVELLER) {
       addTraveller(char);
-    } else if (scriptCharIdSet.has(char.id)) {
-      toggleRole(char.id);
-    } else {
+    } else if (char.team === Team.FABLED || char.team === Team.LORIC) {
+      // Fabled / Loric are token-only: they never occupy a seat.
       addExtraChar(char);
+    } else {
+      // Regular characters — including off-script ones — become real seats.
+      toggleRole(char.id);
     }
   }
 
   function handlePickerDeselect(charId: string) {
     if (selectedTravellerIdSet.has(charId)) {
       removeTraveller(charId);
-    } else if (scriptCharIdSet.has(charId)) {
-      toggleRole(charId);
     } else {
-      removeExtraChar(charId);
+      // toggleRole routes ids in `extraCharIdSet` (fabled, loric, legacy
+      // off-script extras) to the extras API and everything else to the roles API.
+      toggleRole(charId);
     }
   }
 
@@ -1112,6 +1137,17 @@
   // --- Grimoire state (persisted per game) ---
   let grimoirePositions = $state(new Map<string, { x: number; y: number }>());
   let grimoireNames = $state(new Map<string, string>());
+  // Seats whose assigned name is pinned: "Assign in order" / "Randomize" skip
+  // them and never hand their name to another seat. Session-local (not persisted).
+  let lockedNameIds = $state(new Set<string>());
+
+  function toggleNameLock(playerId: string) {
+    const next = new Set(lockedNameIds);
+    if (next.has(playerId)) next.delete(playerId);
+    else next.add(playerId);
+    lockedNameIds = next;
+  }
+
   let reminderPositions = $state(new Map<string, { x: number; y: number }>());
   let reminderAttachments = $state(
     new Map<string, { playerId: string; angle: number }>(),
@@ -1662,6 +1698,13 @@
         characterName: promo ? promo.label : sub?.characterName || c.name,
         team: promo ? promo.actsAsTeam : c.team,
         edition: promo ? promo.actsAsEdition : c.edition,
+        // Grimoire truth for learned info (Undertaker/Ravenkeeper): the bag-sub
+        // facade above is a player-perspective display only.
+        trueCharacter: resolveTrueCharacter({
+          own: { id: c.id, name: c.name, edition: c.edition, team: c.team },
+          promotion: promo,
+          bagSub: sub,
+        }),
         isDead: nightDeadRoleIds.has(c.id),
         alignment: effectiveAlignment(
           c.id,
@@ -2025,6 +2068,7 @@
       grimoireNames,
       chars.map((c) => c.id),
       names,
+      lockedNameIds,
     );
     saveGrimoireState();
   }
@@ -2037,11 +2081,18 @@
 
   function unassignPlayerName(playerId: string) {
     grimoireNames = unassignName(grimoireNames, playerId);
+    // A seat with no name has nothing to lock.
+    if (lockedNameIds.has(playerId)) {
+      const next = new Set(lockedNameIds);
+      next.delete(playerId);
+      lockedNameIds = next;
+    }
     saveGrimoireState();
   }
 
   function clearAllPlayerNames() {
     grimoireNames = new Map();
+    lockedNameIds = new Set();
     saveGrimoireState();
   }
 
@@ -2182,7 +2233,7 @@
                   >
                 </button>
               {/if}
-              <span>{game.playerCount} players</span>
+              <span>{displayPlayerCount} players</span>
               {#if isSetup}
                 <button
                   onclick={() => updatePlayerCount(1)}
@@ -2204,11 +2255,11 @@
                   >
                 </button>
               {/if}
-              {#if game.travellerCount > 0}
+              {#if displayTravellerCount > 0}
                 <span
-                  >+ {game.travellerCount}
-                  {game.travellerCount === 1 ? "traveller" : "travellers"}
-                  = {game.playerCount + game.travellerCount} total</span
+                  >+ {displayTravellerCount}
+                  {displayTravellerCount === 1 ? "traveller" : "travellers"}
+                  = {displayPlayerCount + displayTravellerCount} total</span
                 >
               {/if}
             </div>
@@ -2279,25 +2330,33 @@
                 /></svg
               >
             </button>
-            <button
-              onclick={duplicateGame}
-              class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
-              title="Duplicate game"
-            >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
-            </button>
+            <OverflowMenu label="More actions">
+              {#snippet children(close: () => void)}
+                <button
+                  role="menuitem"
+                  onclick={() => {
+                    close();
+                    duplicateGame();
+                  }}
+                  class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover"
+                >
+                  <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
+                  </svg>
+                  Duplicate game
+                </button>
+              {/snippet}
+            </OverflowMenu>
             {#if isSetup && activeTab === "setup"}
               <button
                 onclick={randomize}
@@ -2570,8 +2629,10 @@
           <PlayerAssignmentPanel
             players={assignmentPanelPlayers}
             {presetNames}
+            lockedIds={lockedNameIds}
             onassign={assignNameToPlayer}
             onunassign={unassignPlayerName}
+            ontogglelock={toggleNameLock}
             onassigninorder={() => handleAssignPresets(presetNames)}
             onrandomize={() => handleAssignPresets(shuffled(presetNames))}
             onclearall={clearAllPlayerNames}

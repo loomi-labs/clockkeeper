@@ -20,6 +20,7 @@
   import PlayerPickerPopover from "./night-helpers/PlayerPickerPopover.svelte";
   import type { PlayerStatus } from "~/lib/night-helpers/status";
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
+  import { NIGHT_HELPERS } from "~/lib/night-helpers/registry";
 
   let {
     game,
@@ -796,6 +797,26 @@
     demonKillFor = null;
   }
 
+  // Minion/Demon Info steps: the storyteller needs to know WHO to wake and who
+  // to point at. Built from the night-scoped helper players, so promotions and
+  // bag substitutions are already reflected (a promoted Minion lists as Demon).
+  // Player name first when one is assigned, character name in parens.
+  type EvilSeat = { id: string; label: string; icon: string };
+
+  function evilSeats(team: Team): EvilSeat[] {
+    if (!helperContext) return [];
+    return [...helperContext.players.values()]
+      .filter((p) => p.team === team)
+      .map((p) => ({
+        id: p.id,
+        label: p.name ? `${p.name} (${p.characterName})` : p.characterName,
+        icon: `/characters/${p.edition}/${p.characterId}${iconSuffix(p.team)}.webp`,
+      }));
+  }
+
+  const minionSeats = $derived(evilSeats(Team.MINION));
+  const demonSeats = $derived(evilSeats(Team.DEMON));
+
   function demonKillFromMenu() {
     if (!overflowMenu) return;
     demonKillFor = {
@@ -807,6 +828,31 @@
 </script>
 
 <svelte:window onclick={handleWindowClick} />
+
+<!-- One roster line for the Minion/Demon Info steps ("Minions: Frank
+     (Poisoner), …") so the storyteller knows who to wake and point at. -->
+{#snippet evilRoster(label: string, seats: EvilSeat[])}
+  {#if seats.length > 0}
+    <p
+      class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-secondary"
+    >
+      <span class="font-semibold">{label}</span>
+      {#each seats as seat, idx (seat.id)}
+        <span class="flex items-center gap-1">
+          <img
+            src={seat.icon}
+            alt=""
+            class="h-4 w-4 rounded-full"
+            onerror={(e: Event) =>
+              ((e.target as HTMLImageElement).style.display = "none")}
+          />
+          <span class="font-medium text-primary">{seat.label}</span
+          >{#if idx < seats.length - 1}<span>,</span>{/if}
+        </span>
+      {/each}
+    </p>
+  {/if}
+{/snippet}
 
 <div class="space-y-4">
   <h2 class="print-title hidden text-xl font-bold">
@@ -928,6 +974,25 @@
           ? guideVisualDone
           : (completedActions?.has(entry.id) ?? false)}
         {@const entryIsDead = isGuideTarget ? guideVisualDead : entry.isDead}
+        <!-- A dead seat whose night helper fires BECAUSE it died tonight (the
+             Ravenkeeper). The row-level dimming would make the helper look
+             disabled, and child CSS cannot undo a parent's opacity — so the
+             container drops the dead styling and gets a purple ring instead.
+             Icon/name stay dead-styled: the seat really is dead.
+             `triggersOnOwnDeath` is required: a helper merely being active
+             tonight is not enough (an Undertaker who died tonight does NOT
+             act), only helpers whose trigger IS their own death qualify. -->
+        {@const actsTonight =
+          entryIsDead &&
+          !entry.isSpecial &&
+          !entry.actsAsId &&
+          entry.inPlay &&
+          !!helperContext &&
+          !!helperContext.diedTonight?.has(
+            helperContext.playerIdForEntry(entry.id) ?? "",
+          ) &&
+          !!NIGHT_HELPERS[entry.id]?.triggersOnOwnDeath &&
+          !!NIGHT_HELPERS[entry.id]?.nights.includes(helperContext.night)}
         {#if entry.isSpecial}
           {@const isInteractive = !NON_INTERACTIVE_SPECIALS.has(entry.id)}
           <div class="overflow-hidden rounded-lg" data-entry={entry.id}>
@@ -958,6 +1023,8 @@
                   {@html formatReminder(entry.reminder)}
                 </p>
                 {#if entry.id === "demoninfo"}
+                  {@render evilRoster("Demon:", demonSeats)}
+                  {@render evilRoster("Minions:", minionSeats)}
                   <div class="mt-2 flex flex-wrap items-center gap-2">
                     {#if onshowcard}
                       <button
@@ -968,6 +1035,14 @@
                       </button>
                     {/if}
                     {#if bluffs && bluffs.length > 0}
+                      {#if onshowcard}
+                        <button
+                          onclick={() => onshowcard?.("std:notinplay")}
+                          class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                        >
+                          Show card: Not in play
+                        </button>
+                      {/if}
                       <span class="text-xs font-semibold text-secondary"
                         >Bluffs:</span
                       >
@@ -1009,14 +1084,6 @@
                           Edit
                         </button>
                       {/if}
-                      {#if onshowcard}
-                        <button
-                          onclick={() => onshowcard?.("std:notinplay")}
-                          class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                        >
-                          Show card: Not in play
-                        </button>
-                      {/if}
                     {:else if oneditbluffs}
                       <button
                         onclick={oneditbluffs}
@@ -1038,21 +1105,25 @@
                       </button>
                     {/if}
                   </div>
-                {:else if entry.id === "minioninfo" && onshowcard}
-                  <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <button
-                      onclick={() => onshowcard?.("std:thisisthedemon")}
-                      class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                    >
-                      Show card: This is the Demon
-                    </button>
-                    <button
-                      onclick={() => onshowcard?.("std:minions")}
-                      class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                    >
-                      Show card: These are your minions
-                    </button>
-                  </div>
+                {:else if entry.id === "minioninfo"}
+                  {@render evilRoster("Minions:", minionSeats)}
+                  {@render evilRoster("Demon:", demonSeats)}
+                  {#if onshowcard}
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        onclick={() => onshowcard?.("std:thisisthedemon")}
+                        class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                      >
+                        Show card: This is the Demon
+                      </button>
+                      <button
+                        onclick={() => onshowcard?.("std:minions")}
+                        class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                      >
+                        Show card: These are your minions
+                      </button>
+                    </div>
+                  {/if}
                 {/if}
               </div>
               {#if ontoggle && isInteractive}
@@ -1295,8 +1366,12 @@
               class="card-slate relative flex items-center gap-2 border px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5 {isDone
                 ? 'opacity-50 border-l-4 border-l-green-500'
                 : ''} {entryIsDead
-                ? (unselectedColors[effectiveTeam(entry.id, entry.team ?? 0)] ??
-                    'border-border/50') + ' opacity-40 border-dashed'
+                ? actsTonight
+                  ? (teamCardColors[effectiveTeam(entry.id, entry.team ?? 0)] ??
+                      'border-border') + ' ring-2 ring-purple-400/70'
+                  : (unselectedColors[
+                      effectiveTeam(entry.id, entry.team ?? 0)
+                    ] ?? 'border-border/50') + ' opacity-40 border-dashed'
                 : entry.inPlay
                   ? (teamCardColors[effectiveTeam(entry.id, entry.team ?? 0)] ??
                     'border-border')
@@ -1343,6 +1418,10 @@
                 {#if entryIsDead}<span
                     class="ml-2 text-xs text-red-500 dark:text-red-400"
                     >Dead</span
+                  >{/if}
+                {#if actsTonight}<span
+                    class="ml-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/20 dark:text-purple-300"
+                    >Died tonight &mdash; acts now</span
                   >{/if}
                 {#if !entry.isSpecial}
                   {@const status = statusForEntry(entry.id)}
@@ -1709,8 +1788,8 @@
                     : 'border-border-strong text-transparent hover:border-green-400'}"
                   title={isDone ? "Mark as not done" : "Mark as done"}
                   aria-label={isDone
-                    ? "Mark {entry.name} as not done"
-                    : "Mark {entry.name} as done"}
+                    ? `Mark ${entry.name} as not done`
+                    : `Mark ${entry.name} as done`}
                   aria-pressed={isDone}
                 >
                   <svg

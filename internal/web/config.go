@@ -21,6 +21,7 @@ type Config struct {
 	RateLimitAnon       int
 	RateLimitAuth       int
 	AnonymousMaxAge     time.Duration
+	DevSingleUser       bool
 }
 
 // LoadConfigFromEnv loads web configuration from environment variables.
@@ -44,5 +45,6 @@ func LoadConfigFromEnv() *Config {
 		RateLimitAnon:       env.GetInt("RATE_LIMIT_ANON", 120),
 		RateLimitAuth:       env.GetInt("RATE_LIMIT_AUTH", 120),
 		AnonymousMaxAge:     env.GetDuration("ANONYMOUS_MAX_AGE", "8760h"),
+		DevSingleUser:       env.GetBool("DEV_SINGLE_USER", false),
 	}
 }

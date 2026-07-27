@@ -28,6 +28,7 @@ tasks:
         echo "Postgres did not become ready in 30s" >&2
         exit 1
       - task: db:migrate
+      - task: db:seed
       - |
         trap 'kill 0' EXIT
         go tool air &
@@ -52,6 +53,7 @@ tasks:
         echo "Postgres did not become ready in 30s" >&2
         exit 1
       - task: db:migrate
+      - task: db:seed
       - |
         trap 'kill 0' EXIT
         go tool air &

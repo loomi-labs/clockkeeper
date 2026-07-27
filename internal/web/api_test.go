@@ -700,6 +700,90 @@ func TestRandomizeRoles_ShufflesTravellers(t *testing.T) {
 	assert.Greater(t, len(seen), 1, "expected different travellers across 20 randomizations, but always got the same one")
 }
 
+func TestRandomizeRoles_KeepsLockedRoles(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, gameID := createTestGame(t, handler)
+
+	// Locked seats keep their role (and with it the player name keyed by role id).
+	locked := []string{"chef", "poisoner"}
+
+	for range 10 {
+		resp, err := handler.RandomizeRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+			GameId:        gameID,
+			LockedRoleIds: locked,
+		}))
+		require.NoError(t, err)
+		assert.Len(t, resp.Msg.Game.SelectedRoleIds, 7)
+		for _, id := range locked {
+			assert.Contains(t, resp.Msg.Game.SelectedRoleIds, id, "locked role %q should be kept", id)
+		}
+	}
+}
+
+func TestRandomizeRoles_KeepsLockedTraveller(t *testing.T) {
+	handler := testHandler(t)
+	ctx := context.Background()
+
+	u, err := handler.db.User.Create().Save(ctx)
+	require.NoError(t, err)
+
+	scriptResp, err := handler.CreateScript(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateScriptRequest{
+		Name: "TB travellers for locked randomize",
+		CharacterIds: []string{
+			"washerwoman", "librarian", "investigator", "chef", "empath",
+			"fortuneteller", "undertaker", "monk", "ravenkeeper", "virgin",
+			"slayer", "soldier", "mayor", "butler", "saint", "recluse",
+			"drunk", "poisoner", "spy", "scarletwoman", "baron", "imp",
+			"thief", "bureaucrat", "gunslinger", "beggar", "scapegoat",
+		},
+	}))
+	require.NoError(t, err)
+
+	gameResp, err := handler.CreateGame(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.CreateGameRequest{
+		ScriptId:       scriptResp.Msg.Script.Id,
+		PlayerCount:    7,
+		TravellerCount: 1,
+	}))
+	require.NoError(t, err)
+
+	for range 10 {
+		resp, err := handler.RandomizeRoles(authedCtx(u.ID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+			GameId:        gameResp.Msg.Game.Id,
+			LockedRoleIds: []string{"gunslinger", "mayor"},
+		}))
+		require.NoError(t, err)
+		g := resp.Msg.Game
+		require.Len(t, g.SelectedTravellerIds, 1)
+		assert.Equal(t, "gunslinger", g.SelectedTravellerIds[0], "locked traveller should be kept")
+		assert.Contains(t, g.SelectedRoleIds, "mayor", "locked role should be kept")
+	}
+}
+
+func TestRandomizeRoles_RejectsUnknownLockedRole(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, gameID := createTestGame(t, handler)
+
+	_, err := handler.RandomizeRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+		GameId:        gameID,
+		LockedRoleIds: []string{"not-a-character"},
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestRandomizeRoles_LockedRolesExceedingSlotsFails(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, gameID := createTestGame(t, handler)
+
+	// A 7-player game has a single minion slot.
+	_, err := handler.RandomizeRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RandomizeRolesRequest{
+		GameId:        gameID,
+		LockedRoleIds: []string{"poisoner", "spy"},
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+}
+
 func TestGetSetupChecklist_ReturnsSteps(t *testing.T) {
 	handler := testHandler(t)
 	ownerID, gameID := createTestGame(t, handler)
@@ -832,4 +916,77 @@ func TestUpdateGameRoles_RejectsUnknownCharacter(t *testing.T) {
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+// --- UpdateGameRoles state guard tests ---
+
+func TestUpdateGameRoles_AllowsAddingRoleWhileInProgress(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, g := startedGame(t, handler)
+
+	extra := unusedTroubleBrewingRole(t, g.SelectedRoleIds)
+	want := append(append([]string{}, g.SelectedRoleIds...), extra)
+
+	resp, err := handler.UpdateGameRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+		GameId:          g.Id,
+		SelectedRoleIds: want,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, want, resp.Msg.Game.SelectedRoleIds)
+}
+
+func TestUpdateGameRoles_RejectsRemovalWhileInProgress(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, g := startedGame(t, handler)
+
+	require.Greater(t, len(g.SelectedRoleIds), 1)
+
+	_, err := handler.UpdateGameRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+		GameId:          g.Id,
+		SelectedRoleIds: g.SelectedRoleIds[1:],
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), g.SelectedRoleIds[0])
+}
+
+func TestUpdateGameRoles_RejectsCompletedGame(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, g := startedGame(t, handler)
+
+	_, err := handler.EndGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.EndGameRequest{
+		GameId: g.Id,
+	}))
+	require.NoError(t, err)
+
+	extra := unusedTroubleBrewingRole(t, g.SelectedRoleIds)
+
+	_, err = handler.UpdateGameRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+		GameId:          g.Id,
+		SelectedRoleIds: append(append([]string{}, g.SelectedRoleIds...), extra),
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+}
+
+// unusedTroubleBrewingRole returns a Trouble Brewing role ID that is not in inPlay.
+func unusedTroubleBrewingRole(t *testing.T, inPlay []string) string {
+	t.Helper()
+
+	used := make(map[string]bool, len(inPlay))
+	for _, id := range inPlay {
+		used[id] = true
+	}
+	candidates := []string{
+		"washerwoman", "librarian", "investigator", "chef", "empath",
+		"fortuneteller", "undertaker", "monk", "ravenkeeper", "virgin",
+		"slayer", "soldier", "mayor",
+	}
+	for _, id := range candidates {
+		if !used[id] {
+			return id
+		}
+	}
+	t.Fatal("no unused Trouble Brewing role available")
+	return ""
 }

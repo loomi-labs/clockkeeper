@@ -11,6 +11,10 @@ import (
 	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 )
 
+// devSingleUserUUID is the fixed UUID of the shared local-dev user used when
+// DEV_SINGLE_USER=true. Must match scripts/seed-dev.sql.
+const devSingleUserUUID = "dev-local-user"
+
 // LoginWithDiscord exchanges a Discord OAuth code for a ClockKeeper JWT.
 // If the caller has an anonymous session (JWT in Authorization header), the
 // anonymous account is upgraded to a Discord-linked account.
@@ -158,6 +162,10 @@ func (h *ClockKeeperServiceHandler) loginExistingDiscordUser(ctx context.Context
 
 // CreateAnonymousSession creates a new anonymous user and returns a JWT.
 func (h *ClockKeeperServiceHandler) CreateAnonymousSession(ctx context.Context, req *connect.Request[clockkeeperv1.CreateAnonymousSessionRequest]) (*connect.Response[clockkeeperv1.CreateAnonymousSessionResponse], error) {
+	if h.config.DevSingleUser {
+		return h.createDevSingleUserSession(ctx)
+	}
+
 	u, err := h.db.User.Create().
 		SetIsAnonymous(true).
 		Save(ctx)
@@ -171,6 +179,55 @@ func (h *ClockKeeperServiceHandler) CreateAnonymousSession(ctx context.Context, 
 		slog.Error("issue token failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+
+	return connect.NewResponse(&clockkeeperv1.CreateAnonymousSessionResponse{
+		Token: token,
+	}), nil
+}
+
+// createDevSingleUserSession returns a token for the fixed local-dev user so every
+// browser/device in a dev session shares the same games. Local development only —
+// gated behind DEV_SINGLE_USER and forced off in the containerized deployment.
+//
+// The dev user is deliberately is_anonymous=false so the anonymous-user cleanup
+// (see cleanup.go) never deletes it along with its seeded games.
+func (h *ClockKeeperServiceHandler) createDevSingleUserSession(ctx context.Context) (*connect.Response[clockkeeperv1.CreateAnonymousSessionResponse], error) {
+	u, err := h.db.User.Query().
+		Where(user.UUID(devSingleUserUUID)).
+		Only(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		slog.Error("dev single user lookup failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	if u == nil {
+		u, err = h.db.User.Create().
+			SetUUID(devSingleUserUUID).
+			SetIsAnonymous(false).
+			Save(ctx)
+		if err != nil {
+			// Possible race: another request created the dev user concurrently.
+			if !ent.IsConstraintError(err) {
+				slog.Error("create dev single user failed", "err", err)
+				return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+			}
+			u, err = h.db.User.Query().Where(user.UUID(devSingleUserUUID)).Only(ctx)
+			if err != nil {
+				slog.Error("re-query dev single user after race failed", "err", err)
+				return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+			}
+		}
+	}
+
+	token, err := h.auth.IssueToken(u.ID, false)
+	if err != nil {
+		slog.Error("issue token failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Debug, not Warn: the startup warning (cmd/server.go) is the signal that the
+	// flag is on. Warning per request would drown out real warnings in dev.
+	slog.Debug("dev single-user session issued", "user_id", u.ID)
 
 	return connect.NewResponse(&clockkeeperv1.CreateAnonymousSessionResponse{
 		Token: token,
