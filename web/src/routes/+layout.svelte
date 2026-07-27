@@ -14,6 +14,7 @@
   import { rawClient } from "~/lib/api";
   import { initTheme } from "~/lib/theme";
   import { sidebar, initSidebar } from "~/lib/sidebar.svelte";
+  import { spotify } from "~/lib/spotify.svelte";
   import ThemeSwitcher from "~/lib/components/ThemeSwitcher.svelte";
   import Sidebar from "~/lib/components/Sidebar.svelte";
   import "~/app.css";
@@ -32,6 +33,8 @@
       const config = await rawClient.getAuthConfig({});
       auth.discordAvailable = !!config.discordClientId;
       auth.discordClientId = config.discordClientId;
+      spotify.available = !!config.spotifyClientId;
+      spotify.clientId = config.spotifyClientId;
     } catch {
       // Server may be unavailable — continue with defaults.
     }

@@ -160,6 +160,36 @@ var (
 			},
 		},
 	}
+	// SpotifyConnectionsColumns holds the columns for the "spotify_connections" table.
+	SpotifyConnectionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "spotify_user_id", Type: field.TypeString},
+		{Name: "display_name", Type: field.TypeString, Nullable: true},
+		{Name: "premium", Type: field.TypeBool, Default: false},
+		{Name: "refresh_token", Type: field.TypeString},
+		{Name: "access_token", Type: field.TypeString, Nullable: true},
+		{Name: "access_token_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "day_playlist", Type: field.TypeJSON, Nullable: true},
+		{Name: "night_playlist", Type: field.TypeJSON, Nullable: true},
+		{Name: "nominations_playlist", Type: field.TypeJSON, Nullable: true},
+		{Name: "user_id", Type: field.TypeInt, Unique: true},
+	}
+	// SpotifyConnectionsTable holds the schema information for the "spotify_connections" table.
+	SpotifyConnectionsTable = &schema.Table{
+		Name:       "spotify_connections",
+		Columns:    SpotifyConnectionsColumns,
+		PrimaryKey: []*schema.Column{SpotifyConnectionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "spotify_connections_users_spotify_connection",
+				Columns:    []*schema.Column{SpotifyConnectionsColumns[12]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -186,6 +216,7 @@ var (
 		InfoCardsTable,
 		PhasesTable,
 		ScriptsTable,
+		SpotifyConnectionsTable,
 		UsersTable,
 	}
 )
@@ -197,4 +228,5 @@ func init() {
 	InfoCardsTable.ForeignKeys[0].RefTable = UsersTable
 	PhasesTable.ForeignKeys[0].RefTable = GamesTable
 	ScriptsTable.ForeignKeys[0].RefTable = UsersTable
+	SpotifyConnectionsTable.ForeignKeys[0].RefTable = UsersTable
 }

@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -50,9 +51,11 @@ type UserEdges struct {
 	Games []*Game `json:"games,omitempty"`
 	// InfoCards holds the value of the info_cards edge.
 	InfoCards []*InfoCard `json:"info_cards,omitempty"`
+	// SpotifyConnection holds the value of the spotify_connection edge.
+	SpotifyConnection *SpotifyConnection `json:"spotify_connection,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [4]bool
 }
 
 // ScriptsOrErr returns the Scripts value or an error if the edge
@@ -80,6 +83,17 @@ func (e UserEdges) InfoCardsOrErr() ([]*InfoCard, error) {
 		return e.InfoCards, nil
 	}
 	return nil, &NotLoadedError{edge: "info_cards"}
+}
+
+// SpotifyConnectionOrErr returns the SpotifyConnection value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UserEdges) SpotifyConnectionOrErr() (*SpotifyConnection, error) {
+	if e.SpotifyConnection != nil {
+		return e.SpotifyConnection, nil
+	} else if e.loadedTypes[3] {
+		return nil, &NotFoundError{label: spotifyconnection.Label}
+	}
+	return nil, &NotLoadedError{edge: "spotify_connection"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -203,6 +217,11 @@ func (_m *User) QueryGames() *GameQuery {
 // QueryInfoCards queries the "info_cards" edge of the User entity.
 func (_m *User) QueryInfoCards() *InfoCardQuery {
 	return NewUserClient(_m.config).QueryInfoCards(_m)
+}
+
+// QuerySpotifyConnection queries the "spotify_connection" edge of the User entity.
+func (_m *User) QuerySpotifyConnection() *SpotifyConnectionQuery {
+	return NewUserClient(_m.config).QuerySpotifyConnection(_m)
 }
 
 // Update returns a builder for updating this User.

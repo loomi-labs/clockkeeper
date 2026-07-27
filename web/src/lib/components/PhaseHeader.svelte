@@ -21,6 +21,8 @@
     ontogglefullscreen,
     onshowcards,
     dayActive = false,
+    nominationMode = false,
+    nominationsAvailable = false,
   }: {
     game: Game;
     viewingRoundIndex: number;
@@ -37,6 +39,12 @@
     // step-wise: Night N → Day N → Night N+1). Only meaningful for the current
     // round; past rounds always read as "Night N" in the breadcrumbs.
     dayActive?: boolean;
+    // Nominations is a UI-only step wedged between Day N and Night N+1 so the
+    // music can change for it. The server never hears about it, so it is
+    // purely a label + advance-button change owned by the page.
+    nominationMode?: boolean;
+    // Whether the page is willing to offer the Nominations step at all.
+    nominationsAvailable?: boolean;
   } = $props();
 
   const viewingRound = $derived(rounds[viewingRoundIndex]);
@@ -45,6 +53,17 @@
 
   // Show "Day N" only while viewing the current round and its Day step is active.
   const showDay = $derived(isViewingCurrent && dayActive);
+  // The nomination step lives inside the current round's Day — past rounds are
+  // always browsed as plain Nights.
+  const showNominations = $derived(showDay && nominationMode);
+
+  const advanceLabel = $derived.by(() => {
+    if (!showDay) return "Finish Night";
+    // Day is the only step that can branch: it goes to Nominations when the
+    // page offers that, and straight to the next Night otherwise.
+    if (!showNominations && nominationsAvailable) return "Begin Nominations";
+    return `Begin Night ${roundNumber + 1}`;
+  });
 
   const canGoBack = $derived(viewingRoundIndex > 0);
   const canGoForward = $derived(viewingRoundIndex < rounds.length - 1);
@@ -117,7 +136,22 @@
           <h2
             class="flex items-center gap-1.5 text-xl font-bold text-primary sm:text-2xl"
           >
-            {#if showDay}
+            {#if showNominations}
+              <svg
+                class="h-5 w-5 shrink-0 text-indigo-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M9 11V4.5a1.5 1.5 0 013 0V10m0-.5a1.5 1.5 0 013 0V11m0-.5a1.5 1.5 0 013 0v5.25a5.25 5.25 0 01-5.25 5.25h-1.5a5.25 5.25 0 01-5.25-5.25V9.5a1.5 1.5 0 013 0V13"
+                />
+              </svg>
+              Nominations
+            {:else if showDay}
               <svg
                 class="h-5 w-5 shrink-0 text-amber-500"
                 fill="none"
@@ -305,7 +339,7 @@
               onclick={onadvance}
               class="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
             >
-              {showDay ? `Begin Night ${roundNumber + 1}` : "Finish Night"}
+              {advanceLabel}
             </button>
             <button
               onclick={onend}

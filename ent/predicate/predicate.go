@@ -21,5 +21,8 @@ type Phase func(*sql.Selector)
 // Script is the predicate function for script builders.
 type Script func(*sql.Selector)
 
+// SpotifyConnection is the predicate function for spotifyconnection builders.
+type SpotifyConnection func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

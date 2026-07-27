@@ -594,6 +594,29 @@ func HasInfoCardsWith(preds ...predicate.InfoCard) predicate.User {
 	})
 }
 
+// HasSpotifyConnection applies the HasEdge predicate on the "spotify_connection" edge.
+func HasSpotifyConnection() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, SpotifyConnectionTable, SpotifyConnectionColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSpotifyConnectionWith applies the HasEdge predicate on the "spotify_connection" edge with a given conditions (other predicates).
+func HasSpotifyConnectionWith(preds ...predicate.SpotifyConnection) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newSpotifyConnectionStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.User) predicate.User {
 	return predicate.User(sql.AndPredicates(predicates...))

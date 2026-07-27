@@ -20,6 +20,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -38,6 +39,8 @@ type Client struct {
 	Phase *PhaseClient
 	// Script is the client for interacting with the Script builders.
 	Script *ScriptClient
+	// SpotifyConnection is the client for interacting with the SpotifyConnection builders.
+	SpotifyConnection *SpotifyConnectionClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 }
@@ -56,6 +59,7 @@ func (c *Client) init() {
 	c.InfoCard = NewInfoCardClient(c.config)
 	c.Phase = NewPhaseClient(c.config)
 	c.Script = NewScriptClient(c.config)
+	c.SpotifyConnection = NewSpotifyConnectionClient(c.config)
 	c.User = NewUserClient(c.config)
 }
 
@@ -147,14 +151,15 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:      ctx,
-		config:   cfg,
-		Death:    NewDeathClient(cfg),
-		Game:     NewGameClient(cfg),
-		InfoCard: NewInfoCardClient(cfg),
-		Phase:    NewPhaseClient(cfg),
-		Script:   NewScriptClient(cfg),
-		User:     NewUserClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		Death:             NewDeathClient(cfg),
+		Game:              NewGameClient(cfg),
+		InfoCard:          NewInfoCardClient(cfg),
+		Phase:             NewPhaseClient(cfg),
+		Script:            NewScriptClient(cfg),
+		SpotifyConnection: NewSpotifyConnectionClient(cfg),
+		User:              NewUserClient(cfg),
 	}, nil
 }
 
@@ -172,14 +177,15 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:      ctx,
-		config:   cfg,
-		Death:    NewDeathClient(cfg),
-		Game:     NewGameClient(cfg),
-		InfoCard: NewInfoCardClient(cfg),
-		Phase:    NewPhaseClient(cfg),
-		Script:   NewScriptClient(cfg),
-		User:     NewUserClient(cfg),
+		ctx:               ctx,
+		config:            cfg,
+		Death:             NewDeathClient(cfg),
+		Game:              NewGameClient(cfg),
+		InfoCard:          NewInfoCardClient(cfg),
+		Phase:             NewPhaseClient(cfg),
+		Script:            NewScriptClient(cfg),
+		SpotifyConnection: NewSpotifyConnectionClient(cfg),
+		User:              NewUserClient(cfg),
 	}, nil
 }
 
@@ -209,7 +215,7 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Death, c.Game, c.InfoCard, c.Phase, c.Script, c.User,
+		c.Death, c.Game, c.InfoCard, c.Phase, c.Script, c.SpotifyConnection, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -219,7 +225,7 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Death, c.Game, c.InfoCard, c.Phase, c.Script, c.User,
+		c.Death, c.Game, c.InfoCard, c.Phase, c.Script, c.SpotifyConnection, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -238,6 +244,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Phase.mutate(ctx, m)
 	case *ScriptMutation:
 		return c.Script.mutate(ctx, m)
+	case *SpotifyConnectionMutation:
+		return c.SpotifyConnection.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	default:
@@ -1054,6 +1062,155 @@ func (c *ScriptClient) mutate(ctx context.Context, m *ScriptMutation) (Value, er
 	}
 }
 
+// SpotifyConnectionClient is a client for the SpotifyConnection schema.
+type SpotifyConnectionClient struct {
+	config
+}
+
+// NewSpotifyConnectionClient returns a client for the SpotifyConnection from the given config.
+func NewSpotifyConnectionClient(c config) *SpotifyConnectionClient {
+	return &SpotifyConnectionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `spotifyconnection.Hooks(f(g(h())))`.
+func (c *SpotifyConnectionClient) Use(hooks ...Hook) {
+	c.hooks.SpotifyConnection = append(c.hooks.SpotifyConnection, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `spotifyconnection.Intercept(f(g(h())))`.
+func (c *SpotifyConnectionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SpotifyConnection = append(c.inters.SpotifyConnection, interceptors...)
+}
+
+// Create returns a builder for creating a SpotifyConnection entity.
+func (c *SpotifyConnectionClient) Create() *SpotifyConnectionCreate {
+	mutation := newSpotifyConnectionMutation(c.config, OpCreate)
+	return &SpotifyConnectionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SpotifyConnection entities.
+func (c *SpotifyConnectionClient) CreateBulk(builders ...*SpotifyConnectionCreate) *SpotifyConnectionCreateBulk {
+	return &SpotifyConnectionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SpotifyConnectionClient) MapCreateBulk(slice any, setFunc func(*SpotifyConnectionCreate, int)) *SpotifyConnectionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SpotifyConnectionCreateBulk{err: fmt.Errorf("calling to SpotifyConnectionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SpotifyConnectionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SpotifyConnectionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SpotifyConnection.
+func (c *SpotifyConnectionClient) Update() *SpotifyConnectionUpdate {
+	mutation := newSpotifyConnectionMutation(c.config, OpUpdate)
+	return &SpotifyConnectionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SpotifyConnectionClient) UpdateOne(_m *SpotifyConnection) *SpotifyConnectionUpdateOne {
+	mutation := newSpotifyConnectionMutation(c.config, OpUpdateOne, withSpotifyConnection(_m))
+	return &SpotifyConnectionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SpotifyConnectionClient) UpdateOneID(id int) *SpotifyConnectionUpdateOne {
+	mutation := newSpotifyConnectionMutation(c.config, OpUpdateOne, withSpotifyConnectionID(id))
+	return &SpotifyConnectionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SpotifyConnection.
+func (c *SpotifyConnectionClient) Delete() *SpotifyConnectionDelete {
+	mutation := newSpotifyConnectionMutation(c.config, OpDelete)
+	return &SpotifyConnectionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SpotifyConnectionClient) DeleteOne(_m *SpotifyConnection) *SpotifyConnectionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SpotifyConnectionClient) DeleteOneID(id int) *SpotifyConnectionDeleteOne {
+	builder := c.Delete().Where(spotifyconnection.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SpotifyConnectionDeleteOne{builder}
+}
+
+// Query returns a query builder for SpotifyConnection.
+func (c *SpotifyConnectionClient) Query() *SpotifyConnectionQuery {
+	return &SpotifyConnectionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSpotifyConnection},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SpotifyConnection entity by its id.
+func (c *SpotifyConnectionClient) Get(ctx context.Context, id int) (*SpotifyConnection, error) {
+	return c.Query().Where(spotifyconnection.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SpotifyConnectionClient) GetX(ctx context.Context, id int) *SpotifyConnection {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a SpotifyConnection.
+func (c *SpotifyConnectionClient) QueryUser(_m *SpotifyConnection) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(spotifyconnection.Table, spotifyconnection.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, spotifyconnection.UserTable, spotifyconnection.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SpotifyConnectionClient) Hooks() []Hook {
+	return c.hooks.SpotifyConnection
+}
+
+// Interceptors returns the client interceptors.
+func (c *SpotifyConnectionClient) Interceptors() []Interceptor {
+	return c.inters.SpotifyConnection
+}
+
+func (c *SpotifyConnectionClient) mutate(ctx context.Context, m *SpotifyConnectionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SpotifyConnectionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SpotifyConnectionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SpotifyConnectionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SpotifyConnectionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SpotifyConnection mutation op: %q", m.Op())
+	}
+}
+
 // UserClient is a client for the User schema.
 type UserClient struct {
 	config
@@ -1210,6 +1367,22 @@ func (c *UserClient) QueryInfoCards(_m *User) *InfoCardQuery {
 	return query
 }
 
+// QuerySpotifyConnection queries the spotify_connection edge of a User.
+func (c *UserClient) QuerySpotifyConnection(_m *User) *SpotifyConnectionQuery {
+	query := (&SpotifyConnectionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(spotifyconnection.Table, spotifyconnection.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, user.SpotifyConnectionTable, user.SpotifyConnectionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UserClient) Hooks() []Hook {
 	return c.hooks.User
@@ -1238,9 +1411,9 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Death, Game, InfoCard, Phase, Script, User []ent.Hook
+		Death, Game, InfoCard, Phase, Script, SpotifyConnection, User []ent.Hook
 	}
 	inters struct {
-		Death, Game, InfoCard, Phase, Script, User []ent.Interceptor
+		Death, Game, InfoCard, Phase, Script, SpotifyConnection, User []ent.Interceptor
 	}
 )

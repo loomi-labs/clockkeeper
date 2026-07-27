@@ -73,6 +73,13 @@ service ClockKeeperService {
   rpc CreateInfoCard(CreateInfoCardRequest) returns (CreateInfoCardResponse) {}
   rpc UpdateInfoCard(UpdateInfoCardRequest) returns (UpdateInfoCardResponse) {}
   rpc DeleteInfoCard(DeleteInfoCardRequest) returns (DeleteInfoCardResponse) {}
+
+  // Spotify
+  rpc ConnectSpotify(ConnectSpotifyRequest) returns (ConnectSpotifyResponse) {}
+  rpc DisconnectSpotify(DisconnectSpotifyRequest) returns (DisconnectSpotifyResponse) {}
+  rpc GetSpotifyStatus(GetSpotifyStatusRequest) returns (GetSpotifyStatusResponse) {}
+  rpc UpdateSpotifyPlaylists(UpdateSpotifyPlaylistsRequest) returns (UpdateSpotifyPlaylistsResponse) {}
+  rpc GetSpotifyAccessToken(GetSpotifyAccessTokenRequest) returns (GetSpotifyAccessTokenResponse) {}
 }
 
 // --- Enums ---
@@ -137,6 +144,7 @@ message GetAuthConfigRequest {}
 message GetAuthConfigResponse {
   string discord_client_id = 1;
   bool anonymous_enabled = 2;
+  string spotify_client_id = 3; // empty => Spotify feature not configured
 }
 
 // --- Characters ---
@@ -719,3 +727,61 @@ message DeleteInfoCardRequest {
 }
 
 message DeleteInfoCardResponse {}
+
+// --- Spotify ---
+
+message SpotifyPlaylistSlot {
+  string uri = 1; // spotify:playlist:<id>
+  string name = 2; // display name, snapshotted at config time
+  string image_url = 3; // optional cover art
+}
+
+message SpotifyStatus {
+  bool connected = 1;
+  string display_name = 2;
+  bool premium = 3; // product == "premium" at connect time
+  SpotifyPlaylistSlot day = 4; // unset slot => not configured
+  SpotifyPlaylistSlot night = 5;
+  SpotifyPlaylistSlot nominations = 6;
+}
+
+message ConnectSpotifyRequest {
+  string code = 1;
+  string redirect_uri = 2;
+}
+
+message ConnectSpotifyResponse {
+  SpotifyStatus status = 1;
+}
+
+message DisconnectSpotifyRequest {}
+
+message DisconnectSpotifyResponse {}
+
+message GetSpotifyStatusRequest {}
+
+message GetSpotifyStatusResponse {
+  SpotifyStatus status = 1;
+}
+
+message UpdateSpotifyPlaylistsRequest {
+  SpotifyPlaylistSlot day = 1; // absent message = clear slot
+  SpotifyPlaylistSlot night = 2;
+  SpotifyPlaylistSlot nominations = 3;
+}
+
+message UpdateSpotifyPlaylistsResponse {
+  SpotifyStatus status = 1;
+}
+
+message GetSpotifyAccessTokenRequest {
+  // Bypass the cached token and refresh against Spotify. Set by the client
+  // after the Web API rejects the current token with a 401, so a revoked
+  // grant is detected (and the connection dropped) instead of dead-ending.
+  bool force_refresh = 1;
+}
+
+message GetSpotifyAccessTokenResponse {
+  string access_token = 1;
+  int64 expires_at_unix = 2; // unix seconds
+}

@@ -16,19 +16,21 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
 	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
 // UserQuery is the builder for querying User entities.
 type UserQuery struct {
 	config
-	ctx           *QueryContext
-	order         []user.OrderOption
-	inters        []Interceptor
-	predicates    []predicate.User
-	withScripts   *ScriptQuery
-	withGames     *GameQuery
-	withInfoCards *InfoCardQuery
+	ctx                   *QueryContext
+	order                 []user.OrderOption
+	inters                []Interceptor
+	predicates            []predicate.User
+	withScripts           *ScriptQuery
+	withGames             *GameQuery
+	withInfoCards         *InfoCardQuery
+	withSpotifyConnection *SpotifyConnectionQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -124,6 +126,28 @@ func (_q *UserQuery) QueryInfoCards() *InfoCardQuery {
 			sqlgraph.From(user.Table, user.FieldID, selector),
 			sqlgraph.To(infocard.Table, infocard.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.InfoCardsTable, user.InfoCardsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySpotifyConnection chains the current query on the "spotify_connection" edge.
+func (_q *UserQuery) QuerySpotifyConnection() *SpotifyConnectionQuery {
+	query := (&SpotifyConnectionClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(spotifyconnection.Table, spotifyconnection.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, user.SpotifyConnectionTable, user.SpotifyConnectionColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -318,14 +342,15 @@ func (_q *UserQuery) Clone() *UserQuery {
 		return nil
 	}
 	return &UserQuery{
-		config:        _q.config,
-		ctx:           _q.ctx.Clone(),
-		order:         append([]user.OrderOption{}, _q.order...),
-		inters:        append([]Interceptor{}, _q.inters...),
-		predicates:    append([]predicate.User{}, _q.predicates...),
-		withScripts:   _q.withScripts.Clone(),
-		withGames:     _q.withGames.Clone(),
-		withInfoCards: _q.withInfoCards.Clone(),
+		config:                _q.config,
+		ctx:                   _q.ctx.Clone(),
+		order:                 append([]user.OrderOption{}, _q.order...),
+		inters:                append([]Interceptor{}, _q.inters...),
+		predicates:            append([]predicate.User{}, _q.predicates...),
+		withScripts:           _q.withScripts.Clone(),
+		withGames:             _q.withGames.Clone(),
+		withInfoCards:         _q.withInfoCards.Clone(),
+		withSpotifyConnection: _q.withSpotifyConnection.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -362,6 +387,17 @@ func (_q *UserQuery) WithInfoCards(opts ...func(*InfoCardQuery)) *UserQuery {
 		opt(query)
 	}
 	_q.withInfoCards = query
+	return _q
+}
+
+// WithSpotifyConnection tells the query-builder to eager-load the nodes that are connected to
+// the "spotify_connection" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithSpotifyConnection(opts ...func(*SpotifyConnectionQuery)) *UserQuery {
+	query := (&SpotifyConnectionClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSpotifyConnection = query
 	return _q
 }
 
@@ -443,10 +479,11 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [4]bool{
 			_q.withScripts != nil,
 			_q.withGames != nil,
 			_q.withInfoCards != nil,
+			_q.withSpotifyConnection != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -485,6 +522,12 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadInfoCards(ctx, query, nodes,
 			func(n *User) { n.Edges.InfoCards = []*InfoCard{} },
 			func(n *User, e *InfoCard) { n.Edges.InfoCards = append(n.Edges.InfoCards, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSpotifyConnection; query != nil {
+		if err := _q.loadSpotifyConnection(ctx, query, nodes, nil,
+			func(n *User, e *SpotifyConnection) { n.Edges.SpotifyConnection = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -569,6 +612,33 @@ func (_q *UserQuery) loadInfoCards(ctx context.Context, query *InfoCardQuery, no
 	}
 	query.Where(predicate.InfoCard(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(user.InfoCardsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadSpotifyConnection(ctx context.Context, query *SpotifyConnectionQuery, nodes []*User, init func(*User), assign func(*User, *SpotifyConnection)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(spotifyconnection.FieldUserID)
+	}
+	query.Where(predicate.SpotifyConnection(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.SpotifyConnectionColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

@@ -38,6 +38,8 @@ const (
 	EdgeGames = "games"
 	// EdgeInfoCards holds the string denoting the info_cards edge name in mutations.
 	EdgeInfoCards = "info_cards"
+	// EdgeSpotifyConnection holds the string denoting the spotify_connection edge name in mutations.
+	EdgeSpotifyConnection = "spotify_connection"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// ScriptsTable is the table that holds the scripts relation/edge.
@@ -61,6 +63,13 @@ const (
 	InfoCardsInverseTable = "info_cards"
 	// InfoCardsColumn is the table column denoting the info_cards relation/edge.
 	InfoCardsColumn = "user_id"
+	// SpotifyConnectionTable is the table that holds the spotify_connection relation/edge.
+	SpotifyConnectionTable = "spotify_connections"
+	// SpotifyConnectionInverseTable is the table name for the SpotifyConnection entity.
+	// It exists in this package in order to avoid circular dependency with the "spotifyconnection" package.
+	SpotifyConnectionInverseTable = "spotify_connections"
+	// SpotifyConnectionColumn is the table column denoting the spotify_connection relation/edge.
+	SpotifyConnectionColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -195,6 +204,13 @@ func ByInfoCards(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newInfoCardsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// BySpotifyConnectionField orders the results by spotify_connection field.
+func BySpotifyConnectionField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSpotifyConnectionStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newScriptsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -214,5 +230,12 @@ func newInfoCardsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(InfoCardsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, InfoCardsTable, InfoCardsColumn),
+	)
+}
+func newSpotifyConnectionStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SpotifyConnectionInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, SpotifyConnectionTable, SpotifyConnectionColumn),
 	)
 }

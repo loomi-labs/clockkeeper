@@ -43,6 +43,8 @@
   import CharacterPreviewPopup from "~/lib/components/CharacterPreviewPopup.svelte";
   import PlayerPresetsModal from "~/lib/components/PlayerPresetsModal.svelte";
   import WakeLockToggle from "~/lib/components/WakeLockToggle.svelte";
+  import SpotifyPanel from "~/lib/components/SpotifyPanel.svelte";
+  import { spotify, syncPhase, switchToSlot } from "~/lib/spotify.svelte";
   import PlayerAssignmentPanel from "~/lib/components/PlayerAssignmentPanel.svelte";
   import NameChipsBar from "~/lib/components/NameChipsBar.svelte";
   import InfoCardPicker from "~/lib/components/InfoCardPicker.svelte";
@@ -845,6 +847,50 @@
     }
   }
 
+  // --- Nominations: a UI-only step between Day N and Night N+1 ---
+  // It exists purely so the music can change for nominations, so it is offered
+  // only while a session is running with a nominations playlist, and it is
+  // never sent to the server (the backend still knows only Night/Day).
+  let nominationMode = $state(false);
+  // `connected` is belt-and-braces: a lost grant already ends the session in
+  // spotify.svelte.ts, so this only guards against a future state combination
+  // where the two drift apart.
+  const nominationsAvailable = $derived(
+    spotify.connected &&
+      spotify.sessionActive &&
+      spotify.playlists.nominations !== null,
+  );
+
+  function handleAdvance() {
+    if (activeIsDay && !nominationMode && nominationsAvailable) {
+      nominationMode = true;
+      void switchToSlot("nominations");
+      return;
+    }
+    // Leaving nominations behaves exactly like the plain Day → Night advance;
+    // the phase-flip effect below puts the music back on the night slot.
+    nominationMode = false;
+    void advancePhase();
+  }
+
+  // The step is client-only state, so every premise that made it visible has
+  // to retract it: a phase change (from anywhere, including another device),
+  // the game ending, or the music session going away (stop button, revoked
+  // grant). None of those involve a backend call — the step just disappears.
+  let prevNominationPhaseId = $state<bigint | undefined>(undefined);
+  $effect(() => {
+    const phaseId = activePhase?.id;
+    const offered = isInProgress && spotify.sessionActive;
+    untrack(() => {
+      if (phaseId !== prevNominationPhaseId) {
+        prevNominationPhaseId = phaseId;
+        nominationMode = false;
+        return;
+      }
+      if (!offered) nominationMode = false;
+    });
+  });
+
   function endGame() {
     if (!game) return;
     confirmDialog = {
@@ -1131,6 +1177,27 @@
       if (prevActiveIsDay === day) return;
       prevActiveIsDay = day;
       inProgressView = day ? "grimoire" : "nightsheet";
+    });
+  });
+
+  // Flip the Spotify playlist on the same day/night step transition. Tracked
+  // independently of the view toggle above so neither can swallow the other's
+  // transition. syncPhase() no-ops unless the Storyteller has already started
+  // playback, so this never begins music on its own; the tracker is also reset
+  // outside the in-progress state so entering play is not seen as a flip.
+  let prevMusicIsDay = $state<boolean | undefined>(undefined);
+  $effect(() => {
+    const inProgress = isInProgress;
+    const day = activeIsDay;
+    untrack(() => {
+      if (!inProgress) {
+        prevMusicIsDay = undefined;
+        return;
+      }
+      if (prevMusicIsDay === day) return;
+      const isTransition = prevMusicIsDay !== undefined;
+      prevMusicIsDay = day;
+      if (isTransition) void syncPhase(day);
     });
   });
 
@@ -2307,6 +2374,9 @@
               </button>
             {/if}
             <WakeLockToggle />
+            {#if spotify.available}
+              <SpotifyPanel {activeIsDay} />
+            {/if}
             <button
               onclick={() => {
                 showNameChips = !showNameChips;
@@ -2485,7 +2555,7 @@
           {game}
           {viewingRoundIndex}
           {rounds}
-          onadvance={advancePhase}
+          onadvance={handleAdvance}
           onend={endGame}
           onnavigate={(i) => (viewingRoundIndex = i)}
           activeView={inProgressView}
@@ -2494,6 +2564,8 @@
           ontogglefullscreen={toggleFullscreen}
           onshowcards={() => (infoCardPickerOpen = true)}
           dayActive={activeIsDay}
+          {nominationMode}
+          {nominationsAvailable}
         />
 
         {#if inProgressView === "nightsheet"}

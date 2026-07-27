@@ -11,6 +11,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -227,6 +228,33 @@ func init() {
 	scriptDescIsSystem := scriptFields[3].Descriptor()
 	// script.DefaultIsSystem holds the default value on creation for the is_system field.
 	script.DefaultIsSystem = scriptDescIsSystem.Default.(bool)
+	spotifyconnectionMixin := schema.SpotifyConnection{}.Mixin()
+	spotifyconnectionMixinFields0 := spotifyconnectionMixin[0].Fields()
+	_ = spotifyconnectionMixinFields0
+	spotifyconnectionFields := schema.SpotifyConnection{}.Fields()
+	_ = spotifyconnectionFields
+	// spotifyconnectionDescCreatedAt is the schema descriptor for created_at field.
+	spotifyconnectionDescCreatedAt := spotifyconnectionMixinFields0[0].Descriptor()
+	// spotifyconnection.DefaultCreatedAt holds the default value on creation for the created_at field.
+	spotifyconnection.DefaultCreatedAt = spotifyconnectionDescCreatedAt.Default.(func() time.Time)
+	// spotifyconnectionDescUpdatedAt is the schema descriptor for updated_at field.
+	spotifyconnectionDescUpdatedAt := spotifyconnectionMixinFields0[1].Descriptor()
+	// spotifyconnection.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	spotifyconnection.DefaultUpdatedAt = spotifyconnectionDescUpdatedAt.Default.(func() time.Time)
+	// spotifyconnection.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	spotifyconnection.UpdateDefaultUpdatedAt = spotifyconnectionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// spotifyconnectionDescSpotifyUserID is the schema descriptor for spotify_user_id field.
+	spotifyconnectionDescSpotifyUserID := spotifyconnectionFields[0].Descriptor()
+	// spotifyconnection.SpotifyUserIDValidator is a validator for the "spotify_user_id" field. It is called by the builders before save.
+	spotifyconnection.SpotifyUserIDValidator = spotifyconnectionDescSpotifyUserID.Validators[0].(func(string) error)
+	// spotifyconnectionDescPremium is the schema descriptor for premium field.
+	spotifyconnectionDescPremium := spotifyconnectionFields[2].Descriptor()
+	// spotifyconnection.DefaultPremium holds the default value on creation for the premium field.
+	spotifyconnection.DefaultPremium = spotifyconnectionDescPremium.Default.(bool)
+	// spotifyconnectionDescRefreshToken is the schema descriptor for refresh_token field.
+	spotifyconnectionDescRefreshToken := spotifyconnectionFields[3].Descriptor()
+	// spotifyconnection.RefreshTokenValidator is a validator for the "refresh_token" field. It is called by the builders before save.
+	spotifyconnection.RefreshTokenValidator = spotifyconnectionDescRefreshToken.Validators[0].(func(string) error)
 	userMixin := schema.User{}.Mixin()
 	userMixinFields0 := userMixin[0].Fields()
 	_ = userMixinFields0

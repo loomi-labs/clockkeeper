@@ -41,5 +41,6 @@ func (User) Edges() []ent.Edge {
 		edge.To("scripts", Script.Type),
 		edge.To("games", Game.Type),
 		edge.To("info_cards", InfoCard.Type),
+		edge.To("spotify_connection", SpotifyConnection.Type).Unique(),
 	}
 }

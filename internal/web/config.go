@@ -11,6 +11,11 @@ func (c *Config) DiscordConfigured() bool {
 	return c.DiscordClientID != "" && c.DiscordClientSecret != "" && c.DiscordRedirectURI != ""
 }
 
+// SpotifyConfigured returns true if Spotify OAuth is set up.
+func (c *Config) SpotifyConfigured() bool {
+	return c.SpotifyClientID != "" && c.SpotifyClientSecret != "" && c.SpotifyRedirectURI != ""
+}
+
 // Config holds web server configuration.
 type Config struct {
 	Listen              string
@@ -18,6 +23,9 @@ type Config struct {
 	DiscordClientID     string
 	DiscordClientSecret string
 	DiscordRedirectURI  string
+	SpotifyClientID     string
+	SpotifyClientSecret string
+	SpotifyRedirectURI  string
 	RateLimitAnon       int
 	RateLimitAuth       int
 	AnonymousMaxAge     time.Duration
@@ -36,12 +44,20 @@ func LoadConfigFromEnv() *Config {
 		discordSecret = env.GetString("DISCORD_CLIENT_SECRET", "")
 	}
 
+	spotifySecret, err := env.GetStringFromFile("SPOTIFY_CLIENT_SECRET_FILE")
+	if err != nil {
+		spotifySecret = env.GetString("SPOTIFY_CLIENT_SECRET", "")
+	}
+
 	return &Config{
 		Listen:              env.GetString("WEB_LISTEN", ":8080"),
 		JWTSecretKey:        jwtSecret,
 		DiscordClientID:     env.GetString("DISCORD_CLIENT_ID", ""),
 		DiscordClientSecret: discordSecret,
 		DiscordRedirectURI:  env.GetString("DISCORD_REDIRECT_URI", ""),
+		SpotifyClientID:     env.GetString("SPOTIFY_CLIENT_ID", ""),
+		SpotifyClientSecret: spotifySecret,
+		SpotifyRedirectURI:  env.GetString("SPOTIFY_REDIRECT_URI", ""),
 		RateLimitAnon:       env.GetInt("RATE_LIMIT_ANON", 120),
 		RateLimitAuth:       env.GetInt("RATE_LIMIT_AUTH", 120),
 		AnonymousMaxAge:     env.GetDuration("ANONYMOUS_MAX_AGE", "8760h"),
