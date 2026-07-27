@@ -4,6 +4,7 @@ import {
   DeathCause,
   DeathSchema,
   PhaseSchema,
+  PhaseType,
   Team,
 } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 import type { Death, Phase } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
@@ -15,6 +16,7 @@ import {
   findDemonPlayers,
   chefRangeCauses,
   classifyRegistration,
+  executionTargetDay,
   findExecutedToday,
   newDeathsTonight,
   scarletWomanPromotionAlert,
@@ -659,6 +661,52 @@ describe("findExecutedToday", () => {
   it("returns undefined when the day has no deaths", () => {
     expect(
       findExecutedToday({ night: phase([death("empath")]), day: phase([]) }),
+    ).toBeUndefined();
+  });
+
+  it("does not treat a non-execution day death (cause OTHER) as an execution", () => {
+    // A Slayer shot / storyteller kill during the day: recorded on the day
+    // phase with cause OTHER, so the Undertaker learns nothing.
+    const prev = {
+      night: phase([death("imp", DeathCause.DEMON)]),
+      day: phase([
+        death("imp", DeathCause.DEMON),
+        death("scarletwoman", DeathCause.OTHER),
+      ]),
+    };
+    expect(findExecutedToday(prev)).toBeUndefined();
+  });
+});
+
+describe("executionTargetDay", () => {
+  const rounds = [
+    { day: phase([death("r1")]) },
+    { day: phase([death("r2")]) },
+    { day: phase([death("r3")]) },
+  ];
+
+  it("targets the viewed round's own day while a Day is on screen", () => {
+    expect(executionTargetDay(rounds, 1, PhaseType.DAY)).toBe(rounds[1].day);
+  });
+
+  it("targets the PREVIOUS round's day while a Night is on screen", () => {
+    // Rounds run Night N -> Day N, so during Night 3 the last day is Day 2.
+    expect(executionTargetDay(rounds, 2, PhaseType.NIGHT)).toBe(rounds[1].day);
+  });
+
+  it("returns undefined on the first night (no day played yet)", () => {
+    expect(executionTargetDay(rounds, 0, PhaseType.NIGHT)).toBeUndefined();
+  });
+
+  it("returns undefined for an out-of-range or negative round index", () => {
+    expect(executionTargetDay(rounds, 9, PhaseType.DAY)).toBeUndefined();
+    expect(executionTargetDay(rounds, -1, PhaseType.DAY)).toBeUndefined();
+    expect(executionTargetDay([], 0, PhaseType.DAY)).toBeUndefined();
+  });
+
+  it("returns undefined when the target round has no day phase", () => {
+    expect(
+      executionTargetDay([{}, { day: phase([]) }], 0, PhaseType.DAY),
     ).toBeUndefined();
   });
 });

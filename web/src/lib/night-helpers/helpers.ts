@@ -2,7 +2,11 @@
 // Undertaker). Pure logic only — UI lives in the night-helper components.
 
 import type { Phase } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
-import { DeathCause, Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
+import {
+  DeathCause,
+  PhaseType,
+  Team,
+} from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 import type { PromotionDisplay } from "~/lib/promotions";
 import { countEvilAliveNeighbours, type Registration } from "./seating";
 
@@ -300,6 +304,33 @@ export function computeFortuneTeller(
     viaRedHerring: yes && redHerringPicked && !demonPicked,
     recluseMayYes,
   };
+}
+
+/**
+ * Which DAY phase an execution should be recorded on.
+ *
+ * Executions are a day event, so they always land on the current-or-most-recent
+ * day relative to what the Storyteller is looking at:
+ *
+ * - the viewed phase is a Day -> that same round's day;
+ * - the viewed phase is a Night -> the PREVIOUS round's day, because rounds run
+ *   Night N -> Day N, so while Night N is on screen the last day played was
+ *   Day N-1.
+ *
+ * Returns `undefined` when no day has happened yet (first night), which callers
+ * use to hide the Execute action. Night/Day phases are created in pairs, so a
+ * round's `day` existing does NOT mean it has been played — hence the explicit
+ * phase type instead of an existence check on `rounds[i].day`.
+ */
+export function executionTargetDay(
+  rounds: readonly { day?: Phase }[],
+  viewingRoundIndex: number,
+  viewedPhaseType: PhaseType,
+): Phase | undefined {
+  if (viewingRoundIndex < 0) return undefined;
+  return viewedPhaseType === PhaseType.DAY
+    ? rounds[viewingRoundIndex]?.day
+    : rounds[viewingRoundIndex - 1]?.day;
 }
 
 /**

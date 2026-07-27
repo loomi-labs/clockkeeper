@@ -26,6 +26,7 @@
     onbagsubdrop,
     onplayerrename,
     onplayertoggledeath,
+    onplayerexecute,
     onplayergamenote,
     onplayerroundnote,
     onplayeralignment,
@@ -50,6 +51,8 @@
     ) => void;
     onplayerrename?: (id: string, name: string) => void;
     onplayertoggledeath?: (id: string) => void;
+    /** Omit to hide the Execute action (e.g. no day has been played yet). */
+    onplayerexecute?: (id: string) => void;
     onplayergamenote?: (id: string, note: string) => void;
     onplayerroundnote?: (id: string, note: string) => void;
     onplayeralignment?: (id: string, alignment: string) => void;
@@ -289,6 +292,9 @@
         onmove={(x: number, y: number) => onplayermove?.(player.id, x, y)}
         onrename={(name: string) => onplayerrename?.(player.id, name)}
         ontoggledeath={() => onplayertoggledeath?.(player.id)}
+        onexecute={onplayerexecute
+          ? () => onplayerexecute?.(player.id)
+          : undefined}
         ongamenote={(note: string) => onplayergamenote?.(player.id, note)}
         onroundnote={(note: string) => onplayerroundnote?.(player.id, note)}
         onalignment={(alignment: string) =>

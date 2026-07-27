@@ -22,6 +22,7 @@
     onmove,
     onrename,
     ontoggledeath,
+    onexecute,
     ongamenote,
     onroundnote,
     onalignment,
@@ -35,7 +36,10 @@
     highlightAttach?: boolean;
     onmove?: (x: number, y: number) => void;
     onrename?: (name: string) => void;
+    /** Kill (alive) / Revive (dead) — a phase-appropriate death, not an execution. */
     ontoggledeath?: () => void;
+    /** Execute by the town. Omit to hide the action (no day played yet). */
+    onexecute?: () => void;
     ongamenote?: (note: string) => void;
     onroundnote?: (note: string) => void;
     onalignment?: (alignment: string) => void;
@@ -358,6 +362,26 @@
       class="absolute left-1/2 top-full z-50 mt-1 min-w-[160px] -translate-x-1/2 rounded-lg border border-border bg-surface py-1 shadow-lg"
       onpointerdown={(e: PointerEvent) => e.stopPropagation()}
     >
+      {#if onexecute && !player.isDead}
+        <!-- Execution: a DAY death by the town. Recorded on the current or most
+             recent day, never on a night. Hidden when no day has been played. -->
+        <button
+          class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-hover"
+          onclick={() => handleMenuAction(() => onexecute?.())}
+        >
+          <svg
+            class="h-4 w-4 text-amber-600 dark:text-amber-500"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <path stroke-width="4" stroke-linecap="round" d="M14 5l5 5" />
+            <path stroke-width="2" stroke-linecap="round" d="M15 9l-7 7" />
+            <path stroke-width="2" stroke-linecap="round" d="M4 20h9" />
+          </svg>
+          <span>Execute</span>
+        </button>
+      {/if}
       <button
         class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-hover"
         onclick={() => handleMenuAction(() => ontoggledeath?.())}

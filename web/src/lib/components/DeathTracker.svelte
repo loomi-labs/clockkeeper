@@ -14,6 +14,7 @@
     onremove,
     onuseghostvote,
     onmove,
+    onexecute,
     readonly = false,
   }: {
     game: Game;
@@ -23,10 +24,18 @@
     onuseghostvote: (deathId: bigint) => void;
     // Move a death to the sibling phase of the same round (Night N <-> Day N).
     onmove?: (death: Death) => void;
+    /**
+     * Execute by the town — a DAY death, recorded on the current or most recent
+     * day. Omitted when no day exists yet (first night), which hides the
+     * Execute button entirely.
+     */
+    onexecute?: (roleId: string) => void;
     readonly?: boolean;
   } = $props();
 
-  let showPicker = $state(false);
+  // Which button's character dropdown is open (null = closed). Doubles as the
+  // pending action: picking a character routes by this value.
+  let openAction = $state<"kill" | "execute" | null>(null);
 
   const allDeaths = $derived(game.playState?.allDeaths ?? []);
   const displayDeaths = $derived(viewedPhaseDeaths ?? allDeaths);
@@ -130,15 +139,98 @@
       : `Day ${cur.roundNumber}`;
   }
 
+  // Toggle a button's dropdown. Clicking the other button while one is open
+  // just moves the dropdown (and the pending action) to that button.
+  function togglePicker(action: "kill" | "execute") {
+    openAction = openAction === action ? null : action;
+  }
+
   function handleRecord(roleId: string) {
-    showPicker = false;
+    const action = openAction;
+    openAction = null;
+    if (action === "execute") {
+      onexecute?.(roleId);
+      return;
+    }
     onrecord(roleId);
   }
 
   const hasAliveCharacters = $derived(
     teamOrder.some((t) => (aliveByTeam[t]?.length ?? 0) > 0),
   );
+
+  // Close the open dropdown on outside click / Escape.
+  $effect(() => {
+    if (!openAction) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("[data-death-picker]")) return;
+      openAction = null;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") openAction = null;
+    };
+    document.addEventListener("click", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
 </script>
+
+<!-- Floating character list, rendered inside whichever action button is active
+     so it anchors under that button. -->
+{#snippet characterPicker(actionLabel: string)}
+  <div
+    class="absolute right-0 top-full z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-border bg-surface p-3 shadow-lg"
+    role="menu"
+  >
+    <span
+      class="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted"
+    >
+      {actionLabel}
+    </span>
+    <div class="space-y-3">
+      {#each teamOrder as team}
+        {@const chars = aliveByTeam[team]}
+        {#if chars && chars.length > 0}
+          <div>
+            <span
+              class="mb-1 block text-xs font-semibold uppercase tracking-wide {teamNameColors[
+                team
+              ] ?? 'text-secondary'}"
+            >
+              {teamLabels[team] ?? ""}
+            </span>
+            <div class="grid gap-1">
+              {#each chars as char (char.id)}
+                <button
+                  role="menuitem"
+                  onclick={() => handleRecord(char.id)}
+                  class="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 text-left transition-colors hover:bg-hover"
+                >
+                  <img
+                    src="/characters/{char.edition}/{char.id}{iconSuffix(
+                      char.team,
+                    )}.webp"
+                    alt=""
+                    class="h-8 w-8 shrink-0 rounded-full"
+                    onerror={(e: Event) =>
+                      ((e.target as HTMLImageElement).style.display = "none")}
+                  />
+                  <span class="text-sm font-medium text-primary"
+                    >{char.name}</span
+                  >
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      {/each}
+    </div>
+  </div>
+{/snippet}
 
 <div class="rounded-lg border border-border bg-surface p-4">
   <div class="flex items-center justify-between mb-3">
@@ -151,80 +243,45 @@
       {/if}
     </h3>
     {#if !readonly}
-      <button
-        onclick={() => (showPicker = !showPicker)}
-        disabled={!hasAliveCharacters}
-        class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
-      >
-        Kill
-      </button>
+      <!-- Two death causes, two buttons: a plain kill (night/day) and a town
+           execution. Each opens the character list as a dropdown anchored under
+           itself. Execute only exists once a day is available to record onto. -->
+      <div class="flex items-center gap-2">
+        <div class="relative" data-death-picker>
+          <button
+            onclick={() => togglePicker("kill")}
+            disabled={!hasAliveCharacters}
+            aria-haspopup="menu"
+            aria-expanded={openAction === "kill"}
+            class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+          >
+            Kill
+          </button>
+          {#if openAction === "kill"}
+            {@render characterPicker("Kill")}
+          {/if}
+        </div>
+
+        {#if onexecute}
+          <div class="relative" data-death-picker>
+            <button
+              onclick={() => togglePicker("execute")}
+              disabled={!hasAliveCharacters}
+              aria-haspopup="menu"
+              aria-expanded={openAction === "execute"}
+              title="Execute (by the town, during the day)"
+              class="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-500 disabled:opacity-50"
+            >
+              Execute
+            </button>
+            {#if openAction === "execute"}
+              {@render characterPicker("Execute")}
+            {/if}
+          </div>
+        {/if}
+      </div>
     {/if}
   </div>
-
-  <!-- Death picker -->
-  {#if showPicker}
-    <div class="mb-4 rounded-lg border border-border bg-element p-3">
-      <div class="mb-2 flex items-center justify-between">
-        <span class="text-sm font-medium text-secondary">Select character</span>
-        <button
-          onclick={() => (showPicker = false)}
-          aria-label="Close picker"
-          class="rounded p-1 text-muted transition-colors hover:bg-hover hover:text-medium"
-        >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
-      <div class="space-y-3">
-        {#each teamOrder as team}
-          {@const chars = aliveByTeam[team]}
-          {#if chars && chars.length > 0}
-            <div>
-              <span
-                class="mb-1 block text-xs font-semibold uppercase tracking-wide {teamNameColors[
-                  team
-                ] ?? 'text-secondary'}"
-              >
-                {teamLabels[team] ?? ""}
-              </span>
-              <div class="grid gap-1 sm:grid-cols-2">
-                {#each chars as char (char.id)}
-                  <button
-                    onclick={() => handleRecord(char.id)}
-                    class="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 text-left transition-colors hover:bg-hover"
-                  >
-                    <img
-                      src="/characters/{char.edition}/{char.id}{iconSuffix(
-                        char.team,
-                      )}.webp"
-                      alt=""
-                      class="h-8 w-8 shrink-0 rounded-full"
-                      onerror={(e: Event) =>
-                        ((e.target as HTMLImageElement).style.display = "none")}
-                    />
-                    <span class="text-sm font-medium text-primary"
-                      >{char.name}</span
-                    >
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        {/each}
-      </div>
-    </div>
-  {/if}
 
   <!-- Deaths list -->
   {#if displayDeaths.length === 0}
