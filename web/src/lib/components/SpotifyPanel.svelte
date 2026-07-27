@@ -6,8 +6,10 @@
     getSpotifyOAuthURL,
     switchToSlot,
     setVolumeDebounced,
+    setShufflePref,
     pausePlayback,
     resumePlayback,
+    stopMusic,
     getDevices,
     transferPlayback,
     startPlaybackPolling,
@@ -173,6 +175,17 @@
     }
   }
 
+  // stopMusic resolves its own errors into spotify.error (same reason as
+  // selectSlot), so it must not go through run().
+  async function stop() {
+    busy = true;
+    try {
+      await stopMusic();
+    } finally {
+      busy = false;
+    }
+  }
+
   // Deliberately does not clear spotify.error: listing devices does not resolve
   // the condition that produced it (typically "no active device").
   async function refreshDevices() {
@@ -216,6 +229,14 @@
     }
   }
 
+  // A closed panel is the only place an error can go unnoticed — the strip
+  // lives inside the dropdown. Derived, so it clears itself the moment the
+  // error does (or the Storyteller opens the panel to read it).
+  const showErrorDot = $derived(!open && spotify.error !== null);
+  const triggerTitle = $derived(
+    showErrorDot && spotify.error ? errorText(spotify.error) : "Phase music",
+  );
+
   function handleKeydown(e: KeyboardEvent) {
     // The config modal owns Escape while it is up.
     if (e.key === "Escape" && open && !configOpen) open = false;
@@ -228,14 +249,22 @@
   <button
     type="button"
     onclick={toggle}
-    class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors {spotify.sessionActive &&
+    class="relative rounded-lg border border-border px-3 py-2.5 text-sm font-medium transition-colors {spotify.sessionActive &&
     spotify.isPlaying
       ? 'border-green-300 bg-green-100 text-green-600 dark:border-green-600 dark:bg-green-500/20 dark:text-green-400'
       : 'text-secondary hover:bg-hover hover:text-primary'}"
-    title="Phase music"
+    title={triggerTitle}
     aria-label="Phase music"
     aria-expanded={open}
   >
+    <!-- The panel is where the error is explained; closed, the toolbar only
+         says that there is something to look at. -->
+    {#if showErrorDot}
+      <span
+        aria-hidden="true"
+        class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500"
+      ></span>
+    {/if}
     <svg
       class="h-4 w-4"
       fill="none"
@@ -346,7 +375,7 @@
         </div>
 
         <!-- Transport -->
-        <div class="mt-3 flex items-center gap-2">
+        <div class="mt-3 flex items-center gap-1.5">
           <button
             type="button"
             onclick={togglePlayback}
@@ -379,6 +408,50 @@
                 /></svg
               >
             {/if}
+          </button>
+          <button
+            type="button"
+            onclick={stop}
+            disabled={busy || !spotify.sessionActive}
+            class="shrink-0 rounded-lg border border-border p-2 text-secondary transition-colors hover:bg-hover hover:text-primary disabled:opacity-60"
+            title="Stop music"
+            aria-label="Stop music"
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+              ><rect x="7.5" y="7.5" width="9" height="9" rx="1.5" /><circle
+                cx="12"
+                cy="12"
+                r="9.25"
+              /></svg
+            >
+          </button>
+          <button
+            type="button"
+            onclick={() => setShufflePref(!spotify.shuffle)}
+            class="shrink-0 rounded-lg border p-2 transition-colors {spotify.shuffle
+              ? 'border-green-300 bg-green-100 text-green-600 dark:border-green-600 dark:bg-green-500/20 dark:text-green-400'
+              : 'border-border text-secondary hover:bg-hover hover:text-primary'}"
+            title={spotify.shuffle ? "Shuffle on" : "Shuffle off"}
+            aria-label="Shuffle"
+            aria-pressed={spotify.shuffle}
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+              ><path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"
+              /></svg
+            >
           </button>
           <svg
             class="h-4 w-4 shrink-0 text-muted"

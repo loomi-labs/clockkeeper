@@ -42,12 +42,19 @@ const POLL_INTERVAL_MS = 5_000;
 
 const OAUTH_STATE_KEY = "spotify_oauth_state";
 const RETURN_TO_KEY = "spotify_return_to";
+const SHUFFLE_KEY = "clockkeeper_spotify_shuffle";
 
 export const SPOTIFY_SCOPES =
   "user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-read-private";
 
 function emptyPlaylists(): Record<SlotKey, PlaylistRef | null> {
   return { day: null, night: null, nominations: null };
+}
+
+/** Shuffle is on unless the Storyteller explicitly turned it off. */
+function storedShuffle(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(SHUFFLE_KEY) !== "false";
 }
 
 export const spotify = $state({
@@ -58,6 +65,8 @@ export const spotify = $state({
   premium: false,
   displayName: "",
   playlists: emptyPlaylists(),
+  /** Persisted preference, pushed to the device on every slot switch. */
+  shuffle: storedShuffle(),
   // Transient playback session (never persisted).
   /** True once the Storyteller has started music — gates phase auto-switch. */
   sessionActive: false,
@@ -93,6 +102,19 @@ export function toSpotifyError(err: unknown): SpotifyError {
 
 export function clearSpotifyError() {
   spotify.error = null;
+}
+
+/**
+ * The Spotify grant is gone. Beyond flipping the connect CTA back on, this ends
+ * the playback session: nothing can be paused, resumed or switched without a
+ * token, so leaving `sessionActive` up would keep phase auto-switching armed
+ * and keep offering session-gated UI for a session that cannot exist.
+ */
+function markGrantLost() {
+  spotify.connected = false;
+  spotify.sessionActive = false;
+  spotify.currentSlot = null;
+  spotify.isPlaying = false;
 }
 
 /**
@@ -170,10 +192,14 @@ export function resetSpotifyState() {
   stopPlaybackPolling();
   cancelVolumeDebounce();
   clearTokenCache();
+  cancelPendingSwitch();
+  clearTrackSelection();
   spotify.connected = false;
   spotify.premium = false;
   spotify.displayName = "";
   spotify.playlists = emptyPlaylists();
+  // Not session state — re-read so memory matches what was persisted.
+  spotify.shuffle = storedShuffle();
   spotify.sessionActive = false;
   spotify.currentSlot = null;
   spotify.isPlaying = false;
@@ -266,7 +292,9 @@ export async function getAccessToken(force = false): Promise<string> {
     } catch (err) {
       clearTokenCache();
       if (err instanceof ConnectError && err.code === Code.FailedPrecondition) {
-        spotify.connected = false;
+        // Same dead grant as the double-401 below, just discovered a step
+        // earlier — the server has no usable refresh token for this account.
+        markGrantLost();
         throw { kind: "not_connected" } satisfies SpotifyError;
       }
       throw {
@@ -332,7 +360,7 @@ export async function spotifyFetch<T = unknown>(
     resp = await rawFetch(path, init, await getAccessToken(true));
     if (resp.status === 401) {
       clearTokenCache();
-      spotify.connected = false;
+      markGrantLost();
       throw { kind: "not_connected" } satisfies SpotifyError;
     }
   }
@@ -387,11 +415,26 @@ function deviceQuery(deviceId?: string): string {
   return deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : "";
 }
 
-export async function playContext(contextUri: string, deviceId?: string) {
+/** Where inside the context playback should start. */
+export type PlayOffset = { uri: string } | { position: number };
+
+export async function playContext(
+  contextUri: string,
+  deviceId?: string,
+  offset?: PlayOffset,
+) {
+  const body: Record<string, unknown> = { context_uri: contextUri };
+  if (offset) body.offset = offset;
   await spotifyFetch(`/me/player/play${deviceQuery(deviceId)}`, {
     method: "PUT",
-    body: JSON.stringify({ context_uri: contextUri }),
+    body: JSON.stringify(body),
   });
+}
+
+export async function setShuffle(state: boolean, deviceId?: string) {
+  const params = new URLSearchParams({ state: String(state) });
+  if (deviceId) params.set("device_id", deviceId);
+  await spotifyFetch(`/me/player/shuffle?${params}`, { method: "PUT" });
 }
 
 export async function pausePlayback() {
@@ -449,6 +492,7 @@ export type PlaybackState = {
   is_playing?: boolean;
   device?: RawDevice;
   context?: { uri?: string } | null;
+  item?: { uri?: string } | null;
 };
 
 /** GET /me/player — null when nothing is playing (204). */
@@ -501,8 +545,237 @@ export async function listPlaylists(): Promise<PlaylistRef[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Playlist track lists
+// ---------------------------------------------------------------------------
+
+const TRACK_PAGE_LIMIT = 100;
+/** 5 x 100 tracks. Beyond that we stop paging and fall back to a position. */
+const MAX_TRACK_PAGES = 5;
+
+export type PlaylistTracks = {
+  /** Track URIs read so far — only trustworthy as a whole when `complete`. */
+  uris: string[];
+  /** Playlist length reported by the API, null when no page succeeded. */
+  total: number | null;
+  /** False when the list is truncated (>500 tracks) or a page failed. */
+  complete: boolean;
+};
+
+type RawTrackPage = {
+  items?: ({ track?: { uri?: string } | null } | null)[];
+  total?: number;
+};
+
+/** `spotify:playlist:37i9dQ` -> `37i9dQ`. */
+function playlistId(playlistUri: string): string {
+  const parts = playlistUri.split(":");
+  return parts[parts.length - 1] ?? "";
+}
+
+const trackCache = new Map<string, PlaylistTracks>();
+
+/**
+ * Pages a playlist's track URIs so a slot can start on a specific song.
+ * Never throws: a failure just means the caller loses URI-precise selection
+ * and falls back to a position offset (or none) — music still has to start.
+ * Successful reads are cached for the page session.
+ */
+export async function getPlaylistTrackURIs(
+  playlistUri: string,
+): Promise<PlaylistTracks> {
+  const cached = trackCache.get(playlistUri);
+  if (cached) return cached;
+
+  const id = playlistId(playlistUri);
+  const uris: string[] = [];
+  let total: number | null = null;
+  let complete = false;
+
+  try {
+    for (let page = 0; page < MAX_TRACK_PAGES; page++) {
+      const params = new URLSearchParams({
+        fields: "items(track(uri)),total",
+        limit: String(TRACK_PAGE_LIMIT),
+        offset: String(page * TRACK_PAGE_LIMIT),
+      });
+      const resp = await spotifyFetch<RawTrackPage>(
+        `/playlists/${encodeURIComponent(id)}/tracks?${params}`,
+      );
+      if (typeof resp?.total === "number") total = resp.total;
+      const items = resp?.items ?? [];
+      for (const item of items) {
+        const uri = item?.track?.uri;
+        if (uri) uris.push(uri);
+      }
+      if (items.length < TRACK_PAGE_LIMIT) {
+        complete = true;
+        break;
+      }
+      if (total !== null && uris.length >= total) {
+        complete = true;
+        break;
+      }
+    }
+  } catch {
+    // Partial reads are still useful for their `total`.
+    return { uris, total, complete: false };
+  }
+
+  const tracks: PlaylistTracks = { uris, total, complete };
+  trackCache.set(playlistUri, tracks);
+  return tracks;
+}
+
+// ---------------------------------------------------------------------------
+// Played-aware track selection (module-level, transient per page load)
+// ---------------------------------------------------------------------------
+
+const playedBySlot: Partial<Record<SlotKey, Set<string>>> = {};
+const lastPickBySlot: Partial<Record<SlotKey, string>> = {};
+
+function playedSet(slot: SlotKey): Set<string> {
+  return (playedBySlot[slot] ??= new Set<string>());
+}
+
+function markPlayed(slot: SlotKey, trackUri: string | undefined | null) {
+  if (trackUri) playedSet(slot).add(trackUri);
+}
+
+function clearTrackSelection() {
+  for (const key of Object.keys(playedBySlot) as SlotKey[]) {
+    delete playedBySlot[key];
+  }
+  for (const key of Object.keys(lastPickBySlot) as SlotKey[]) {
+    delete lastPickBySlot[key];
+  }
+  trackCache.clear();
+}
+
+function randomIndex(length: number): number {
+  return Math.floor(Math.random() * length);
+}
+
+/**
+ * Picks a track the slot has not played yet. Once the slot has been through
+ * the whole playlist the set is wiped and every track is fair game again —
+ * except the one it just started on, which would be an audible repeat.
+ */
+function pickUnplayed(slot: SlotKey, uris: string[]): string | null {
+  if (uris.length === 0) return null;
+  const played = playedSet(slot);
+  let candidates = uris.filter((uri) => !played.has(uri));
+  if (candidates.length === 0) {
+    played.clear();
+    const last = lastPickBySlot[slot];
+    const fresh = uris.filter((uri) => uri !== last);
+    candidates = fresh.length > 0 ? fresh : uris;
+  }
+  const pick = candidates[randomIndex(candidates.length)] ?? null;
+  if (pick) lastPickBySlot[slot] = pick;
+  return pick;
+}
+
+/** Records the track a playback snapshot shows, if it belongs to the slot. */
+function notePlayingTrack(slot: SlotKey | null, state: PlaybackState | null) {
+  if (!slot || !state) return;
+  const playlist = spotify.playlists[slot];
+  if (!playlist || state.context?.uri !== playlist.uri) return;
+  markPlayed(slot, state.item?.uri);
+}
+
+// ---------------------------------------------------------------------------
 // Session logic
 // ---------------------------------------------------------------------------
+
+/**
+ * Ticket for the most recent switch request. Overlapping switches take
+ * different numbers of round trips (the snapshot is conditional, track lists
+ * may be cached), so without this the slower earlier call can issue its play
+ * last and leave the device on a phase the Storyteller already moved past.
+ */
+let switchSeq = 0;
+
+function isCurrentSwitch(seq: number): boolean {
+  return seq === switchSeq;
+}
+
+/** Invalidates every in-flight switch so none of them can write state. */
+function cancelPendingSwitch() {
+  switchSeq++;
+}
+
+/**
+ * Remembers what the outgoing slot was playing so switching back does not land
+ * on it again. Best effort — a failed snapshot must never block the switch.
+ */
+async function snapshotOutgoingTrack(seq: number) {
+  const slot = spotify.currentSlot;
+  if (!slot) return;
+  // spotifyFetch raises the device picker on a 404 as a side effect. A
+  // best-effort read must not open it — the play that follows decides that.
+  const hadDevicePick = spotify.needsDevicePick;
+  try {
+    notePlayingTrack(slot, await getPlaybackState());
+  } catch {
+    // Losing one snapshot only risks a repeat later. Undo the flag only while
+    // this switch is still the current one: a newer switch may legitimately
+    // have raised the picker while this rejection was in flight.
+    if (isCurrentSwitch(seq)) spotify.needsDevicePick = hadDevicePick;
+  }
+}
+
+/** Keeps the device in sync with the pref. Never fails the slot switch. */
+async function applyShufflePref(deviceId?: string) {
+  try {
+    await setShuffle(spotify.shuffle, deviceId);
+  } catch (err) {
+    // Shuffle is a nicety — a device that refuses it still plays the slot.
+    const error = toSpotifyError(err);
+    if (error.kind === "not_connected") spotify.error = error;
+  }
+}
+
+/**
+ * Starts the slot's playlist on a track it has not played yet, so cycling
+ * phases does not replay the same song. Falls back to a random position, then
+ * to plain context playback, as the information available shrinks.
+ *
+ * Resolves to false when a newer switch superseded this one — the caller must
+ * then leave the state alone.
+ */
+async function startSlotPlayback(
+  slot: SlotKey,
+  playlistUri: string,
+  seq: number,
+  deviceId?: string,
+): Promise<boolean> {
+  const tracks = await getPlaylistTrackURIs(playlistUri);
+  // Never issue a play for a slot the Storyteller has already switched off.
+  if (!isCurrentSwitch(seq)) return false;
+
+  const pick = tracks.complete ? pickUnplayed(slot, tracks.uris) : null;
+  let offset: PlayOffset | undefined;
+  if (pick) {
+    offset = { uri: pick };
+  } else if (tracks.total !== null && tracks.total > 0) {
+    offset = { position: randomIndex(tracks.total) };
+  }
+
+  try {
+    await playContext(playlistUri, deviceId, offset);
+  } catch (err) {
+    if (!isCurrentSwitch(seq)) return false;
+    // A stale or unavailable track breaks only the offset — the context is
+    // still playable, so drop it and try once more. Device, plan and rate
+    // limit failures are about the request itself; a retry cannot help.
+    if (!offset || toSpotifyError(err).kind !== "api") throw err;
+    await playContext(playlistUri, deviceId);
+    return isCurrentSwitch(seq);
+  }
+  // The pick did start playing, so it counts as played either way.
+  if (pick) markPlayed(slot, pick);
+  return isCurrentSwitch(seq);
+}
 
 export async function switchToSlot(slot: SlotKey) {
   const playlist = spotify.playlists[slot];
@@ -510,18 +783,75 @@ export async function switchToSlot(slot: SlotKey) {
     spotify.error = { kind: "slot_unconfigured", slot };
     return;
   }
+  const seq = ++switchSeq;
+  if (spotify.currentSlot && spotify.currentSlot !== slot) {
+    await snapshotOutgoingTrack(seq);
+    if (!isCurrentSwitch(seq)) return;
+  }
+  const deviceId = spotify.activeDeviceId ?? undefined;
   try {
-    await playContext(playlist.uri, spotify.activeDeviceId ?? undefined);
+    if (!(await startSlotPlayback(slot, playlist.uri, seq, deviceId))) return;
     spotify.currentSlot = slot;
     spotify.sessionActive = true;
     spotify.isPlaying = true;
     spotify.needsDevicePick = false;
     spotify.error = null;
   } catch (err) {
+    if (!isCurrentSwitch(seq)) return;
     // no_device leaves needsDevicePick set — the UI opens the device picker
     // and re-invokes this after a device is chosen.
     spotify.error = toSpotifyError(err);
+    return;
   }
+  // Not awaited: the panel's busy flag should release once audio starts, not
+  // after a follow-up call that cannot change the outcome.
+  void applyShufflePref(deviceId);
+}
+
+/**
+ * Ends the playback session: pauses the device and disarms the phase
+ * auto-switch. Deliberately NOT a disconnect — playlists, devices, shuffle and
+ * the token cache all survive, so the play button can restart the current
+ * phase's slot (it falls through to switchToSlot once currentSlot is null).
+ */
+export async function stopMusic() {
+  // Invalidate up front: the tail of this function overwrites whatever a
+  // concurrent switch writes *during* the pause, but a switch that resolves
+  // after stopMusic returns would otherwise re-arm the session behind it.
+  cancelPendingSwitch();
+  // A pause that finds no device raises the picker as a side effect of
+  // spotifyFetch. The Storyteller is stopping, not trying to start something,
+  // so that flag has to be put back exactly as it was.
+  const hadDevicePick = spotify.needsDevicePick;
+  try {
+    await pausePlayback();
+    spotify.error = null;
+  } catch (err) {
+    const error = toSpotifyError(err);
+    // Nothing playing, a sleeping device, a rate limit — none of it changes
+    // the intent to stop, so the failure is swallowed rather than left on
+    // screen. A lost grant is the one exception the whole module surfaces.
+    spotify.error = error.kind === "not_connected" ? error : null;
+    spotify.needsDevicePick = hadDevicePick;
+  }
+  spotify.sessionActive = false;
+  spotify.currentSlot = null;
+  spotify.isPlaying = false;
+}
+
+/** Persists the shuffle preference and pushes it to a live session. */
+export function setShufflePref(on: boolean) {
+  spotify.shuffle = on;
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(SHUFFLE_KEY, String(on));
+  }
+  if (!spotify.sessionActive) return;
+  void setShuffle(on, spotify.activeDeviceId ?? undefined).catch(
+    (err: unknown) => {
+      const error = toSpotifyError(err);
+      if (error.kind === "not_connected") spotify.error = error;
+    },
+  );
 }
 
 /** Auto-switch on day/night flip. Only runs inside an active session. */
@@ -566,6 +896,7 @@ async function pollPlaybackOnce() {
       return;
     }
     spotify.isPlaying = !!state.is_playing;
+    notePlayingTrack(spotify.currentSlot, state);
     if (state.device) {
       if (state.device.id) spotify.activeDeviceId = state.device.id;
       const midDebounce = volumeTimer !== null || pendingVolume !== null;
