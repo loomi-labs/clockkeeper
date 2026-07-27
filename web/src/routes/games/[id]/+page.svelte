@@ -75,6 +75,7 @@
   import { seatingOrder } from "~/lib/night-helpers/seating";
   import { effectiveAlignment } from "~/lib/night-helpers/alignment";
   import {
+    executionTargetDay,
     findExecutedToday,
     newDeathsTonight,
     resolveTrueCharacter,
@@ -378,6 +379,18 @@
     (game?.playState?.phases ?? []).find((p) => p.isActive),
   );
   const activeIsDay = $derived(activePhase?.type === PhaseType.DAY);
+
+  // Where an execution goes: the current-or-most-recent DAY relative to the
+  // viewed round (a day on screen -> that day; a night on screen -> the previous
+  // round's day). Undefined on the first night, which hides the Execute action.
+  const executionDayPhase = $derived(
+    executionTargetDay(
+      rounds,
+      viewingRoundIndex,
+      activeIsDay ? PhaseType.DAY : PhaseType.NIGHT,
+    ),
+  );
+  const canExecute = $derived(!!executionDayPhase);
 
   // Dead characters per phase type.
   const nightDeadRoleIds = $derived(
@@ -985,11 +998,12 @@
     };
   }
 
+  // A plain day-phase kill: a day death that is NOT an execution (Slayer shot,
+  // storyteller kill, …). Executions have their own action — recordExecution.
   function recordDeathOnDay(roleId: string) {
     if (!game || !dayPhase) return;
-    // Day-phase kills come from the grimoire / death tracker — an execution.
     if (isViewingCurrent) {
-      doRecordDeath(roleId, dayPhase.id, true, DeathCause.EXECUTION);
+      doRecordDeath(roleId, dayPhase.id, true, DeathCause.OTHER);
       return;
     }
     const charName = characterById.get(roleId)?.name ?? roleId;
@@ -1000,11 +1014,41 @@
       cancelLabel: "This phase only",
       onconfirm: () => {
         confirmDialog = null;
-        doRecordDeath(roleId, dayPhase!.id, true, DeathCause.EXECUTION);
+        doRecordDeath(roleId, dayPhase!.id, true, DeathCause.OTHER);
       },
       oncancel: () => {
         confirmDialog = null;
-        doRecordDeath(roleId, dayPhase!.id, false, DeathCause.EXECUTION);
+        doRecordDeath(roleId, dayPhase!.id, false, DeathCause.OTHER);
+      },
+    };
+  }
+
+  // An execution by the town. Always lands on the current-or-most-recent DAY
+  // (see executionTargetDay) with cause EXECUTION — that cause is what the
+  // Undertaker helper reads. Always propagates: an execution on an earlier day
+  // must leave the player dead in every later phase, including the one on
+  // screen. When the target day is not the phase being played we confirm first,
+  // naming the day, so recording onto a past day is never silent.
+  function recordExecution(roleId: string) {
+    if (!game) return;
+    const target = executionDayPhase;
+    if (!target) return;
+    if (activeIsDay && isViewingCurrent) {
+      doRecordDeath(roleId, target.id, true, DeathCause.EXECUTION);
+      return;
+    }
+    const charName = characterById.get(roleId)?.name ?? roleId;
+    confirmDialog = {
+      title: `Execute ${charName}`,
+      message: `Record on Day ${target.roundNumber} (the most recent day) and apply to all later phases?`,
+      confirmLabel: `Execute on Day ${target.roundNumber}`,
+      cancelLabel: "Cancel",
+      onconfirm: () => {
+        confirmDialog = null;
+        doRecordDeath(roleId, target.id, true, DeathCause.EXECUTION);
+      },
+      oncancel: () => {
+        confirmDialog = null;
       },
     };
   }
@@ -1084,8 +1128,9 @@
   }
 
   // Move a death to the sibling phase of the SAME round (Night N <-> Day N):
-  // remove it, then re-record on the sibling with a phase-appropriate cause
-  // (execution on a day; DEMON preserved, else UNSPECIFIED, on a night).
+  // remove it, then re-record on the sibling with a phase-appropriate cause.
+  // Moving to a day keeps EXECUTION if it was one, else OTHER (a day death that
+  // is not an execution); moving to a night keeps DEMON, else UNSPECIFIED.
   async function moveDeath(death: Death) {
     if (!game) return;
     const phase = (game.playState?.phases ?? []).find(
@@ -1098,7 +1143,9 @@
     if (!sibling) return;
     const cause =
       sibling.type === PhaseType.DAY
-        ? DeathCause.EXECUTION
+        ? death.cause === DeathCause.EXECUTION
+          ? DeathCause.EXECUTION
+          : DeathCause.OTHER
         : death.cause === DeathCause.DEMON
           ? DeathCause.DEMON
           : DeathCause.UNSPECIFIED;
@@ -1674,8 +1721,9 @@
     saveGrimoireState();
   }
   function handleGrimoirePlayerToggleDeath(id: string) {
-    // Route to the ACTIVE phase: a day-phase toggle is an execution, a
-    // night-phase toggle is a night kill (cause UNSPECIFIED).
+    // Route to the ACTIVE phase: a day-phase kill is a non-execution day death
+    // (cause OTHER — a Slayer shot etc.), a night-phase kill is a night kill
+    // (cause UNSPECIFIED). Executions go through recordExecution instead.
     if (activeIsDay) {
       if (dayDeadRoleIds.has(id)) undoDeathByRoleOnDay(id);
       else recordDeathOnDay(id);
@@ -2583,6 +2631,7 @@
             roundNotes={currentRoundNotes}
             ontoggle={toggleNightAction}
             ondeath={recordDeathOnNight}
+            onexecute={canExecute ? recordExecution : undefined}
             onundodeath={undoDeathByRoleOnNight}
             ongamenote={handleGrimoireGameNote}
             onroundnote={handleGrimoireRoundNote}
@@ -2607,6 +2656,7 @@
             viewedPhaseDeaths={newDeathsThisRound}
             onrecord={(id) =>
               activeIsDay ? recordDeathOnDay(id) : recordDeathOnNight(id)}
+            onexecute={canExecute ? recordExecution : undefined}
             onremove={removeDeath}
             onuseghostvote={useGhostVote}
             onmove={moveDeath}
@@ -2625,7 +2675,7 @@
               selectedName={selectedChipName}
             />
           {/if}
-          <!-- Active-day hint: executions are recorded via the grimoire skull. -->
+          <!-- Active-day hint: day deaths are recorded from a grimoire token. -->
           {#if activeIsDay && isViewingCurrent}
             <div
               class="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
@@ -2643,8 +2693,8 @@
                   d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
                 />
               </svg>
-              Day {viewingRound?.roundNumber ?? 1} — tap a player's skull in the grimoire
-              to record an execution.
+              Day {viewingRound?.roundNumber ?? 1} — tap a player in the grimoire
+              to record an execution or a kill.
             </div>
           {/if}
           <!-- Grimoire view -->
@@ -2671,6 +2721,7 @@
               onbagsubdrop={handleBagSubDrop}
               onplayerrename={handleGrimoirePlayerRename}
               onplayertoggledeath={handleGrimoirePlayerToggleDeath}
+              onplayerexecute={canExecute ? recordExecution : undefined}
               onplayergamenote={handleGrimoireGameNote}
               onplayerroundnote={handleGrimoireRoundNote}
               onplayeralignment={handleGrimoireAlignment}

@@ -32,6 +32,7 @@
     roundNotes,
     ontoggle,
     ondeath,
+    onexecute,
     onundodeath,
     ongamenote,
     onroundnote,
@@ -62,6 +63,11 @@
     bluffs?: Character[];
     ontoggle?: (id: string, done: boolean) => void;
     ondeath?: (roleId: string) => void;
+    /**
+     * Execute by the town — a DAY death, recorded on the current or most recent
+     * day. Omit to hide the action (e.g. first night, no day played yet).
+     */
+    onexecute?: (roleId: string) => void;
     onundodeath?: (roleId: string) => void;
     ongamenote?: (id: string, note: string) => void;
     onroundnote?: (id: string, note: string) => void;
@@ -1634,6 +1640,39 @@
                     Undo star pass
                   </button>
                 {/if}
+                {#if onexecute && !entryIsDead}
+                  <!-- Executions are a DAY event: this records on the current or
+                       most recent day, not on the night being viewed. -->
+                  <button
+                    onclick={() => onexecute?.(entry.id)}
+                    class="rounded p-1 text-muted transition-colors hover:bg-hover hover:text-amber-600 dark:hover:text-amber-500"
+                    title="Execute (by the town, during the day)"
+                    aria-label="Execute {entry.name}"
+                  >
+                    <svg
+                      class="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-width="4"
+                        stroke-linecap="round"
+                        d="M14 5l5 5"
+                      />
+                      <path
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        d="M15 9l-7 7"
+                      />
+                      <path
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        d="M4 20h9"
+                      />
+                    </svg>
+                  </button>
+                {/if}
                 {#if ondeath && !entryIsDead}
                   <button
                     onclick={() => ondeath?.(entry.id)}
@@ -1891,6 +1930,28 @@
           />
         </svg>
         Undo star pass
+      </button>
+    {/if}
+    {#if onexecute && !m.entryIsDead}
+      <!-- Execution: a DAY death, recorded on the current or most recent day. -->
+      <button
+        onclick={() => {
+          onexecute?.(m.entryId);
+          closeOverflowMenu();
+        }}
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-hover"
+      >
+        <svg
+          class="h-4 w-4 text-amber-600 dark:text-amber-500"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+        >
+          <path stroke-width="4" stroke-linecap="round" d="M14 5l5 5" />
+          <path stroke-width="2" stroke-linecap="round" d="M15 9l-7 7" />
+          <path stroke-width="2" stroke-linecap="round" d="M4 20h9" />
+        </svg>
+        Execute
       </button>
     {/if}
     {#if ondeath && !m.entryIsDead}
