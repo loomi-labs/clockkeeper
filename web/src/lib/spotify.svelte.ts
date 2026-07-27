@@ -146,6 +146,14 @@ export function applySpotifyStatus(status: SpotifyStatus | undefined) {
     night: toPlaylistRef(status?.night),
     nominations: toPlaylistRef(status?.nominations),
   };
+  // A server-reported disconnect (revoked elsewhere, row deleted) ends the
+  // playback session too — otherwise transient flags like sessionActive keep
+  // session-gated UI (e.g. the nominations step) alive with no connection.
+  if (!spotify.connected) {
+    spotify.sessionActive = false;
+    spotify.currentSlot = null;
+    spotify.isPlaying = false;
+  }
 }
 
 /**

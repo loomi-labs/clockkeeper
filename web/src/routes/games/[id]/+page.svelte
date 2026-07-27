@@ -1188,12 +1188,16 @@
   let prevMusicIsDay = $state<boolean | undefined>(undefined);
   $effect(() => {
     const inProgress = isInProgress;
-    const day = activeIsDay;
+    // Without an active phase there is no day/night fact — activeIsDay would
+    // collapse "unknown" to Night and a later Day would fire a phantom
+    // transition. Ignore such snapshots without touching the tracker.
+    const day = activePhase === undefined ? undefined : activeIsDay;
     untrack(() => {
       if (!inProgress) {
         prevMusicIsDay = undefined;
         return;
       }
+      if (day === undefined) return;
       if (prevMusicIsDay === day) return;
       const isTransition = prevMusicIsDay !== undefined;
       prevMusicIsDay = day;

@@ -13,6 +13,7 @@ vi.mock("./api", () => ({ client: rpc, rawClient: rpc }));
 
 import {
   spotify,
+  applySpotifyStatus,
   resetSpotifyState,
   getAccessToken,
   spotifyFetch,
@@ -994,6 +995,34 @@ describe("listPlaylists", () => {
       { uri: "spotify:playlist:b", name: "B", imageUrl: "" },
       { uri: "spotify:playlist:c", name: "C", imageUrl: "" },
     ]);
+  });
+});
+
+describe("applySpotifyStatus", () => {
+  it("ends the playback session on a server-reported disconnect", () => {
+    spotify.connected = true;
+    spotify.sessionActive = true;
+    spotify.currentSlot = "day";
+    spotify.isPlaying = true;
+
+    applySpotifyStatus(undefined);
+
+    expect(spotify.connected).toBe(false);
+    expect(spotify.sessionActive).toBe(false);
+    expect(spotify.currentSlot).toBeNull();
+    expect(spotify.isPlaying).toBe(false);
+  });
+
+  it("keeps a running session when the server still reports connected", () => {
+    spotify.sessionActive = true;
+    spotify.currentSlot = "night";
+    spotify.isPlaying = true;
+
+    applySpotifyStatus({ connected: true } as never);
+
+    expect(spotify.sessionActive).toBe(true);
+    expect(spotify.currentSlot).toBe("night");
+    expect(spotify.isPlaying).toBe(true);
   });
 });
 
