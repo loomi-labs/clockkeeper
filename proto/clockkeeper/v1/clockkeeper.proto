@@ -353,6 +353,9 @@ message GetGameResponse {
 
 message RandomizeRolesRequest {
   int64 game_id = 1;
+  // Role ids whose seat is locked: they keep their role (and therefore their
+  // player name) and only the remaining slots are re-randomized.
+  repeated string locked_role_ids = 2;
 }
 
 message RandomizeRolesResponse {

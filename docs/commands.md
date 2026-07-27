@@ -31,7 +31,8 @@ All commands use [Task](https://taskfile.dev/) as the runner.
 
 | Command                                  | Description                                      |
 |------------------------------------------|--------------------------------------------------|
-| `task db:up`                             | Start PostgreSQL and apply migrations            |
+| `task db:up`                             | Start PostgreSQL, apply migrations, seed dev data |
+| `task db:seed`                           | Load dev seed data (idempotent, local only)     |
 | `task db:migrate`                        | Apply all pending migrations                     |
 | `task db:migrate:new -- <name>`          | Generate a new migration from Ent schema changes |
 | `task db:migrate:status`                 | Show migration status                            |

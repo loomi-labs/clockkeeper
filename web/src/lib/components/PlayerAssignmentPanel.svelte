@@ -17,8 +17,10 @@
   let {
     players,
     presetNames,
+    lockedIds,
     onassign,
     onunassign,
+    ontogglelock,
     onassigninorder,
     onrandomize,
     onclearall,
@@ -26,8 +28,11 @@
   }: {
     players: PanelPlayer[];
     presetNames: string[];
+    // Seats whose name survives "Assign in order" / "Randomize".
+    lockedIds: ReadonlySet<string>;
     onassign: (playerId: string, name: string) => void;
     onunassign: (playerId: string) => void;
+    ontogglelock: (playerId: string) => void;
     onassigninorder: () => void;
     onrandomize?: () => void;
     onclearall: () => void;
@@ -164,6 +169,47 @@
                   class="inline-flex items-center gap-1 rounded-full border border-border bg-element pl-2.5 pr-1 py-0.5 text-xs font-medium text-primary"
                 >
                   {p.name}
+                  {#if lockedIds.has(p.id)}
+                    <button
+                      onclick={() => ontogglelock(p.id)}
+                      aria-pressed="true"
+                      class="rounded-full p-0.5 text-amber-500 transition-colors hover:bg-hover"
+                      aria-label="Unlock name (randomize may replace it)"
+                      title="Unlock name (randomize may replace it)"
+                    >
+                      <svg
+                        class="h-3 w-3"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        ><path
+                          fill-rule="evenodd"
+                          clip-rule="evenodd"
+                          d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z"
+                        /></svg
+                      >
+                    </button>
+                  {:else}
+                    <button
+                      onclick={() => ontogglelock(p.id)}
+                      aria-pressed="false"
+                      class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-amber-500"
+                      aria-label="Lock name (randomize keeps it)"
+                      title="Lock name (randomize keeps it)"
+                    >
+                      <svg
+                        class="h-3 w-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        ><path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        /></svg
+                      >
+                    </button>
+                  {/if}
                   <button
                     onclick={() => startEdit(p.id, p.name ?? "")}
                     class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-indigo-500"

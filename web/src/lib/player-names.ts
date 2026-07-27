@@ -68,20 +68,35 @@ export function unassignName(
  * Each assigned name is also removed from any OTHER seat first, so a preset
  * name is only ever held by a single seat — otherwise a name previously
  * assigned by hand to a seat outside `playerIds` would linger as a duplicate.
+ *
+ * Seats in `locked` are pinned: they are skipped as assignment targets (keeping
+ * whatever name they already hold), the names they hold are withheld from the
+ * name pool, and the duplicate-steal never unassigns them.
  */
 export function assignInOrder(
   map: ReadonlyMap<string, string>,
   playerIds: readonly string[],
   presetNames: readonly string[],
+  locked: ReadonlySet<string> = new Set(),
 ): Map<string, string> {
   const next = new Map(map);
-  const count = Math.min(playerIds.length, presetNames.length);
+  // Locked seats drop out of the targets; their names drop out of the pool.
+  const targets = playerIds.filter((id) => !locked.has(id));
+  const lockedNames = new Set<string>();
+  for (const id of locked) {
+    const name = next.get(id);
+    if (name !== undefined) lockedNames.add(name);
+  }
+  const pool = presetNames.filter((name) => !lockedNames.has(name));
+  const count = Math.min(targets.length, pool.length);
   for (let i = 0; i < count; i++) {
-    const playerId = playerIds[i];
-    const name = presetNames[i];
-    // Drop this name from any other seat before claiming it here.
+    const playerId = targets[i];
+    const name = pool[i];
+    // Drop this name from any other unlocked seat before claiming it here.
     for (const [id, existingName] of next) {
-      if (existingName === name && id !== playerId) next.delete(id);
+      if (existingName === name && id !== playerId && !locked.has(id)) {
+        next.delete(id);
+      }
     }
     next.set(playerId, name);
   }

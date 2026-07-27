@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
-  import type { HelperPlayer } from "~/lib/night-helpers/helpers";
+  import type { CharacterRef, HelperPlayer } from "~/lib/night-helpers/helpers";
   import { firstNightInfoCard, noOutsidersCard } from "~/lib/info-cards";
   import { iconSuffix } from "~/lib/team-styles";
   import PlayerPickerPopover from "./PlayerPickerPopover.svelte";
@@ -46,12 +46,7 @@
   // "right" seat's DISPLAYED character, but the ST may override it (e.g. to show
   // a category-appropriate character that differs from the seat's token). Reset
   // whenever the picked "right" seat changes, so a stale override never leaks.
-  let overrideChar = $state<{
-    id: string;
-    name: string;
-    team: Team;
-    edition: string;
-  } | null>(null);
+  let overrideChar = $state<CharacterRef | null>(null);
   $effect(() => {
     rightId;
     overrideChar = null;
@@ -161,12 +156,7 @@
     charPicker = { top: rect.bottom + 4, left: rect.left };
   }
 
-  function pickOverride(c: {
-    id: string;
-    name: string;
-    team: Team;
-    edition: string;
-  }) {
+  function pickOverride(c: CharacterRef) {
     overrideChar = { id: c.id, name: c.name, team: c.team, edition: c.edition };
     charPicker = null;
   }

@@ -1735,6 +1735,18 @@ func TestDuplicateGame_CopiesSetupFields(t *testing.T) {
 	require.NoError(t, err)
 	src := randResp.Msg.Game
 
+	// Seat the players so the duplicate has names and positions to carry over.
+	_, err = handler.UpdateGrimoireState(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGrimoireStateRequest{
+		GameId: gameID,
+		Positions: map[string]*clockkeeperv1.Position{
+			"washerwoman": {X: 100, Y: 200},
+		},
+		PlayerNames: map[string]string{
+			"washerwoman": "Alice",
+		},
+	}))
+	require.NoError(t, err)
+
 	// Duplicate the game.
 	dupResp, err := handler.DuplicateGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.DuplicateGameRequest{
 		GameId: gameID,
@@ -1752,6 +1764,14 @@ func TestDuplicateGame_CopiesSetupFields(t *testing.T) {
 	assert.Equal(t, src.SelectedTravellerIds, dup.SelectedTravellerIds)
 	assert.Equal(t, src.SelectedBluffIds, dup.SelectedBluffIds)
 	assert.Equal(t, len(src.BagSubstitutions), len(dup.BagSubstitutions))
+
+	// Player names and seat positions carry over so the storyteller doesn't have to
+	// re-seat the same table for the next game.
+	require.Contains(t, dup.GrimoirePlayerNames, "washerwoman")
+	assert.Equal(t, "Alice", dup.GrimoirePlayerNames["washerwoman"])
+	require.Contains(t, dup.GrimoirePositions, "washerwoman")
+	assert.InDelta(t, 100, dup.GrimoirePositions["washerwoman"].X, 0.01)
+	assert.InDelta(t, 200, dup.GrimoirePositions["washerwoman"].Y, 0.01)
 }
 
 func TestDuplicateGame_FromStartedGame(t *testing.T) {
@@ -1759,6 +1779,15 @@ func TestDuplicateGame_FromStartedGame(t *testing.T) {
 	ownerID, game := startedGame(t, handler)
 
 	assert.Equal(t, clockkeeperv1.GameState_GAME_STATE_IN_PROGRESS, game.State)
+
+	// Name the seats mid-game — the same table usually plays the next game too.
+	require.NotEmpty(t, game.SelectedRoleIds)
+	seatedRole := game.SelectedRoleIds[0]
+	_, err := handler.UpdateGrimoireState(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGrimoireStateRequest{
+		GameId:      game.Id,
+		PlayerNames: map[string]string{seatedRole: "Alice"},
+	}))
+	require.NoError(t, err)
 
 	// Duplicate the in-progress game.
 	dupResp, err := handler.DuplicateGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.DuplicateGameRequest{
@@ -1772,6 +1801,9 @@ func TestDuplicateGame_FromStartedGame(t *testing.T) {
 	assert.Equal(t, clockkeeperv1.GameState_GAME_STATE_SETUP, dup.State)
 	assert.Equal(t, game.SelectedRoleIds, dup.SelectedRoleIds)
 	assert.Nil(t, dup.PlayState)
+
+	require.Contains(t, dup.GrimoirePlayerNames, seatedRole)
+	assert.Equal(t, "Alice", dup.GrimoirePlayerNames[seatedRole])
 }
 
 func TestDuplicateGame_BlocksOtherUser(t *testing.T) {

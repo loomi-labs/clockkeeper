@@ -13,6 +13,7 @@ import {
   customCardToDisplay,
   firstNightInfoCard,
   noOutsidersCard,
+  characterTokenCard,
 } from "./info-cards";
 
 function char(
@@ -217,5 +218,46 @@ describe("noOutsidersCard", () => {
     expect(card.characters).toEqual([]);
     expect(card.accent).toBe("blue");
     expect(card.kind).toBe("standard");
+  });
+});
+
+describe("characterTokenCard", () => {
+  it("builds an icon-only card whose id composes the prefix and character id", () => {
+    const card = characterTokenCard(
+      { id: "imp", name: "Imp", edition: "tb", team: Team.DEMON },
+      "undertaker",
+    );
+    expect(card.id).toBe("dyn:undertaker-imp");
+    // The icon IS the card — no title, no body.
+    expect(card.title).toBe("");
+    expect(card.body).toBe("");
+    expect(card.kind).toBe("standard");
+    expect(card.accent).toBe("neutral");
+    expect(card.characters).toEqual([
+      { id: "imp", name: "Imp", edition: "tb", iconSuffix: "_e" },
+    ]);
+  });
+
+  it("derives the icon suffix from the character's team", () => {
+    const good = characterTokenCard(
+      { id: "empath", name: "Empath", edition: "tb", team: Team.TOWNSFOLK },
+      "ravenkeeper",
+    );
+    expect(good.id).toBe("dyn:ravenkeeper-empath");
+    expect(good.characters).toHaveLength(1);
+    expect(good.characters[0].iconSuffix).toBe("_g");
+
+    const evil = characterTokenCard(
+      { id: "poisoner", name: "Poisoner", edition: "tb", team: Team.MINION },
+      "ravenkeeper",
+    );
+    expect(evil.characters[0].iconSuffix).toBe("_e");
+
+    // Travellers are the only characters with a bare `<id>.webp` icon.
+    const traveller = characterTokenCard(
+      { id: "thief", name: "Thief", edition: "tb", team: Team.TRAVELLER },
+      "undertaker",
+    );
+    expect(traveller.characters[0].iconSuffix).toBe("");
   });
 });
