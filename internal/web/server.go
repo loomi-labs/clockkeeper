@@ -93,7 +93,10 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'")
+		// connect-src: the Spotify panel calls the Web API directly from the
+		// browser with a backend-vended token. img-src: playlist cover art is
+		// served from Spotify's CDNs.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.scdn.co https://*.spotifycdn.com; connect-src 'self' https://api.spotify.com; font-src 'self'")
 		next.ServeHTTP(w, r)
 	})
 }
