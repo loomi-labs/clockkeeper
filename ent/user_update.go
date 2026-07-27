@@ -16,6 +16,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
 	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -203,6 +204,25 @@ func (_u *UserUpdate) AddInfoCards(v ...*InfoCard) *UserUpdate {
 	return _u.AddInfoCardIDs(ids...)
 }
 
+// SetSpotifyConnectionID sets the "spotify_connection" edge to the SpotifyConnection entity by ID.
+func (_u *UserUpdate) SetSpotifyConnectionID(id int) *UserUpdate {
+	_u.mutation.SetSpotifyConnectionID(id)
+	return _u
+}
+
+// SetNillableSpotifyConnectionID sets the "spotify_connection" edge to the SpotifyConnection entity by ID if the given value is not nil.
+func (_u *UserUpdate) SetNillableSpotifyConnectionID(id *int) *UserUpdate {
+	if id != nil {
+		_u = _u.SetSpotifyConnectionID(*id)
+	}
+	return _u
+}
+
+// SetSpotifyConnection sets the "spotify_connection" edge to the SpotifyConnection entity.
+func (_u *UserUpdate) SetSpotifyConnection(v *SpotifyConnection) *UserUpdate {
+	return _u.SetSpotifyConnectionID(v.ID)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -269,6 +289,12 @@ func (_u *UserUpdate) RemoveInfoCards(v ...*InfoCard) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveInfoCardIDs(ids...)
+}
+
+// ClearSpotifyConnection clears the "spotify_connection" edge to the SpotifyConnection entity.
+func (_u *UserUpdate) ClearSpotifyConnection() *UserUpdate {
+	_u.mutation.ClearSpotifyConnection()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -505,6 +531,35 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.SpotifyConnectionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.SpotifyConnectionTable,
+			Columns: []string{user.SpotifyConnectionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(spotifyconnection.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SpotifyConnectionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.SpotifyConnectionTable,
+			Columns: []string{user.SpotifyConnectionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(spotifyconnection.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -696,6 +751,25 @@ func (_u *UserUpdateOne) AddInfoCards(v ...*InfoCard) *UserUpdateOne {
 	return _u.AddInfoCardIDs(ids...)
 }
 
+// SetSpotifyConnectionID sets the "spotify_connection" edge to the SpotifyConnection entity by ID.
+func (_u *UserUpdateOne) SetSpotifyConnectionID(id int) *UserUpdateOne {
+	_u.mutation.SetSpotifyConnectionID(id)
+	return _u
+}
+
+// SetNillableSpotifyConnectionID sets the "spotify_connection" edge to the SpotifyConnection entity by ID if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableSpotifyConnectionID(id *int) *UserUpdateOne {
+	if id != nil {
+		_u = _u.SetSpotifyConnectionID(*id)
+	}
+	return _u
+}
+
+// SetSpotifyConnection sets the "spotify_connection" edge to the SpotifyConnection entity.
+func (_u *UserUpdateOne) SetSpotifyConnection(v *SpotifyConnection) *UserUpdateOne {
+	return _u.SetSpotifyConnectionID(v.ID)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -762,6 +836,12 @@ func (_u *UserUpdateOne) RemoveInfoCards(v ...*InfoCard) *UserUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveInfoCardIDs(ids...)
+}
+
+// ClearSpotifyConnection clears the "spotify_connection" edge to the SpotifyConnection entity.
+func (_u *UserUpdateOne) ClearSpotifyConnection() *UserUpdateOne {
+	_u.mutation.ClearSpotifyConnection()
+	return _u
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -1021,6 +1101,35 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(infocard.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SpotifyConnectionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.SpotifyConnectionTable,
+			Columns: []string{user.SpotifyConnectionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(spotifyconnection.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SpotifyConnectionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.SpotifyConnectionTable,
+			Columns: []string{user.SpotifyConnectionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(spotifyconnection.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

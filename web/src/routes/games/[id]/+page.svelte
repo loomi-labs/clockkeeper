@@ -42,6 +42,8 @@
   import CharacterPreviewPopup from "~/lib/components/CharacterPreviewPopup.svelte";
   import PlayerPresetsModal from "~/lib/components/PlayerPresetsModal.svelte";
   import WakeLockToggle from "~/lib/components/WakeLockToggle.svelte";
+  import SpotifyPanel from "~/lib/components/SpotifyPanel.svelte";
+  import { spotify, syncPhase } from "~/lib/spotify.svelte";
   import PlayerAssignmentPanel from "~/lib/components/PlayerAssignmentPanel.svelte";
   import NameChipsBar from "~/lib/components/NameChipsBar.svelte";
   import InfoCardPicker from "~/lib/components/InfoCardPicker.svelte";
@@ -1106,6 +1108,27 @@
       if (prevActiveIsDay === day) return;
       prevActiveIsDay = day;
       inProgressView = day ? "grimoire" : "nightsheet";
+    });
+  });
+
+  // Flip the Spotify playlist on the same day/night step transition. Tracked
+  // independently of the view toggle above so neither can swallow the other's
+  // transition. syncPhase() no-ops unless the Storyteller has already started
+  // playback, so this never begins music on its own; the tracker is also reset
+  // outside the in-progress state so entering play is not seen as a flip.
+  let prevMusicIsDay = $state<boolean | undefined>(undefined);
+  $effect(() => {
+    const inProgress = isInProgress;
+    const day = activeIsDay;
+    untrack(() => {
+      if (!inProgress) {
+        prevMusicIsDay = undefined;
+        return;
+      }
+      if (prevMusicIsDay === day) return;
+      const isTransition = prevMusicIsDay !== undefined;
+      prevMusicIsDay = day;
+      if (isTransition) void syncPhase(day);
     });
   });
 
@@ -2256,6 +2279,9 @@
               </button>
             {/if}
             <WakeLockToggle />
+            {#if spotify.available}
+              <SpotifyPanel {activeIsDay} />
+            {/if}
             <button
               onclick={() => {
                 showNameChips = !showNameChips;

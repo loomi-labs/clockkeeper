@@ -22,6 +22,8 @@ type Tx struct {
 	Phase *PhaseClient
 	// Script is the client for interacting with the Script builders.
 	Script *ScriptClient
+	// SpotifyConnection is the client for interacting with the SpotifyConnection builders.
+	SpotifyConnection *SpotifyConnectionClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 
@@ -160,6 +162,7 @@ func (tx *Tx) init() {
 	tx.InfoCard = NewInfoCardClient(tx.config)
 	tx.Phase = NewPhaseClient(tx.config)
 	tx.Script = NewScriptClient(tx.config)
+	tx.SpotifyConnection = NewSpotifyConnectionClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
 

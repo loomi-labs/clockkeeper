@@ -1,4 +1,4 @@
-h1:+YnTivpIjGftVmdNwtkV0dVBvWAbn6lk9E8bj4lWQIk=
+h1:jrDpUPiP2HIbSz7uExbA5D0s8mgktHCHeVatPDDPOUI=
 20260315162621_initial.sql h1:UgW1c0FpXZMO/eGMw/Lq/M/duJEsK+OR2AHwiOzU7DI=
 20260315175834_add_scripts_and_games.sql h1:bvc00M1DNb9CpnkkWKihQE8UBk77yFw7GBmS0WTIAtw=
 20260315191827_add_traveller_count.sql h1:VYJyhlSU8uSA2JAc/Q2Lv5fA0ZaqJp6CnMzT2H3e6F4=
@@ -24,3 +24,4 @@ h1:+YnTivpIjGftVmdNwtkV0dVBvWAbn6lk9E8bj4lWQIk=
 20260724121222_add_death_cause.sql h1:iSoRREfL64vSBQDZiX9z0oxK1CYXo6Dm5e9FcsrdOz8=
 20260724121808_add_info_cards.sql h1:6sUQQFt2YjwtAAlUwOjdBjd1TKOfkitgNEvCYBh1ecI=
 20260724195230_add_role_promotions.sql h1:hXUCOQQne1fi1Eja6u5ydg/TyvURwEzVD1wNYclYf1U=
+20260727125505_add_spotify_connection.sql h1:lYBWSO2n9DrKhsk/qmnSoRfa7FgW6Kh2eQLOyhrwVd4=

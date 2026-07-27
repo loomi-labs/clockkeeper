@@ -8,8 +8,10 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent"
 	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
+	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -99,6 +101,20 @@ func deleteUserCascade(ctx context.Context, db *ent.Client, userID int) error {
 	// Delete user's scripts.
 	if _, err := db.Script.Delete().
 		Where(script.UserID(userID)).
+		Exec(ctx); err != nil {
+		return err
+	}
+
+	// Delete user's info cards.
+	if _, err := db.InfoCard.Delete().
+		Where(infocard.UserID(userID)).
+		Exec(ctx); err != nil {
+		return err
+	}
+
+	// Delete user's Spotify connection.
+	if _, err := db.SpotifyConnection.Delete().
+		Where(spotifyconnection.UserID(userID)).
 		Exec(ctx); err != nil {
 		return err
 	}

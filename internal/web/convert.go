@@ -173,6 +173,34 @@ func entInfoCardToProto(c *ent.InfoCard, registry *botc.Registry) *clockkeeperv1
 	return proto
 }
 
+// spotifyPlaylistSlotToProto converts a stored playlist slot, nil-safe.
+func spotifyPlaylistSlotToProto(slot *schema.SpotifyPlaylistSlot) *clockkeeperv1.SpotifyPlaylistSlot {
+	if slot == nil {
+		return nil
+	}
+	return &clockkeeperv1.SpotifyPlaylistSlot{
+		Uri:      slot.URI,
+		Name:     slot.Name,
+		ImageUrl: slot.ImageURL,
+	}
+}
+
+// spotifyStatusToProto converts a Spotify connection to its status message.
+// A nil connection means the user has not linked an account.
+func spotifyStatusToProto(conn *ent.SpotifyConnection) *clockkeeperv1.SpotifyStatus {
+	if conn == nil {
+		return &clockkeeperv1.SpotifyStatus{Connected: false}
+	}
+	return &clockkeeperv1.SpotifyStatus{
+		Connected:   true,
+		DisplayName: conn.DisplayName,
+		Premium:     conn.Premium,
+		Day:         spotifyPlaylistSlotToProto(conn.DayPlaylist),
+		Night:       spotifyPlaylistSlotToProto(conn.NightPlaylist),
+		Nominations: spotifyPlaylistSlotToProto(conn.NominationsPlaylist),
+	}
+}
+
 func entScriptToProto(s *ent.Script, registry *botc.Registry) *clockkeeperv1.Script {
 	proto := &clockkeeperv1.Script{
 		Id:           int64(s.ID),

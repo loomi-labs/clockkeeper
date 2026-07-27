@@ -13,6 +13,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -184,6 +185,25 @@ func (_c *UserCreate) AddInfoCards(v ...*InfoCard) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddInfoCardIDs(ids...)
+}
+
+// SetSpotifyConnectionID sets the "spotify_connection" edge to the SpotifyConnection entity by ID.
+func (_c *UserCreate) SetSpotifyConnectionID(id int) *UserCreate {
+	_c.mutation.SetSpotifyConnectionID(id)
+	return _c
+}
+
+// SetNillableSpotifyConnectionID sets the "spotify_connection" edge to the SpotifyConnection entity by ID if the given value is not nil.
+func (_c *UserCreate) SetNillableSpotifyConnectionID(id *int) *UserCreate {
+	if id != nil {
+		_c = _c.SetSpotifyConnectionID(*id)
+	}
+	return _c
+}
+
+// SetSpotifyConnection sets the "spotify_connection" edge to the SpotifyConnection entity.
+func (_c *UserCreate) SetSpotifyConnection(v *SpotifyConnection) *UserCreate {
+	return _c.SetSpotifyConnectionID(v.ID)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -372,6 +392,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(infocard.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SpotifyConnectionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.SpotifyConnectionTable,
+			Columns: []string{user.SpotifyConnectionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(spotifyconnection.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

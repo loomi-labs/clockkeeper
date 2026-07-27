@@ -49,6 +49,7 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260724121222_add_death_cause":                   validateDeathCause,
 	"20260724121808_add_info_cards":                    validateInfoCards,
 	"20260724195230_add_role_promotions":               validateRolePromotions,
+	"20260727125505_add_spotify_connection":            validateSpotifyConnection,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -124,6 +125,7 @@ func TestSchemaCompleteness(t *testing.T) {
 		"infocard.go",
 		"phase.go",
 		"script.go",
+		"spotifyconnection.go",
 		"user.go",
 	}
 
@@ -695,6 +697,72 @@ func validateRolePromotions(t *testing.T, ctx context.Context, _ *sql.DB, client
 	}
 	if g.RolePromotions != nil && len(g.RolePromotions) != 0 {
 		t.Errorf("expected nil or empty role_promotions, got %v", g.RolePromotions)
+	}
+}
+
+// validateSpotifyConnection checks that the spotify_connections table exists
+// with a NOT NULL user_id FK and at most one connection per user.
+func validateSpotifyConnection(t *testing.T, ctx context.Context, db *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	// user_id must be a NOT NULL column.
+	var nullable string
+	err := db.QueryRowContext(ctx,
+		`SELECT is_nullable FROM information_schema.columns
+		 WHERE table_name = 'spotify_connections' AND column_name = 'user_id'`).Scan(&nullable)
+	if err != nil {
+		t.Fatalf("user_id column should exist on spotify_connections: %v", err)
+	}
+	if nullable != "NO" {
+		t.Errorf("expected user_id to be NOT NULL, got is_nullable=%q", nullable)
+	}
+
+	// user_id must carry a foreign key to users.
+	var fkCount int
+	err = db.QueryRowContext(ctx,
+		`SELECT COUNT(*)
+		 FROM information_schema.table_constraints tc
+		 JOIN information_schema.key_column_usage kcu
+		   ON tc.constraint_name = kcu.constraint_name
+		 WHERE tc.table_name = 'spotify_connections'
+		   AND tc.constraint_type = 'FOREIGN KEY'
+		   AND kcu.column_name = 'user_id'`).Scan(&fkCount)
+	if err != nil {
+		t.Fatalf("failed to check foreign key: %v", err)
+	}
+	if fkCount == 0 {
+		t.Error("expected a foreign key on spotify_connections.user_id")
+	}
+
+	// A round-trip through Ent proves the columns line up with the schema.
+	u, err := client.User.Create().Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	conn, err := client.SpotifyConnection.Create().
+		SetUserID(u.ID).
+		SetSpotifyUserID("spotify-user").
+		SetDisplayName("Storyteller").
+		SetPremium(true).
+		SetRefreshToken("refresh-token").
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create spotify connection: %v", err)
+	}
+	if conn.AccessTokenExpiresAt != nil {
+		t.Errorf("expected nil access_token_expires_at, got %v", conn.AccessTokenExpiresAt)
+	}
+	if conn.DayPlaylist != nil || conn.NightPlaylist != nil || conn.NominationsPlaylist != nil {
+		t.Error("expected all playlist slots to be nil by default")
+	}
+
+	// The unique index allows only one connection per user.
+	if _, err := client.SpotifyConnection.Create().
+		SetUserID(u.ID).
+		SetSpotifyUserID("spotify-user-2").
+		SetRefreshToken("refresh-token-2").
+		Save(ctx); err == nil {
+		t.Error("expected a unique constraint violation for a second connection")
 	}
 }
 

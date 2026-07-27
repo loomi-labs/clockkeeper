@@ -18,6 +18,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
+	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
 
@@ -30,12 +31,13 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeDeath    = "Death"
-	TypeGame     = "Game"
-	TypeInfoCard = "InfoCard"
-	TypePhase    = "Phase"
-	TypeScript   = "Script"
-	TypeUser     = "User"
+	TypeDeath             = "Death"
+	TypeGame              = "Game"
+	TypeInfoCard          = "InfoCard"
+	TypePhase             = "Phase"
+	TypeScript            = "Script"
+	TypeSpotifyConnection = "SpotifyConnection"
+	TypeUser              = "User"
 )
 
 // DeathMutation represents an operation that mutates the Death nodes in the graph.
@@ -5248,35 +5250,1131 @@ func (m *ScriptMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Script edge %s", name)
 }
 
+// SpotifyConnectionMutation represents an operation that mutates the SpotifyConnection nodes in the graph.
+type SpotifyConnectionMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *int
+	created_at              *time.Time
+	updated_at              *time.Time
+	spotify_user_id         *string
+	display_name            *string
+	premium                 *bool
+	refresh_token           *string
+	access_token            *string
+	access_token_expires_at *time.Time
+	day_playlist            **schema.SpotifyPlaylistSlot
+	night_playlist          **schema.SpotifyPlaylistSlot
+	nominations_playlist    **schema.SpotifyPlaylistSlot
+	clearedFields           map[string]struct{}
+	user                    *int
+	cleareduser             bool
+	done                    bool
+	oldValue                func(context.Context) (*SpotifyConnection, error)
+	predicates              []predicate.SpotifyConnection
+}
+
+var _ ent.Mutation = (*SpotifyConnectionMutation)(nil)
+
+// spotifyconnectionOption allows management of the mutation configuration using functional options.
+type spotifyconnectionOption func(*SpotifyConnectionMutation)
+
+// newSpotifyConnectionMutation creates new mutation for the SpotifyConnection entity.
+func newSpotifyConnectionMutation(c config, op Op, opts ...spotifyconnectionOption) *SpotifyConnectionMutation {
+	m := &SpotifyConnectionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSpotifyConnection,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSpotifyConnectionID sets the ID field of the mutation.
+func withSpotifyConnectionID(id int) spotifyconnectionOption {
+	return func(m *SpotifyConnectionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SpotifyConnection
+		)
+		m.oldValue = func(ctx context.Context) (*SpotifyConnection, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SpotifyConnection.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSpotifyConnection sets the old SpotifyConnection of the mutation.
+func withSpotifyConnection(node *SpotifyConnection) spotifyconnectionOption {
+	return func(m *SpotifyConnectionMutation) {
+		m.oldValue = func(context.Context) (*SpotifyConnection, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SpotifyConnectionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SpotifyConnectionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SpotifyConnectionMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SpotifyConnectionMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SpotifyConnection.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SpotifyConnectionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SpotifyConnectionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SpotifyConnectionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SpotifyConnectionMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SpotifyConnectionMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SpotifyConnectionMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetSpotifyUserID sets the "spotify_user_id" field.
+func (m *SpotifyConnectionMutation) SetSpotifyUserID(s string) {
+	m.spotify_user_id = &s
+}
+
+// SpotifyUserID returns the value of the "spotify_user_id" field in the mutation.
+func (m *SpotifyConnectionMutation) SpotifyUserID() (r string, exists bool) {
+	v := m.spotify_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSpotifyUserID returns the old "spotify_user_id" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldSpotifyUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSpotifyUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSpotifyUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSpotifyUserID: %w", err)
+	}
+	return oldValue.SpotifyUserID, nil
+}
+
+// ResetSpotifyUserID resets all changes to the "spotify_user_id" field.
+func (m *SpotifyConnectionMutation) ResetSpotifyUserID() {
+	m.spotify_user_id = nil
+}
+
+// SetDisplayName sets the "display_name" field.
+func (m *SpotifyConnectionMutation) SetDisplayName(s string) {
+	m.display_name = &s
+}
+
+// DisplayName returns the value of the "display_name" field in the mutation.
+func (m *SpotifyConnectionMutation) DisplayName() (r string, exists bool) {
+	v := m.display_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisplayName returns the old "display_name" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldDisplayName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisplayName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisplayName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisplayName: %w", err)
+	}
+	return oldValue.DisplayName, nil
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (m *SpotifyConnectionMutation) ClearDisplayName() {
+	m.display_name = nil
+	m.clearedFields[spotifyconnection.FieldDisplayName] = struct{}{}
+}
+
+// DisplayNameCleared returns if the "display_name" field was cleared in this mutation.
+func (m *SpotifyConnectionMutation) DisplayNameCleared() bool {
+	_, ok := m.clearedFields[spotifyconnection.FieldDisplayName]
+	return ok
+}
+
+// ResetDisplayName resets all changes to the "display_name" field.
+func (m *SpotifyConnectionMutation) ResetDisplayName() {
+	m.display_name = nil
+	delete(m.clearedFields, spotifyconnection.FieldDisplayName)
+}
+
+// SetPremium sets the "premium" field.
+func (m *SpotifyConnectionMutation) SetPremium(b bool) {
+	m.premium = &b
+}
+
+// Premium returns the value of the "premium" field in the mutation.
+func (m *SpotifyConnectionMutation) Premium() (r bool, exists bool) {
+	v := m.premium
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPremium returns the old "premium" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldPremium(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPremium is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPremium requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPremium: %w", err)
+	}
+	return oldValue.Premium, nil
+}
+
+// ResetPremium resets all changes to the "premium" field.
+func (m *SpotifyConnectionMutation) ResetPremium() {
+	m.premium = nil
+}
+
+// SetRefreshToken sets the "refresh_token" field.
+func (m *SpotifyConnectionMutation) SetRefreshToken(s string) {
+	m.refresh_token = &s
+}
+
+// RefreshToken returns the value of the "refresh_token" field in the mutation.
+func (m *SpotifyConnectionMutation) RefreshToken() (r string, exists bool) {
+	v := m.refresh_token
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRefreshToken returns the old "refresh_token" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldRefreshToken(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRefreshToken is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRefreshToken requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRefreshToken: %w", err)
+	}
+	return oldValue.RefreshToken, nil
+}
+
+// ResetRefreshToken resets all changes to the "refresh_token" field.
+func (m *SpotifyConnectionMutation) ResetRefreshToken() {
+	m.refresh_token = nil
+}
+
+// SetAccessToken sets the "access_token" field.
+func (m *SpotifyConnectionMutation) SetAccessToken(s string) {
+	m.access_token = &s
+}
+
+// AccessToken returns the value of the "access_token" field in the mutation.
+func (m *SpotifyConnectionMutation) AccessToken() (r string, exists bool) {
+	v := m.access_token
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAccessToken returns the old "access_token" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldAccessToken(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAccessToken is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAccessToken requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAccessToken: %w", err)
+	}
+	return oldValue.AccessToken, nil
+}
+
+// ClearAccessToken clears the value of the "access_token" field.
+func (m *SpotifyConnectionMutation) ClearAccessToken() {
+	m.access_token = nil
+	m.clearedFields[spotifyconnection.FieldAccessToken] = struct{}{}
+}
+
+// AccessTokenCleared returns if the "access_token" field was cleared in this mutation.
+func (m *SpotifyConnectionMutation) AccessTokenCleared() bool {
+	_, ok := m.clearedFields[spotifyconnection.FieldAccessToken]
+	return ok
+}
+
+// ResetAccessToken resets all changes to the "access_token" field.
+func (m *SpotifyConnectionMutation) ResetAccessToken() {
+	m.access_token = nil
+	delete(m.clearedFields, spotifyconnection.FieldAccessToken)
+}
+
+// SetAccessTokenExpiresAt sets the "access_token_expires_at" field.
+func (m *SpotifyConnectionMutation) SetAccessTokenExpiresAt(t time.Time) {
+	m.access_token_expires_at = &t
+}
+
+// AccessTokenExpiresAt returns the value of the "access_token_expires_at" field in the mutation.
+func (m *SpotifyConnectionMutation) AccessTokenExpiresAt() (r time.Time, exists bool) {
+	v := m.access_token_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAccessTokenExpiresAt returns the old "access_token_expires_at" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldAccessTokenExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAccessTokenExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAccessTokenExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAccessTokenExpiresAt: %w", err)
+	}
+	return oldValue.AccessTokenExpiresAt, nil
+}
+
+// ClearAccessTokenExpiresAt clears the value of the "access_token_expires_at" field.
+func (m *SpotifyConnectionMutation) ClearAccessTokenExpiresAt() {
+	m.access_token_expires_at = nil
+	m.clearedFields[spotifyconnection.FieldAccessTokenExpiresAt] = struct{}{}
+}
+
+// AccessTokenExpiresAtCleared returns if the "access_token_expires_at" field was cleared in this mutation.
+func (m *SpotifyConnectionMutation) AccessTokenExpiresAtCleared() bool {
+	_, ok := m.clearedFields[spotifyconnection.FieldAccessTokenExpiresAt]
+	return ok
+}
+
+// ResetAccessTokenExpiresAt resets all changes to the "access_token_expires_at" field.
+func (m *SpotifyConnectionMutation) ResetAccessTokenExpiresAt() {
+	m.access_token_expires_at = nil
+	delete(m.clearedFields, spotifyconnection.FieldAccessTokenExpiresAt)
+}
+
+// SetDayPlaylist sets the "day_playlist" field.
+func (m *SpotifyConnectionMutation) SetDayPlaylist(sps *schema.SpotifyPlaylistSlot) {
+	m.day_playlist = &sps
+}
+
+// DayPlaylist returns the value of the "day_playlist" field in the mutation.
+func (m *SpotifyConnectionMutation) DayPlaylist() (r *schema.SpotifyPlaylistSlot, exists bool) {
+	v := m.day_playlist
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDayPlaylist returns the old "day_playlist" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldDayPlaylist(ctx context.Context) (v *schema.SpotifyPlaylistSlot, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDayPlaylist is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDayPlaylist requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDayPlaylist: %w", err)
+	}
+	return oldValue.DayPlaylist, nil
+}
+
+// ClearDayPlaylist clears the value of the "day_playlist" field.
+func (m *SpotifyConnectionMutation) ClearDayPlaylist() {
+	m.day_playlist = nil
+	m.clearedFields[spotifyconnection.FieldDayPlaylist] = struct{}{}
+}
+
+// DayPlaylistCleared returns if the "day_playlist" field was cleared in this mutation.
+func (m *SpotifyConnectionMutation) DayPlaylistCleared() bool {
+	_, ok := m.clearedFields[spotifyconnection.FieldDayPlaylist]
+	return ok
+}
+
+// ResetDayPlaylist resets all changes to the "day_playlist" field.
+func (m *SpotifyConnectionMutation) ResetDayPlaylist() {
+	m.day_playlist = nil
+	delete(m.clearedFields, spotifyconnection.FieldDayPlaylist)
+}
+
+// SetNightPlaylist sets the "night_playlist" field.
+func (m *SpotifyConnectionMutation) SetNightPlaylist(sps *schema.SpotifyPlaylistSlot) {
+	m.night_playlist = &sps
+}
+
+// NightPlaylist returns the value of the "night_playlist" field in the mutation.
+func (m *SpotifyConnectionMutation) NightPlaylist() (r *schema.SpotifyPlaylistSlot, exists bool) {
+	v := m.night_playlist
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNightPlaylist returns the old "night_playlist" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldNightPlaylist(ctx context.Context) (v *schema.SpotifyPlaylistSlot, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNightPlaylist is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNightPlaylist requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNightPlaylist: %w", err)
+	}
+	return oldValue.NightPlaylist, nil
+}
+
+// ClearNightPlaylist clears the value of the "night_playlist" field.
+func (m *SpotifyConnectionMutation) ClearNightPlaylist() {
+	m.night_playlist = nil
+	m.clearedFields[spotifyconnection.FieldNightPlaylist] = struct{}{}
+}
+
+// NightPlaylistCleared returns if the "night_playlist" field was cleared in this mutation.
+func (m *SpotifyConnectionMutation) NightPlaylistCleared() bool {
+	_, ok := m.clearedFields[spotifyconnection.FieldNightPlaylist]
+	return ok
+}
+
+// ResetNightPlaylist resets all changes to the "night_playlist" field.
+func (m *SpotifyConnectionMutation) ResetNightPlaylist() {
+	m.night_playlist = nil
+	delete(m.clearedFields, spotifyconnection.FieldNightPlaylist)
+}
+
+// SetNominationsPlaylist sets the "nominations_playlist" field.
+func (m *SpotifyConnectionMutation) SetNominationsPlaylist(sps *schema.SpotifyPlaylistSlot) {
+	m.nominations_playlist = &sps
+}
+
+// NominationsPlaylist returns the value of the "nominations_playlist" field in the mutation.
+func (m *SpotifyConnectionMutation) NominationsPlaylist() (r *schema.SpotifyPlaylistSlot, exists bool) {
+	v := m.nominations_playlist
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNominationsPlaylist returns the old "nominations_playlist" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldNominationsPlaylist(ctx context.Context) (v *schema.SpotifyPlaylistSlot, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNominationsPlaylist is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNominationsPlaylist requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNominationsPlaylist: %w", err)
+	}
+	return oldValue.NominationsPlaylist, nil
+}
+
+// ClearNominationsPlaylist clears the value of the "nominations_playlist" field.
+func (m *SpotifyConnectionMutation) ClearNominationsPlaylist() {
+	m.nominations_playlist = nil
+	m.clearedFields[spotifyconnection.FieldNominationsPlaylist] = struct{}{}
+}
+
+// NominationsPlaylistCleared returns if the "nominations_playlist" field was cleared in this mutation.
+func (m *SpotifyConnectionMutation) NominationsPlaylistCleared() bool {
+	_, ok := m.clearedFields[spotifyconnection.FieldNominationsPlaylist]
+	return ok
+}
+
+// ResetNominationsPlaylist resets all changes to the "nominations_playlist" field.
+func (m *SpotifyConnectionMutation) ResetNominationsPlaylist() {
+	m.nominations_playlist = nil
+	delete(m.clearedFields, spotifyconnection.FieldNominationsPlaylist)
+}
+
+// SetUserID sets the "user_id" field.
+func (m *SpotifyConnectionMutation) SetUserID(i int) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *SpotifyConnectionMutation) UserID() (r int, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the SpotifyConnection entity.
+// If the SpotifyConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SpotifyConnectionMutation) OldUserID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *SpotifyConnectionMutation) ResetUserID() {
+	m.user = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *SpotifyConnectionMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[spotifyconnection.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *SpotifyConnectionMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *SpotifyConnectionMutation) UserIDs() (ids []int) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *SpotifyConnectionMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// Where appends a list predicates to the SpotifyConnectionMutation builder.
+func (m *SpotifyConnectionMutation) Where(ps ...predicate.SpotifyConnection) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SpotifyConnectionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SpotifyConnectionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SpotifyConnection, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SpotifyConnectionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SpotifyConnectionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SpotifyConnection).
+func (m *SpotifyConnectionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SpotifyConnectionMutation) Fields() []string {
+	fields := make([]string, 0, 12)
+	if m.created_at != nil {
+		fields = append(fields, spotifyconnection.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, spotifyconnection.FieldUpdatedAt)
+	}
+	if m.spotify_user_id != nil {
+		fields = append(fields, spotifyconnection.FieldSpotifyUserID)
+	}
+	if m.display_name != nil {
+		fields = append(fields, spotifyconnection.FieldDisplayName)
+	}
+	if m.premium != nil {
+		fields = append(fields, spotifyconnection.FieldPremium)
+	}
+	if m.refresh_token != nil {
+		fields = append(fields, spotifyconnection.FieldRefreshToken)
+	}
+	if m.access_token != nil {
+		fields = append(fields, spotifyconnection.FieldAccessToken)
+	}
+	if m.access_token_expires_at != nil {
+		fields = append(fields, spotifyconnection.FieldAccessTokenExpiresAt)
+	}
+	if m.day_playlist != nil {
+		fields = append(fields, spotifyconnection.FieldDayPlaylist)
+	}
+	if m.night_playlist != nil {
+		fields = append(fields, spotifyconnection.FieldNightPlaylist)
+	}
+	if m.nominations_playlist != nil {
+		fields = append(fields, spotifyconnection.FieldNominationsPlaylist)
+	}
+	if m.user != nil {
+		fields = append(fields, spotifyconnection.FieldUserID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SpotifyConnectionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case spotifyconnection.FieldCreatedAt:
+		return m.CreatedAt()
+	case spotifyconnection.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case spotifyconnection.FieldSpotifyUserID:
+		return m.SpotifyUserID()
+	case spotifyconnection.FieldDisplayName:
+		return m.DisplayName()
+	case spotifyconnection.FieldPremium:
+		return m.Premium()
+	case spotifyconnection.FieldRefreshToken:
+		return m.RefreshToken()
+	case spotifyconnection.FieldAccessToken:
+		return m.AccessToken()
+	case spotifyconnection.FieldAccessTokenExpiresAt:
+		return m.AccessTokenExpiresAt()
+	case spotifyconnection.FieldDayPlaylist:
+		return m.DayPlaylist()
+	case spotifyconnection.FieldNightPlaylist:
+		return m.NightPlaylist()
+	case spotifyconnection.FieldNominationsPlaylist:
+		return m.NominationsPlaylist()
+	case spotifyconnection.FieldUserID:
+		return m.UserID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SpotifyConnectionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case spotifyconnection.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case spotifyconnection.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case spotifyconnection.FieldSpotifyUserID:
+		return m.OldSpotifyUserID(ctx)
+	case spotifyconnection.FieldDisplayName:
+		return m.OldDisplayName(ctx)
+	case spotifyconnection.FieldPremium:
+		return m.OldPremium(ctx)
+	case spotifyconnection.FieldRefreshToken:
+		return m.OldRefreshToken(ctx)
+	case spotifyconnection.FieldAccessToken:
+		return m.OldAccessToken(ctx)
+	case spotifyconnection.FieldAccessTokenExpiresAt:
+		return m.OldAccessTokenExpiresAt(ctx)
+	case spotifyconnection.FieldDayPlaylist:
+		return m.OldDayPlaylist(ctx)
+	case spotifyconnection.FieldNightPlaylist:
+		return m.OldNightPlaylist(ctx)
+	case spotifyconnection.FieldNominationsPlaylist:
+		return m.OldNominationsPlaylist(ctx)
+	case spotifyconnection.FieldUserID:
+		return m.OldUserID(ctx)
+	}
+	return nil, fmt.Errorf("unknown SpotifyConnection field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SpotifyConnectionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case spotifyconnection.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case spotifyconnection.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case spotifyconnection.FieldSpotifyUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSpotifyUserID(v)
+		return nil
+	case spotifyconnection.FieldDisplayName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisplayName(v)
+		return nil
+	case spotifyconnection.FieldPremium:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPremium(v)
+		return nil
+	case spotifyconnection.FieldRefreshToken:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRefreshToken(v)
+		return nil
+	case spotifyconnection.FieldAccessToken:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAccessToken(v)
+		return nil
+	case spotifyconnection.FieldAccessTokenExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAccessTokenExpiresAt(v)
+		return nil
+	case spotifyconnection.FieldDayPlaylist:
+		v, ok := value.(*schema.SpotifyPlaylistSlot)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDayPlaylist(v)
+		return nil
+	case spotifyconnection.FieldNightPlaylist:
+		v, ok := value.(*schema.SpotifyPlaylistSlot)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNightPlaylist(v)
+		return nil
+	case spotifyconnection.FieldNominationsPlaylist:
+		v, ok := value.(*schema.SpotifyPlaylistSlot)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNominationsPlaylist(v)
+		return nil
+	case spotifyconnection.FieldUserID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SpotifyConnection field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SpotifyConnectionMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SpotifyConnectionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SpotifyConnectionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown SpotifyConnection numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SpotifyConnectionMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(spotifyconnection.FieldDisplayName) {
+		fields = append(fields, spotifyconnection.FieldDisplayName)
+	}
+	if m.FieldCleared(spotifyconnection.FieldAccessToken) {
+		fields = append(fields, spotifyconnection.FieldAccessToken)
+	}
+	if m.FieldCleared(spotifyconnection.FieldAccessTokenExpiresAt) {
+		fields = append(fields, spotifyconnection.FieldAccessTokenExpiresAt)
+	}
+	if m.FieldCleared(spotifyconnection.FieldDayPlaylist) {
+		fields = append(fields, spotifyconnection.FieldDayPlaylist)
+	}
+	if m.FieldCleared(spotifyconnection.FieldNightPlaylist) {
+		fields = append(fields, spotifyconnection.FieldNightPlaylist)
+	}
+	if m.FieldCleared(spotifyconnection.FieldNominationsPlaylist) {
+		fields = append(fields, spotifyconnection.FieldNominationsPlaylist)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SpotifyConnectionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SpotifyConnectionMutation) ClearField(name string) error {
+	switch name {
+	case spotifyconnection.FieldDisplayName:
+		m.ClearDisplayName()
+		return nil
+	case spotifyconnection.FieldAccessToken:
+		m.ClearAccessToken()
+		return nil
+	case spotifyconnection.FieldAccessTokenExpiresAt:
+		m.ClearAccessTokenExpiresAt()
+		return nil
+	case spotifyconnection.FieldDayPlaylist:
+		m.ClearDayPlaylist()
+		return nil
+	case spotifyconnection.FieldNightPlaylist:
+		m.ClearNightPlaylist()
+		return nil
+	case spotifyconnection.FieldNominationsPlaylist:
+		m.ClearNominationsPlaylist()
+		return nil
+	}
+	return fmt.Errorf("unknown SpotifyConnection nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SpotifyConnectionMutation) ResetField(name string) error {
+	switch name {
+	case spotifyconnection.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case spotifyconnection.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case spotifyconnection.FieldSpotifyUserID:
+		m.ResetSpotifyUserID()
+		return nil
+	case spotifyconnection.FieldDisplayName:
+		m.ResetDisplayName()
+		return nil
+	case spotifyconnection.FieldPremium:
+		m.ResetPremium()
+		return nil
+	case spotifyconnection.FieldRefreshToken:
+		m.ResetRefreshToken()
+		return nil
+	case spotifyconnection.FieldAccessToken:
+		m.ResetAccessToken()
+		return nil
+	case spotifyconnection.FieldAccessTokenExpiresAt:
+		m.ResetAccessTokenExpiresAt()
+		return nil
+	case spotifyconnection.FieldDayPlaylist:
+		m.ResetDayPlaylist()
+		return nil
+	case spotifyconnection.FieldNightPlaylist:
+		m.ResetNightPlaylist()
+		return nil
+	case spotifyconnection.FieldNominationsPlaylist:
+		m.ResetNominationsPlaylist()
+		return nil
+	case spotifyconnection.FieldUserID:
+		m.ResetUserID()
+		return nil
+	}
+	return fmt.Errorf("unknown SpotifyConnection field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SpotifyConnectionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.user != nil {
+		edges = append(edges, spotifyconnection.EdgeUser)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SpotifyConnectionMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case spotifyconnection.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SpotifyConnectionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SpotifyConnectionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SpotifyConnectionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.cleareduser {
+		edges = append(edges, spotifyconnection.EdgeUser)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SpotifyConnectionMutation) EdgeCleared(name string) bool {
+	switch name {
+	case spotifyconnection.EdgeUser:
+		return m.cleareduser
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SpotifyConnectionMutation) ClearEdge(name string) error {
+	switch name {
+	case spotifyconnection.EdgeUser:
+		m.ClearUser()
+		return nil
+	}
+	return fmt.Errorf("unknown SpotifyConnection unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SpotifyConnectionMutation) ResetEdge(name string) error {
+	switch name {
+	case spotifyconnection.EdgeUser:
+		m.ResetUser()
+		return nil
+	}
+	return fmt.Errorf("unknown SpotifyConnection edge %s", name)
+}
+
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *int
-	created_at           *time.Time
-	updated_at           *time.Time
-	uuid                 *string
-	discord_id           *string
-	discord_username     *string
-	discord_avatar       *string
-	is_anonymous         *bool
-	last_active_at       *time.Time
-	player_presets       *[]string
-	appendplayer_presets []string
-	clearedFields        map[string]struct{}
-	scripts              map[int]struct{}
-	removedscripts       map[int]struct{}
-	clearedscripts       bool
-	games                map[int]struct{}
-	removedgames         map[int]struct{}
-	clearedgames         bool
-	info_cards           map[int]struct{}
-	removedinfo_cards    map[int]struct{}
-	clearedinfo_cards    bool
-	done                 bool
-	oldValue             func(context.Context) (*User, error)
-	predicates           []predicate.User
+	op                        Op
+	typ                       string
+	id                        *int
+	created_at                *time.Time
+	updated_at                *time.Time
+	uuid                      *string
+	discord_id                *string
+	discord_username          *string
+	discord_avatar            *string
+	is_anonymous              *bool
+	last_active_at            *time.Time
+	player_presets            *[]string
+	appendplayer_presets      []string
+	clearedFields             map[string]struct{}
+	scripts                   map[int]struct{}
+	removedscripts            map[int]struct{}
+	clearedscripts            bool
+	games                     map[int]struct{}
+	removedgames              map[int]struct{}
+	clearedgames              bool
+	info_cards                map[int]struct{}
+	removedinfo_cards         map[int]struct{}
+	clearedinfo_cards         bool
+	spotify_connection        *int
+	clearedspotify_connection bool
+	done                      bool
+	oldValue                  func(context.Context) (*User, error)
+	predicates                []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -5931,6 +7029,45 @@ func (m *UserMutation) ResetInfoCards() {
 	m.removedinfo_cards = nil
 }
 
+// SetSpotifyConnectionID sets the "spotify_connection" edge to the SpotifyConnection entity by id.
+func (m *UserMutation) SetSpotifyConnectionID(id int) {
+	m.spotify_connection = &id
+}
+
+// ClearSpotifyConnection clears the "spotify_connection" edge to the SpotifyConnection entity.
+func (m *UserMutation) ClearSpotifyConnection() {
+	m.clearedspotify_connection = true
+}
+
+// SpotifyConnectionCleared reports if the "spotify_connection" edge to the SpotifyConnection entity was cleared.
+func (m *UserMutation) SpotifyConnectionCleared() bool {
+	return m.clearedspotify_connection
+}
+
+// SpotifyConnectionID returns the "spotify_connection" edge ID in the mutation.
+func (m *UserMutation) SpotifyConnectionID() (id int, exists bool) {
+	if m.spotify_connection != nil {
+		return *m.spotify_connection, true
+	}
+	return
+}
+
+// SpotifyConnectionIDs returns the "spotify_connection" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// SpotifyConnectionID instead. It exists only for internal usage by the builders.
+func (m *UserMutation) SpotifyConnectionIDs() (ids []int) {
+	if id := m.spotify_connection; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetSpotifyConnection resets all changes to the "spotify_connection" edge.
+func (m *UserMutation) ResetSpotifyConnection() {
+	m.spotify_connection = nil
+	m.clearedspotify_connection = false
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -6227,7 +7364,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.scripts != nil {
 		edges = append(edges, user.EdgeScripts)
 	}
@@ -6236,6 +7373,9 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.info_cards != nil {
 		edges = append(edges, user.EdgeInfoCards)
+	}
+	if m.spotify_connection != nil {
+		edges = append(edges, user.EdgeSpotifyConnection)
 	}
 	return edges
 }
@@ -6262,13 +7402,17 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeSpotifyConnection:
+		if id := m.spotify_connection; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedscripts != nil {
 		edges = append(edges, user.EdgeScripts)
 	}
@@ -6309,7 +7453,7 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.clearedscripts {
 		edges = append(edges, user.EdgeScripts)
 	}
@@ -6318,6 +7462,9 @@ func (m *UserMutation) ClearedEdges() []string {
 	}
 	if m.clearedinfo_cards {
 		edges = append(edges, user.EdgeInfoCards)
+	}
+	if m.clearedspotify_connection {
+		edges = append(edges, user.EdgeSpotifyConnection)
 	}
 	return edges
 }
@@ -6332,6 +7479,8 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedgames
 	case user.EdgeInfoCards:
 		return m.clearedinfo_cards
+	case user.EdgeSpotifyConnection:
+		return m.clearedspotify_connection
 	}
 	return false
 }
@@ -6340,6 +7489,9 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *UserMutation) ClearEdge(name string) error {
 	switch name {
+	case user.EdgeSpotifyConnection:
+		m.ClearSpotifyConnection()
+		return nil
 	}
 	return fmt.Errorf("unknown User unique edge %s", name)
 }
@@ -6356,6 +7508,9 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgeInfoCards:
 		m.ResetInfoCards()
+		return nil
+	case user.EdgeSpotifyConnection:
+		m.ResetSpotifyConnection()
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)

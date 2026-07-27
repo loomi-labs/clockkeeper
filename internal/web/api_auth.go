@@ -179,10 +179,16 @@ func (h *ClockKeeperServiceHandler) CreateAnonymousSession(ctx context.Context, 
 
 // GetAuthConfig returns authentication configuration for the frontend.
 func (h *ClockKeeperServiceHandler) GetAuthConfig(ctx context.Context, req *connect.Request[clockkeeperv1.GetAuthConfigRequest]) (*connect.Response[clockkeeperv1.GetAuthConfigResponse], error) {
-	return connect.NewResponse(&clockkeeperv1.GetAuthConfigResponse{
+	resp := &clockkeeperv1.GetAuthConfigResponse{
 		DiscordClientId:  h.config.DiscordClientID,
 		AnonymousEnabled: true,
-	}), nil
+	}
+	// An empty spotify_client_id tells the frontend the feature is off, so only
+	// advertise the ID when the full OAuth config is present.
+	if h.config.SpotifyConfigured() {
+		resp.SpotifyClientId = h.config.SpotifyClientID
+	}
+	return connect.NewResponse(resp), nil
 }
 
 // nilIfEmpty returns a pointer to s if non-empty, or nil.
