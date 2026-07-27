@@ -12,9 +12,22 @@ BEGIN;
 --    The uuid must match devSingleUserUUID in internal/web/api_auth.go.
 --    is_anonymous is false on purpose: that excludes it (and its games) from the
 --    stale-anonymous-user cleanup in internal/web/cleanup.go.
-INSERT INTO users (created_at, updated_at, uuid, is_anonymous, last_active_at)
-VALUES (NOW(), NOW(), 'dev-local-user', false, NOW())
+--    player_presets seeds the name picker with 16 players; the first ten match the
+--    grimoire_player_names of the seeded games below so setup cross-references them.
+INSERT INTO users (created_at, updated_at, uuid, is_anonymous, last_active_at, player_presets)
+VALUES (NOW(), NOW(), 'dev-local-user', false, NOW(),
+  '["Alice","Bob","Carla","Dorian","Elena","Femi","Gus","Hana","Ivan","Jo",
+    "Kira","Luca","Mira","Noah","Omar","Priya"]'::jsonb)
 ON CONFLICT (uuid) DO NOTHING;
+
+-- 1b. Backfill the presets for DBs seeded before they existed (the insert above is
+--     a no-op there because of ON CONFLICT DO NOTHING).
+UPDATE users
+SET player_presets = '["Alice","Bob","Carla","Dorian","Elena","Femi","Gus","Hana","Ivan","Jo",
+                       "Kira","Luca","Mira","Noah","Omar","Priya"]'::jsonb,
+    updated_at = NOW()
+WHERE uuid = 'dev-local-user'
+  AND (player_presets IS NULL OR jsonb_array_length(player_presets) = 0);
 
 -- 2. A 7-player Trouble Brewing game still in setup.
 INSERT INTO games (

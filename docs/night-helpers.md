@@ -11,7 +11,8 @@ control:
 - The **Empath** helper counts evil neighbours for you.
 - The **Chef** helper counts pairs of adjacent evils.
 - The **Undertaker** helper names the player executed on the previous day and can
-  show that character's token card.
+  show that character's token card. It reports the executed seat's real
+  character, so a Drunk shows as the Drunk.
 - The **Fortune Teller** helper lets you pick two players and tells you whether a
   Demon (or Red Herring) is among them.
 - The **Washerwoman / Librarian / Investigator** helper lets you pick the
@@ -23,7 +24,8 @@ control:
   "Master" / "Poisoned" / "Safe" / "3 Votes" / "Negative Vote" reminder token,
   kept in sync with manual grimoire attachment.
 - The **Ravenkeeper** helper renders only the night the Ravenkeeper dies: pick a
-  player to learn their displayed character and show the character-token card.
+  player to learn their real character (a Drunk is learned as the Drunk) and show
+  the character-token card.
 - The **Scarlet Woman** helper is an alert that fires when the Demon dies with
   5+ non-Traveller players alive (counting the Demon before their death),
   opening the revertible promotion prompt.
@@ -62,6 +64,14 @@ Two nuances worth knowing:
   `playerIdForEntry(entryId)` to resolve the seat, and `displayedCharacterOf`
   to resolve what players see, so a helper classifies a seat by its shown token
   rather than its real role.
+- **Displayed vs. true character.** The bag-sub facade is only what the
+  substituted player believes, so it applies to players'-perspective displays
+  (`displayedCharacterOf`, used by the first-night info helpers) but never to
+  info a character _learns_ from the grimoire. The **Undertaker** and
+  **Ravenkeeper** therefore read `HelperPlayer.trueCharacter` (built by
+  `resolveTrueCharacter` in `night-helpers/helpers.ts`): the seat's own role,
+  ignoring any bag substitution, or the acts-as character when the seat has been
+  promoted (a star-passed Baron really is the Imp now).
 
 ## Registration ranges (Recluse / Spy)
 
@@ -98,15 +108,15 @@ Legend for "Night": F = has a first-night action, O = has an other-night action,
 | Chef          | Townsfolk | F     | ChefHelper           | Implemented. Counts adjacent evil pairs; range under Recluse/Spy.                                                                                                                                    |
 | Empath        | Townsfolk | FO    | EmpathHelper         | Implemented. Counts evil neighbours; range under Recluse/Spy.                                                                                                                                        |
 | Fortuneteller | Townsfolk | FO    | FortuneTellerHelper  | Implemented. Two-player pick; Red Herring aware (Set-Red-Herring button attaches the token) plus a compact "Demon: …" display; Recluse-may-yes.                                                      |
-| Undertaker    | Townsfolk | O     | UndertakerHelper     | Implemented. Names yesterday's execution, plus a "Show card" button that shows the bare character-token card for the executed player's displayed character.                                            |
+| Undertaker    | Townsfolk | O     | UndertakerHelper     | Implemented. Names yesterday's execution, plus a "Show card" button that shows the bare character-token card. Uses the executed seat's TRUE character (grimoire truth): a Drunk shows as the Drunk, never the Townsfolk facade; a promoted seat shows its acts-as character. "Show different…" still overrides both. |
 | Monk          | Townsfolk | O     | TokenPickHelper      | Implemented. Single-player picker (`TokenPickHelper`, excludes the Monk's own seat) that attaches the "Safe" (protected) reminder token; acts on other nights only.                                  |
-| Ravenkeeper   | Townsfolk | O     | RavenkeeperHelper    | Implemented. Conditional — renders only the night the Ravenkeeper died (via `diedTonight`). Pick a player to learn their displayed character; shows the bare character-token card.                   |
+| Ravenkeeper   | Townsfolk | O     | RavenkeeperHelper    | Implemented. Conditional — renders only the night the Ravenkeeper died (via `diedTonight`). Pick a player to learn their TRUE character (grimoire truth): a Drunk is learned as the Drunk, never the Townsfolk facade; a promoted seat is learned as its acts-as character. Shows the bare character-token card; "Show different…" still overrides. |
 | Virgin        | Townsfolk | -     | none                 | No helper. Day-time nomination trigger; nothing to compute at night. Has a "No Ability" reminder the ST places manually.                                                                             |
 | Slayer        | Townsfolk | -     | none                 | No helper. Day-time public ability; nothing at night.                                                                                                                                                |
 | Soldier       | Townsfolk | -     | none                 | No helper. Passive Demon immunity; no ST input.                                                                                                                                                      |
 | Mayor         | Townsfolk | -     | none                 | No helper. Passive win/bounce condition; no night action.                                                                                                                                            |
 | Butler        | Outsider  | FO    | TokenPickHelper      | Implemented. Single-player picker (excludes the Butler's own seat) that attaches the "Master" reminder token; bidirectional with manual grimoire attachment.                                         |
-| Drunk         | Outsider  | -     | none (bag sub)       | No standalone helper. Handled by the bag-substitution flow: the Drunk shows a Townsfolk token, and the "Is the Drunk" grimoire token can be dragged onto a Townsfolk seat to reassign the real role. |
+| Drunk         | Outsider  | -     | none (bag sub)       | No standalone helper. Handled by the bag-substitution flow: the Drunk shows a Townsfolk token, and the "Is the Drunk" grimoire token can be dragged onto a Townsfolk seat to reassign the real role. The facade is a player-perspective display only — the Drunk's real character is the Drunk, so the Undertaker and Ravenkeeper learn "Drunk" (see `HelperPlayer.trueCharacter`). |
 | Recluse       | Outsider  | -     | none                 | No helper. Passive misregistration; surfaced as ranges in the Empath/Chef/FT helpers rather than its own widget.                                                                                     |
 | Saint         | Outsider  | -     | none                 | No helper. Passive execution-loss condition; no night action.                                                                                                                                        |
 | Poisoner      | Minion    | FO    | TokenPickHelper      | Implemented. Single-player picker (may target anyone, including the Poisoner) that attaches the "Poisoned" reminder token, which the state-aware night sheet already reads to flag impaired info.    |

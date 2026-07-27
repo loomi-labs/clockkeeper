@@ -75,6 +75,7 @@
   import {
     findExecutedToday,
     newDeathsTonight,
+    resolveTrueCharacter,
   } from "~/lib/night-helpers/helpers";
   import type { HelperPlayer } from "~/lib/night-helpers/helpers";
   import { buildPromotionsByRole } from "~/lib/promotions";
@@ -466,7 +467,12 @@
     randomizing = true;
     error = "";
     try {
-      const resp = await client.randomizeRoles({ gameId: game.id });
+      // Padlocked seats keep their role (and their name, which is keyed by role
+      // id) — the backend re-randomizes only the rest.
+      const resp = await client.randomizeRoles({
+        gameId: game.id,
+        lockedRoleIds: [...lockedNameIds],
+      });
       game = resp.game;
     } catch (err) {
       error = getErrorMessage(err, "Failed to randomize roles");
@@ -1692,6 +1698,13 @@
         characterName: promo ? promo.label : sub?.characterName || c.name,
         team: promo ? promo.actsAsTeam : c.team,
         edition: promo ? promo.actsAsEdition : c.edition,
+        // Grimoire truth for learned info (Undertaker/Ravenkeeper): the bag-sub
+        // facade above is a player-perspective display only.
+        trueCharacter: resolveTrueCharacter({
+          own: { id: c.id, name: c.name, edition: c.edition, team: c.team },
+          promotion: promo,
+          bagSub: sub,
+        }),
         isDead: nightDeadRoleIds.has(c.id),
         alignment: effectiveAlignment(
           c.id,

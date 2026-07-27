@@ -224,7 +224,7 @@ func TestRandomizeRoles(t *testing.T) {
 		{ID: "imp", Team: TeamDemon},
 	}
 
-	result, err := RandomizeRoles(chars, 7)
+	result, err := RandomizeRoles(chars, 7, nil)
 	require.NoError(t, err)
 	assert.Len(t, result.SelectedIDs, 7)
 
@@ -266,7 +266,7 @@ func TestRandomizeRoles_BaronSelected(t *testing.T) {
 		{ID: "imp", Team: TeamDemon},
 	}
 
-	result, err := RandomizeRoles(chars, 7)
+	result, err := RandomizeRoles(chars, 7, nil)
 	require.NoError(t, err)
 	assert.Len(t, result.SelectedIDs, 7)
 
@@ -295,7 +295,7 @@ func TestRandomizeRoles_BaronNotInScript(t *testing.T) {
 		{ID: "imp", Team: TeamDemon},
 	}
 
-	result, err := RandomizeRoles(chars, 7)
+	result, err := RandomizeRoles(chars, 7, nil)
 	require.NoError(t, err)
 	assert.Len(t, result.SelectedIDs, 7)
 
@@ -320,7 +320,7 @@ func TestRandomizeRoles_BaronClampedToPool(t *testing.T) {
 		{ID: "imp", Team: TeamDemon},
 	}
 
-	result, err := RandomizeRoles(chars, 7)
+	result, err := RandomizeRoles(chars, 7, nil)
 	require.NoError(t, err)
 	assert.Len(t, result.SelectedIDs, 7)
 
@@ -352,7 +352,7 @@ func TestRandomizeRoles_MultipleModifiers(t *testing.T) {
 		{ID: "fanggu", Team: TeamDemon, Setup: true},
 	}
 
-	result, err := RandomizeRoles(chars, 10)
+	result, err := RandomizeRoles(chars, 10, nil)
 	require.NoError(t, err)
 	assert.Len(t, result.SelectedIDs, 10)
 
@@ -384,7 +384,7 @@ func TestRandomizeRoles_BalloonistFixup(t *testing.T) {
 
 	foundBalloonist := false
 	for range 50 {
-		result, err := RandomizeRoles(chars, 8)
+		result, err := RandomizeRoles(chars, 8, nil)
 		require.NoError(t, err)
 		assert.Len(t, result.SelectedIDs, 8)
 
@@ -429,7 +429,7 @@ func TestRandomizeRoles_LilMonstaExtraMinion(t *testing.T) {
 		{ID: "lilmonsta", Team: TeamDemon, Setup: true},
 	}
 
-	result, err := RandomizeRoles(chars, 10)
+	result, err := RandomizeRoles(chars, 10, nil)
 	require.NoError(t, err)
 	assert.Len(t, result.SelectedIDs, 10)
 
@@ -463,7 +463,7 @@ func TestRandomizeRoles_DrunkBagSubstitution(t *testing.T) {
 	// Run multiple times — Drunk may or may not be selected.
 	foundDrunk := false
 	for range 50 {
-		result, err := RandomizeRoles(chars, 8)
+		result, err := RandomizeRoles(chars, 8, nil)
 		require.NoError(t, err)
 
 		hasDrunk := false
@@ -509,7 +509,7 @@ func TestRandomizeRoles_ChoirboyAddsKing(t *testing.T) {
 	// Run multiple times to hit the case where Choirboy is selected.
 	foundChoirboy := false
 	for range 50 {
-		result, err := RandomizeRoles(chars, 8)
+		result, err := RandomizeRoles(chars, 8, nil)
 		require.NoError(t, err)
 		assert.Len(t, result.SelectedIDs, 8)
 
@@ -549,7 +549,7 @@ func TestRandomizeRoles_HuntsmanAddsDamsel(t *testing.T) {
 	// Run multiple times.
 	foundHuntsman := false
 	for range 50 {
-		result, err := RandomizeRoles(chars, 8)
+		result, err := RandomizeRoles(chars, 8, nil)
 		require.NoError(t, err)
 		assert.Len(t, result.SelectedIDs, 8)
 
@@ -591,7 +591,7 @@ func TestRandomizeRoles_CompanionNotOnScript(t *testing.T) {
 	// Run multiple times.
 	foundManual := false
 	for range 50 {
-		result, err := RandomizeRoles(chars, 8)
+		result, err := RandomizeRoles(chars, 8, nil)
 		require.NoError(t, err)
 
 		hasChoirboy := false
@@ -622,8 +622,210 @@ func TestRandomizeRoles_NotEnoughCharacters(t *testing.T) {
 		{ID: "imp", Team: TeamDemon},
 	}
 
-	_, err := RandomizeRoles(chars, 5)
+	_, err := RandomizeRoles(chars, 5, nil)
 	assert.Error(t, err)
+}
+
+// --- RandomizeRoles locked-role tests ---
+
+// troubleBrewingChars returns a full TB-like pool for lock tests.
+func troubleBrewingChars() []*Character {
+	return []*Character{
+		{ID: "washerwoman", Team: TeamTownsfolk},
+		{ID: "librarian", Team: TeamTownsfolk},
+		{ID: "investigator", Team: TeamTownsfolk},
+		{ID: "chef", Team: TeamTownsfolk},
+		{ID: "empath", Team: TeamTownsfolk},
+		{ID: "fortuneteller", Team: TeamTownsfolk},
+		{ID: "undertaker", Team: TeamTownsfolk},
+		{ID: "monk", Team: TeamTownsfolk},
+		{ID: "ravenkeeper", Team: TeamTownsfolk},
+		{ID: "virgin", Team: TeamTownsfolk},
+		{ID: "slayer", Team: TeamTownsfolk},
+		{ID: "soldier", Team: TeamTownsfolk},
+		{ID: "mayor", Team: TeamTownsfolk},
+		{ID: "butler", Team: TeamOutsider},
+		{ID: "recluse", Team: TeamOutsider},
+		{ID: "saint", Team: TeamOutsider},
+		{ID: "poisoner", Team: TeamMinion},
+		{ID: "spy", Team: TeamMinion},
+		{ID: "scarletwoman", Team: TeamMinion},
+		{ID: "baron", Team: TeamMinion, Setup: true},
+		{ID: "imp", Team: TeamDemon},
+	}
+}
+
+func TestRandomizeRoles_KeepsLockedRoles(t *testing.T) {
+	chars := troubleBrewingChars()
+	locked := []string{"chef", "mayor", "spy"}
+
+	for i := 0; i < 50; i++ {
+		result, err := RandomizeRoles(chars, 10, locked)
+		require.NoError(t, err)
+		assert.Len(t, result.SelectedIDs, 10)
+		for _, id := range locked {
+			assert.Contains(t, result.SelectedIDs, id, "locked role %q must be kept", id)
+		}
+		// No duplicates.
+		idSet := make(map[string]bool, len(result.SelectedIDs))
+		for _, id := range result.SelectedIDs {
+			assert.False(t, idSet[id], "duplicate role %q", id)
+			idSet[id] = true
+		}
+	}
+}
+
+func TestRandomizeRoles_KeepsLockedEvilPair(t *testing.T) {
+	chars := troubleBrewingChars()
+	locked := []string{"imp", "poisoner"}
+
+	for i := 0; i < 50; i++ {
+		result, err := RandomizeRoles(chars, 7, locked)
+		require.NoError(t, err)
+		assert.Contains(t, result.SelectedIDs, "imp")
+		assert.Contains(t, result.SelectedIDs, "poisoner")
+
+		// Poisoner has no setup effect, so the base 7-player distribution applies.
+		counts := countTeams(t, result.SelectedIDs, chars)
+		assert.Equal(t, 5, counts[TeamTownsfolk])
+		assert.Equal(t, 0, counts[TeamOutsider])
+		assert.Equal(t, 1, counts[TeamMinion])
+		assert.Equal(t, 1, counts[TeamDemon])
+	}
+}
+
+func TestRandomizeRoles_LockedRolesKeepDistributionLegal(t *testing.T) {
+	chars := troubleBrewingChars()
+	// Lock a mix of teams; 12 players → base {7, 2, 2, 1}.
+	locked := []string{"washerwoman", "butler", "scarletwoman"}
+
+	for i := 0; i < 50; i++ {
+		result, err := RandomizeRoles(chars, 12, locked)
+		require.NoError(t, err)
+		require.Len(t, result.SelectedIDs, 12)
+		for _, id := range locked {
+			assert.Contains(t, result.SelectedIDs, id)
+		}
+
+		selectedChars := make([]*Character, 0, len(result.SelectedIDs))
+		lookup := make(map[string]*Character, len(chars))
+		for _, c := range chars {
+			lookup[c.ID] = c
+		}
+		for _, id := range result.SelectedIDs {
+			selectedChars = append(selectedChars, lookup[id])
+		}
+		require.NoError(t, ValidateDistribution(selectedChars, 12))
+	}
+}
+
+// A locked Baron must still drive the setup modifier, and locked townsfolk must
+// survive the townsfolk→outsider trade it causes.
+func TestRandomizeRoles_LockedBaronAdjustsDistribution(t *testing.T) {
+	chars := troubleBrewingChars()
+	// 7 players: base {5, 0, 1, 1}; Baron makes it {3, 2, 1, 1}.
+	locked := []string{"baron", "chef", "empath", "mayor"}
+
+	for i := 0; i < 50; i++ {
+		result, err := RandomizeRoles(chars, 7, locked)
+		require.NoError(t, err)
+		for _, id := range locked {
+			assert.Contains(t, result.SelectedIDs, id, "locked role %q must be kept", id)
+		}
+		counts := countTeams(t, result.SelectedIDs, chars)
+		assert.Equal(t, 3, counts[TeamTownsfolk])
+		assert.Equal(t, 2, counts[TeamOutsider])
+		assert.Equal(t, 1, counts[TeamMinion])
+		assert.Equal(t, 1, counts[TeamDemon])
+	}
+}
+
+// A locked outsider at 7 players only fits if the minion pick is the Baron —
+// the randomizer retries until it finds a compatible evil pick.
+func TestRandomizeRoles_LockedOutsiderForcesCompatibleEvil(t *testing.T) {
+	chars := troubleBrewingChars()
+
+	for i := 0; i < 20; i++ {
+		result, err := RandomizeRoles(chars, 7, []string{"recluse"})
+		require.NoError(t, err)
+		assert.Contains(t, result.SelectedIDs, "recluse")
+		assert.Contains(t, result.SelectedIDs, "baron", "only the Baron creates an outsider slot at 7 players")
+	}
+}
+
+func TestRandomizeRoles_LockedTownsfolkExceedSlots(t *testing.T) {
+	chars := troubleBrewingChars()
+	// 7 players with a locked Baron leaves 3 townsfolk slots — 4 locked townsfolk
+	// cannot fit.
+	_, err := RandomizeRoles(chars, 7, []string{"baron", "chef", "empath", "mayor", "slayer"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "locked townsfolk")
+}
+
+func TestRandomizeRoles_LockedMinionsExceedSlots(t *testing.T) {
+	chars := troubleBrewingChars()
+	// 7 players has a single minion slot.
+	_, err := RandomizeRoles(chars, 7, []string{"poisoner", "spy"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "locked minion")
+}
+
+func TestRandomizeRoles_LockedDemonsExceedSlots(t *testing.T) {
+	chars := append(troubleBrewingChars(), &Character{ID: "zombuul", Team: TeamDemon})
+	_, err := RandomizeRoles(chars, 7, []string{"imp", "zombuul"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "locked demon")
+}
+
+func TestRandomizeRoles_LockedOutsidersExceedSlots(t *testing.T) {
+	chars := troubleBrewingChars()
+	// 10 players: base {7, 0, 2, 1}; only a Baron (+2) could open outsider slots,
+	// and even then three locked outsiders never fit.
+	_, err := RandomizeRoles(chars, 10, []string{"butler", "recluse", "saint"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "locked outsider")
+}
+
+func TestRandomizeRoles_LockedRoleNotOnScript(t *testing.T) {
+	chars := troubleBrewingChars()
+	_, err := RandomizeRoles(chars, 7, []string{"pixie"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "locked role not on script")
+}
+
+// Travellers are not part of the distribution — locking one is a no-op here.
+func TestRandomizeRoles_LockedTravellerIgnored(t *testing.T) {
+	chars := append(troubleBrewingChars(), &Character{ID: "scapegoat", Team: TeamTraveller})
+	result, err := RandomizeRoles(chars, 7, []string{"scapegoat"})
+	require.NoError(t, err)
+	assert.Len(t, result.SelectedIDs, 7)
+	assert.NotContains(t, result.SelectedIDs, "scapegoat")
+}
+
+// An empty lock set must behave exactly like the pre-lock randomizer.
+func TestRandomizeRoles_EmptyLockedUnchanged(t *testing.T) {
+	chars := troubleBrewingChars()
+	for _, locked := range [][]string{nil, {}} {
+		for i := 0; i < 20; i++ {
+			result, err := RandomizeRoles(chars, 9, locked)
+			require.NoError(t, err)
+			require.Len(t, result.SelectedIDs, 9)
+			counts := countTeams(t, result.SelectedIDs, chars)
+			assert.Equal(t, 1, counts[TeamDemon])
+			assert.Equal(t, 1, counts[TeamMinion])
+			assert.Equal(t, 9, counts[TeamTownsfolk]+counts[TeamOutsider]+counts[TeamMinion]+counts[TeamDemon])
+		}
+	}
+}
+
+// Duplicate locked ids must not inflate the per-team lock counts.
+func TestRandomizeRoles_DuplicateLockedIDs(t *testing.T) {
+	chars := troubleBrewingChars()
+	result, err := RandomizeRoles(chars, 7, []string{"chef", "chef", "poisoner", "poisoner"})
+	require.NoError(t, err)
+	assert.Contains(t, result.SelectedIDs, "chef")
+	assert.Contains(t, result.SelectedIDs, "poisoner")
+	assert.Len(t, result.SelectedIDs, 7)
 }
 
 // --- Helpers ---

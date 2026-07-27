@@ -63,6 +63,11 @@ export interface NightHelperContext {
    * Resolve the DISPLAYED character of a seat (bag-sub aware). Returns the
    * shown token — e.g. the Drunk shown as the Empath resolves to the Empath —
    * so a substituted seat is classified by what players see, not its real role.
+   *
+   * Only for players'-perspective displays (first-night info: Washerwoman /
+   * Librarian / Investigator). Info a character *learns* about a seat
+   * (Undertaker, Ravenkeeper) is grimoire truth and must use
+   * `HelperPlayer.trueCharacter` instead — the Drunk is learned as the Drunk.
    */
   displayedCharacterOf?: (
     playerId: string,

@@ -797,6 +797,26 @@
     demonKillFor = null;
   }
 
+  // Minion/Demon Info steps: the storyteller needs to know WHO to wake and who
+  // to point at. Built from the night-scoped helper players, so promotions and
+  // bag substitutions are already reflected (a promoted Minion lists as Demon).
+  // Player name first when one is assigned, character name in parens.
+  type EvilSeat = { id: string; label: string; icon: string };
+
+  function evilSeats(team: Team): EvilSeat[] {
+    if (!helperContext) return [];
+    return [...helperContext.players.values()]
+      .filter((p) => p.team === team)
+      .map((p) => ({
+        id: p.id,
+        label: p.name ? `${p.name} (${p.characterName})` : p.characterName,
+        icon: `/characters/${p.edition}/${p.characterId}${iconSuffix(p.team)}.webp`,
+      }));
+  }
+
+  const minionSeats = $derived(evilSeats(Team.MINION));
+  const demonSeats = $derived(evilSeats(Team.DEMON));
+
   function demonKillFromMenu() {
     if (!overflowMenu) return;
     demonKillFor = {
@@ -808,6 +828,31 @@
 </script>
 
 <svelte:window onclick={handleWindowClick} />
+
+<!-- One roster line for the Minion/Demon Info steps ("Minions: Frank
+     (Poisoner), …") so the storyteller knows who to wake and point at. -->
+{#snippet evilRoster(label: string, seats: EvilSeat[])}
+  {#if seats.length > 0}
+    <p
+      class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-secondary"
+    >
+      <span class="font-semibold">{label}</span>
+      {#each seats as seat, idx (seat.id)}
+        <span class="flex items-center gap-1">
+          <img
+            src={seat.icon}
+            alt=""
+            class="h-4 w-4 rounded-full"
+            onerror={(e: Event) =>
+              ((e.target as HTMLImageElement).style.display = "none")}
+          />
+          <span class="font-medium text-primary">{seat.label}</span
+          >{#if idx < seats.length - 1}<span>,</span>{/if}
+        </span>
+      {/each}
+    </p>
+  {/if}
+{/snippet}
 
 <div class="space-y-4">
   <h2 class="print-title hidden text-xl font-bold">
@@ -974,6 +1019,8 @@
                   {@html formatReminder(entry.reminder)}
                 </p>
                 {#if entry.id === "demoninfo"}
+                  {@render evilRoster("Demon:", demonSeats)}
+                  {@render evilRoster("Minions:", minionSeats)}
                   <div class="mt-2 flex flex-wrap items-center gap-2">
                     {#if onshowcard}
                       <button
@@ -1054,21 +1101,25 @@
                       </button>
                     {/if}
                   </div>
-                {:else if entry.id === "minioninfo" && onshowcard}
-                  <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <button
-                      onclick={() => onshowcard?.("std:thisisthedemon")}
-                      class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                    >
-                      Show card: This is the Demon
-                    </button>
-                    <button
-                      onclick={() => onshowcard?.("std:minions")}
-                      class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                    >
-                      Show card: These are your minions
-                    </button>
-                  </div>
+                {:else if entry.id === "minioninfo"}
+                  {@render evilRoster("Minions:", minionSeats)}
+                  {@render evilRoster("Demon:", demonSeats)}
+                  {#if onshowcard}
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        onclick={() => onshowcard?.("std:thisisthedemon")}
+                        class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                      >
+                        Show card: This is the Demon
+                      </button>
+                      <button
+                        onclick={() => onshowcard?.("std:minions")}
+                        class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                      >
+                        Show card: These are your minions
+                      </button>
+                    </div>
+                  {/if}
                 {/if}
               </div>
               {#if ontoggle && isInteractive}
@@ -1733,8 +1784,8 @@
                     : 'border-border-strong text-transparent hover:border-green-400'}"
                   title={isDone ? "Mark as not done" : "Mark as done"}
                   aria-label={isDone
-                    ? "Mark {entry.name} as not done"
-                    : "Mark {entry.name} as done"}
+                    ? `Mark ${entry.name} as not done`
+                    : `Mark ${entry.name} as done`}
                   aria-pressed={isDone}
                 >
                   <svg

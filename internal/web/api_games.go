@@ -147,28 +147,52 @@ func (h *ClockKeeperServiceHandler) RandomizeRoles(ctx context.Context, req *con
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// Validate locked role IDs and split them into distribution roles (handed to
+	// the randomizer) and travellers (kept by the traveller pick below). Locked ids
+	// that are not on the script cannot be honored and are ignored.
+	locked := make(map[string]bool, len(req.Msg.LockedRoleIds))
+	for _, id := range req.Msg.LockedRoleIds {
+		if _, ok := h.registry.Character(id); !ok {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown character: %s", id))
+		}
+		locked[id] = true
+	}
+
 	chars := h.registry.Characters(script.CharacterIds)
-	result, err := botc.RandomizeRoles(chars, g.PlayerCount)
+
+	var lockedRoleIDs []string
+	for _, c := range chars {
+		if locked[c.ID] && c.Team != botc.TeamTraveller {
+			lockedRoleIDs = append(lockedRoleIDs, c.ID)
+		}
+	}
+
+	result, err := botc.RandomizeRoles(chars, g.PlayerCount, lockedRoleIDs)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
 
 	// Select travellers from the script, capped to the game's traveller count.
-	var scriptTravellers []string
+	// Locked travellers are kept; the rest of the slots are filled at random.
+	var lockedTravellers, scriptTravellers []string
 	for _, c := range chars {
-		if c.Team == botc.TeamTraveller {
+		if c.Team != botc.TeamTraveller {
+			continue
+		}
+		if locked[c.ID] {
+			lockedTravellers = append(lockedTravellers, c.ID)
+		} else {
 			scriptTravellers = append(scriptTravellers, c.ID)
 		}
 	}
 	rand.Shuffle(len(scriptTravellers), func(i, j int) {
 		scriptTravellers[i], scriptTravellers[j] = scriptTravellers[j], scriptTravellers[i]
 	})
-	selectedTravellers := scriptTravellers
+	selectedTravellers := make([]string, 0, len(lockedTravellers)+len(scriptTravellers))
+	selectedTravellers = append(selectedTravellers, lockedTravellers...)
+	selectedTravellers = append(selectedTravellers, scriptTravellers...)
 	if len(selectedTravellers) > g.TravellerCount {
 		selectedTravellers = selectedTravellers[:g.TravellerCount]
-	}
-	if selectedTravellers == nil {
-		selectedTravellers = []string{}
 	}
 
 	// Auto-select 3 demon bluffs from not-in-play good characters.

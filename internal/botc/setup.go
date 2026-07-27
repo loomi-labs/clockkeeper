@@ -1,6 +1,7 @@
 package botc
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 )
@@ -197,15 +198,68 @@ func ApplySetupModifiers(base Distribution, characters []*Character) SetupResult
 	return result
 }
 
+// lockConflictError marks a randomization failure caused by locked roles that do
+// not fit the distribution. RandomizeRoles retries these (a different evil pick
+// may free up the needed slots) before giving up.
+type lockConflictError struct{ msg string }
+
+func (e *lockConflictError) Error() string { return e.msg }
+
+func lockConflict(format string, args ...any) error {
+	return &lockConflictError{msg: fmt.Sprintf(format, args...)}
+}
+
+func isLockConflict(err error) bool {
+	var target *lockConflictError
+	return errors.As(err, &target)
+}
+
 // pickRandom shuffles pool in place and returns the first n characters.
 func pickRandom(pool []*Character, n int) ([]*Character, error) {
+	return pickRandomLocked(pool, nil, n, "")
+}
+
+// pickRandomLocked returns n characters from pool, guaranteeing that every locked
+// character in the pool is part of the result.
+//
+// The pool is reordered in place: locked characters move to the front (they become
+// the first picks), the remainder is shuffled. That keeps the caller's convention
+// of "picks are pool[:n], leftovers are pool[n:]" intact, and leftovers never
+// contain a locked character.
+//
+// With an empty locked set this is a plain shuffle-and-take-n.
+func pickRandomLocked(pool []*Character, locked map[string]bool, n int, team string) ([]*Character, error) {
 	if len(pool) < n {
 		return nil, fmt.Errorf("not enough characters: need %d, have %d", n, len(pool))
 	}
-	rand.Shuffle(len(pool), func(i, j int) {
-		pool[i], pool[j] = pool[j], pool[i]
+
+	lockedCount := 0
+	if len(locked) > 0 {
+		for i := range pool {
+			if locked[pool[i].ID] {
+				pool[lockedCount], pool[i] = pool[i], pool[lockedCount]
+				lockedCount++
+			}
+		}
+		if lockedCount > n {
+			return nil, lockConflict("%d locked %s role(s) exceed the %d available %s slot(s)", lockedCount, team, n, team)
+		}
+	}
+
+	rest := pool[lockedCount:]
+	rand.Shuffle(len(rest), func(i, j int) {
+		rest[i], rest[j] = rest[j], rest[i]
 	})
 	return pool[:n], nil
+}
+
+// wrapPickErr turns a pool-exhaustion error into a team-specific message while
+// leaving lock conflicts (which carry their own message) untouched.
+func wrapPickErr(team string, err error) error {
+	if isLockConflict(err) {
+		return err
+	}
+	return fmt.Errorf("not enough %s characters: %w", team, err)
 }
 
 // automaticOutsiderDelta returns the automatic outsider delta for a character.
@@ -224,6 +278,12 @@ func automaticOutsiderDelta(c *Character) int {
 // RandomizeRoles selects random characters from the given character pool to fill
 // the distribution for the given player count.
 //
+// lockedRoleIDs are characters the caller wants to keep (the setup UI locks seats
+// by role id so the player name attached to that role survives a re-randomize).
+// Locked characters are pre-placed into their team's picks and only the remaining
+// slots are filled randomly. Locked ids must be part of the character pool;
+// travellers are ignored here (they are not part of the distribution).
+//
 // Uses a two-round selection:
 //   - Round 1a: pick demons + minions (base counts), apply their setup modifiers
 //   - Pick extra minions if needed (e.g., Lil' Monsta)
@@ -231,12 +291,67 @@ func automaticOutsiderDelta(c *Character) int {
 //   - Re-adjust and swap if Round 1b introduced new setup modifiers
 //   - Handle companions (Choirboy→King, Huntsman→Damsel)
 //   - Pick bag substitutions (Drunk→random townsfolk)
-func RandomizeRoles(characters []*Character, playerCount int) (*RandomizeResult, error) {
+func RandomizeRoles(characters []*Character, playerCount int, lockedRoleIDs []string) (*RandomizeResult, error) {
 	base, err := DistributionForPlayerCount(playerCount)
 	if err != nil {
 		return nil, err
 	}
 
+	charByID := make(map[string]*Character, len(characters))
+	for _, c := range characters {
+		charByID[c.ID] = c
+	}
+
+	locked := make(map[string]bool, len(lockedRoleIDs))
+	lockedByTeam := make(map[Team]int, 4)
+	for _, id := range lockedRoleIDs {
+		c, onScript := charByID[id]
+		if !onScript {
+			return nil, fmt.Errorf("locked role not on script: %s", id)
+		}
+		if locked[id] {
+			continue
+		}
+		locked[id] = true
+		lockedByTeam[c.Team]++
+	}
+
+	// The demon count never changes, so an overflow here can never be resolved.
+	if lockedByTeam[TeamDemon] > base.Demons {
+		return nil, lockConflict("%d locked demon role(s) exceed the %d demon slot(s) for %d players",
+			lockedByTeam[TeamDemon], base.Demons, playerCount)
+	}
+
+	// Which slots exist depends on the (random) evil pick — e.g. a locked outsider
+	// only fits at 7 players if the picked minion is a Baron. Retry a few times
+	// before reporting the conflict.
+	attempts := 1
+	if len(locked) > 0 {
+		attempts = 100
+	}
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		result, err := randomizeRoles(characters, charByID, playerCount, base, locked, lockedByTeam)
+		if err == nil {
+			return result, nil
+		}
+		if !isLockConflict(err) {
+			return nil, err
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+// randomizeRoles is one randomization attempt. See RandomizeRoles.
+func randomizeRoles(
+	characters []*Character,
+	charByID map[string]*Character,
+	playerCount int,
+	base Distribution,
+	locked map[string]bool,
+	lockedByTeam map[Team]int,
+) (*RandomizeResult, error) {
 	// Group available characters by team.
 	byTeam := map[Team][]*Character{
 		TeamTownsfolk: {},
@@ -250,30 +365,40 @@ func RandomizeRoles(characters []*Character, playerCount int) (*RandomizeResult,
 		}
 	}
 
-	// Round 1a: pick demons and minions at base counts.
-	demons, err := pickRandom(byTeam[TeamDemon], base.Demons)
+	// Round 1a: pick demons and minions at base counts (locked evil characters are
+	// part of this pick so their setup modifiers shape the distribution).
+	demons, err := pickRandomLocked(byTeam[TeamDemon], locked, base.Demons, "demon")
 	if err != nil {
-		return nil, fmt.Errorf("not enough demon characters: %w", err)
+		return nil, wrapPickErr("demon", err)
 	}
-	minions, err := pickRandom(byTeam[TeamMinion], base.Minions)
+	minionCount := max(base.Minions, lockedByTeam[TeamMinion])
+	minions, err := pickRandomLocked(byTeam[TeamMinion], locked, minionCount, "minion")
 	if err != nil {
-		return nil, fmt.Errorf("not enough minion characters: %w", err)
+		return nil, wrapPickErr("minion", err)
 	}
 
 	// Adjust distribution based on selected evil characters.
-	evil := append(demons, minions...)
+	evil := make([]*Character, 0, len(demons)+len(minions))
+	evil = append(evil, demons...)
+	evil = append(evil, minions...)
 	setupResult := ApplySetupModifiers(base, evil)
 	dist := setupResult.Distribution
 
+	// More locked minions than the game has minion slots (even after modifiers).
+	if dist.Minions < len(minions) {
+		return nil, lockConflict("%d locked minion role(s) exceed the %d minion slot(s) for %d players",
+			lockedByTeam[TeamMinion], dist.Minions, playerCount)
+	}
+
 	// Pick extra minions if needed (e.g., Lil' Monsta adds +1 minion).
-	if dist.Minions > base.Minions {
-		extraNeeded := dist.Minions - base.Minions
-		remainingMinions := byTeam[TeamMinion][base.Minions:]
+	if dist.Minions > len(minions) {
+		extraNeeded := dist.Minions - len(minions)
+		remainingMinions := byTeam[TeamMinion][len(minions):]
 		extra, err := pickRandom(remainingMinions, extraNeeded)
 		if err != nil {
 			// Not enough minions in pool — clamp and compensate with townsfolk.
 			extra = remainingMinions
-			dist.Minions = base.Minions + len(extra)
+			dist.Minions = len(minions) + len(extra)
 			dist.Townsfolk = playerCount - dist.Outsiders - dist.Minions - dist.Demons
 		}
 		minions = append(minions, extra...)
@@ -287,15 +412,17 @@ func RandomizeRoles(characters []*Character, playerCount int) (*RandomizeResult,
 		dist.Townsfolk += diff
 	}
 
-	// Round 1b: pick outsiders and townsfolk with adjusted counts.
-	outsiders, err := pickRandom(outsiderPool, dist.Outsiders)
+	// Round 1b: pick outsiders and townsfolk with adjusted counts. Locked good
+	// characters must fit the adjusted counts (e.g. a Baron trades two townsfolk
+	// slots for outsider slots — the trade has to come out of unlocked slots).
+	outsiders, err := pickRandomLocked(outsiderPool, locked, dist.Outsiders, "outsider")
 	if err != nil {
-		return nil, fmt.Errorf("not enough outsider characters: %w", err)
+		return nil, wrapPickErr("outsider", err)
 	}
 	townsfolkPool := byTeam[TeamTownsfolk]
-	townsfolk, err := pickRandom(townsfolkPool, dist.Townsfolk)
+	townsfolk, err := pickRandomLocked(townsfolkPool, locked, dist.Townsfolk, "townsfolk")
 	if err != nil {
-		return nil, fmt.Errorf("not enough townsfolk characters: %w", err)
+		return nil, wrapPickErr("townsfolk", err)
 	}
 
 	// Re-adjust: check if any selected outsiders/townsfolk have automatic outsider modifiers.
@@ -314,7 +441,7 @@ func RandomizeRoles(characters []*Character, playerCount int) (*RandomizeResult,
 			for goodDelta > 0 && len(remainingOutsiders) > 0 {
 				swapped := false
 				for i := len(townsfolk) - 1; i >= 0; i-- {
-					if automaticOutsiderDelta(townsfolk[i]) == 0 {
+					if automaticOutsiderDelta(townsfolk[i]) == 0 && !locked[townsfolk[i].ID] {
 						townsfolk = append(townsfolk[:i], townsfolk[i+1:]...)
 						outsiders = append(outsiders, remainingOutsiders[0])
 						remainingOutsiders = remainingOutsiders[1:]
@@ -333,7 +460,7 @@ func RandomizeRoles(characters []*Character, playerCount int) (*RandomizeResult,
 			for goodDelta < 0 && len(remainingTownsfolk) > 0 && len(outsiders) > 0 {
 				swapped := false
 				for i := len(outsiders) - 1; i >= 0; i-- {
-					if automaticOutsiderDelta(outsiders[i]) == 0 {
+					if automaticOutsiderDelta(outsiders[i]) == 0 && !locked[outsiders[i].ID] {
 						outsiders = append(outsiders[:i], outsiders[i+1:]...)
 						townsfolk = append(townsfolk, remainingTownsfolk[0])
 						remainingTownsfolk = remainingTownsfolk[1:]
@@ -362,11 +489,6 @@ func RandomizeRoles(characters []*Character, playerCount int) (*RandomizeResult,
 	}
 
 	// Handle companions: auto-add required characters (e.g., Choirboy→King).
-	charByID := make(map[string]*Character, len(characters))
-	for _, c := range characters {
-		charByID[c.ID] = c
-	}
-
 	for _, c := range allSelected {
 		if !c.Setup {
 			continue
@@ -406,10 +528,10 @@ func RandomizeRoles(characters []*Character, playerCount int) (*RandomizeResult,
 			})
 			continue
 		}
-		// Replace a non-setup character from the matching team with the companion.
+		// Replace a non-setup, unlocked character from the matching team with the companion.
 		replaced := false
 		for i := len(*targetSlice) - 1; i >= 0; i-- {
-			if automaticOutsiderDelta((*targetSlice)[i]) == 0 && !hasCompanion((*targetSlice)[i]) {
+			if automaticOutsiderDelta((*targetSlice)[i]) == 0 && !hasCompanion((*targetSlice)[i]) && !locked[(*targetSlice)[i].ID] {
 				selectedSet[(*targetSlice)[i].ID] = false
 				(*targetSlice)[i] = companion
 				selectedSet[companion.ID] = true

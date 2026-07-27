@@ -3,7 +3,16 @@
 
 import type { Phase } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 import { DeathCause, Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
+import type { PromotionDisplay } from "~/lib/promotions";
 import { countEvilAliveNeighbours, type Registration } from "./seating";
+
+/** Everything needed to name and render a character token. */
+export interface CharacterRef {
+  id: string;
+  name: string;
+  edition: string;
+  team: Team;
+}
 
 /** Night-scoped view of a player, everything the helpers need. */
 export interface HelperPlayer {
@@ -25,6 +34,47 @@ export interface HelperPlayer {
   edition: string;
   isDead: boolean;
   alignment: "good" | "evil" | undefined;
+  /**
+   * The seat's TRUE current character — grimoire truth, never the bag-sub
+   * facade. Use this for info a character *learns* about a seat (Undertaker,
+   * Ravenkeeper): the Drunk is learned as the Drunk, not as the Townsfolk they
+   * believe they are. Built with {@link resolveTrueCharacter}.
+   */
+  trueCharacter: CharacterRef;
+}
+
+/**
+ * Resolve a seat's TRUE current character: the promotion's acts-as character
+ * when the seat has been promoted (a star-passed Baron really IS the Imp now),
+ * otherwise the seat's OWN role.
+ *
+ * `bagSub` is accepted and deliberately IGNORED — that is the whole point of
+ * this function. A bag substitution is only a facade the player believes in (the
+ * Drunk holding a Townsfolk token), so it must never leak into grimoire-truth
+ * info: the Undertaker sees the executed player's real character and the
+ * Ravenkeeper learns the real character. For players'-perspective displays
+ * (grimoire tokens, first-night info) use the displayed character instead.
+ */
+export function resolveTrueCharacter(seat: {
+  own: CharacterRef;
+  promotion?: PromotionDisplay | undefined;
+  bagSub?: { characterId?: string; characterName?: string } | undefined;
+}): CharacterRef {
+  const { own, promotion } = seat;
+  if (promotion) {
+    return {
+      id: promotion.actsAsId,
+      name: promotion.actsAsName,
+      edition: promotion.actsAsEdition,
+      team: promotion.actsAsTeam,
+    };
+  }
+  return {
+    id: own.id,
+    name: own.name,
+    edition: own.edition,
+    team: own.team,
+  };
 }
 
 /** Real character ids whose registration is ambiguous. */
