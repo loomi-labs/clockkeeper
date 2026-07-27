@@ -280,6 +280,11 @@ func (h *ClockKeeperServiceHandler) ensureSpotifyAccessToken(ctx context.Context
 	}
 
 	token, err := h.refreshSpotifyToken(ctx, fresh.RefreshToken)
+	// Spotify has already applied the refresh (and possibly rotated the
+	// refresh token) by the time it responds. Persisting that outcome must not
+	// be abandoned because the caller went away, or the stored refresh token
+	// is permanently dead.
+	persistCtx := context.WithoutCancel(ctx)
 	if err != nil {
 		if errors.Is(err, errSpotifyInvalidGrant) {
 			// The refresh token is dead — drop the connection so the UI can
@@ -291,7 +296,7 @@ func (h *ClockKeeperServiceHandler) ensureSpotifyAccessToken(ctx context.Context
 					spotifyconnection.UserID(fresh.UserID),
 					spotifyconnection.RefreshToken(fresh.RefreshToken),
 				).
-				Exec(ctx); delErr != nil {
+				Exec(persistCtx); delErr != nil {
 				slog.Error("delete invalid spotify connection failed", "err", delErr)
 			}
 			return "", time.Time{}, connect.NewError(connect.CodeFailedPrecondition, errSpotifyNotConnected)
@@ -309,7 +314,7 @@ func (h *ClockKeeperServiceHandler) ensureSpotifyAccessToken(ctx context.Context
 	if token.RefreshToken != "" {
 		update = update.SetRefreshToken(token.RefreshToken)
 	}
-	if _, err := update.Save(ctx); err != nil {
+	if _, err := update.Save(persistCtx); err != nil {
 		slog.Error("persist refreshed spotify token failed", "err", err)
 		return "", time.Time{}, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}

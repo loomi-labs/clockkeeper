@@ -1012,6 +1012,11 @@ describe("playback polling", () => {
 
     expect(spotify.error?.kind).toBe("not_connected");
     expect(spotify.connected).toBe(false);
+
+    // The grant is dead — the timer must stop instead of retrying every tick.
+    const callsAfterFailure = fetchMock.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fetchMock.mock.calls.length).toBe(callsAfterFailure);
   });
 
   it("swallows other poll failures without painting the error strip", async () => {

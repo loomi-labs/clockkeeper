@@ -907,9 +907,13 @@ async function pollPlaybackOnce() {
   } catch (err) {
     // Polling errors are swallowed — no error-state spam while the panel is
     // open. The exception is a lost connection: the panel just flipped to
-    // disconnected and has to say why.
+    // disconnected and has to say why — and there is nothing left to poll,
+    // so stop the timer instead of hammering the dead grant every tick.
     const error = toSpotifyError(err);
-    if (error.kind === "not_connected") spotify.error = error;
+    if (error.kind === "not_connected") {
+      spotify.error = error;
+      stopPlaybackPolling();
+    }
   }
 }
 
