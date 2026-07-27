@@ -833,3 +833,76 @@ func TestUpdateGameRoles_RejectsUnknownCharacter(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }
+
+// --- UpdateGameRoles state guard tests ---
+
+func TestUpdateGameRoles_AllowsAddingRoleWhileInProgress(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, g := startedGame(t, handler)
+
+	extra := unusedTroubleBrewingRole(t, g.SelectedRoleIds)
+	want := append(append([]string{}, g.SelectedRoleIds...), extra)
+
+	resp, err := handler.UpdateGameRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+		GameId:          g.Id,
+		SelectedRoleIds: want,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, want, resp.Msg.Game.SelectedRoleIds)
+}
+
+func TestUpdateGameRoles_RejectsRemovalWhileInProgress(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, g := startedGame(t, handler)
+
+	require.Greater(t, len(g.SelectedRoleIds), 1)
+
+	_, err := handler.UpdateGameRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+		GameId:          g.Id,
+		SelectedRoleIds: g.SelectedRoleIds[1:],
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), g.SelectedRoleIds[0])
+}
+
+func TestUpdateGameRoles_RejectsCompletedGame(t *testing.T) {
+	handler := testHandler(t)
+	ownerID, g := startedGame(t, handler)
+
+	_, err := handler.EndGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.EndGameRequest{
+		GameId: g.Id,
+	}))
+	require.NoError(t, err)
+
+	extra := unusedTroubleBrewingRole(t, g.SelectedRoleIds)
+
+	_, err = handler.UpdateGameRoles(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.UpdateGameRolesRequest{
+		GameId:          g.Id,
+		SelectedRoleIds: append(append([]string{}, g.SelectedRoleIds...), extra),
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+}
+
+// unusedTroubleBrewingRole returns a Trouble Brewing role ID that is not in inPlay.
+func unusedTroubleBrewingRole(t *testing.T, inPlay []string) string {
+	t.Helper()
+
+	used := make(map[string]bool, len(inPlay))
+	for _, id := range inPlay {
+		used[id] = true
+	}
+	candidates := []string{
+		"washerwoman", "librarian", "investigator", "chef", "empath",
+		"fortuneteller", "undertaker", "monk", "ravenkeeper", "virgin",
+		"slayer", "soldier", "mayor",
+	}
+	for _, id := range candidates {
+		if !used[id] {
+			return id
+		}
+	}
+	t.Fatal("no unused Trouble Brewing role available")
+	return ""
+}

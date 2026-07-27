@@ -31,6 +31,8 @@ services:
       DB_NAME: clockkeeper
       DB_USER: postgres
       DB_PASSWORD: postgres
+      # Local-dev-only flag — never allow it to leak in from .env.
+      DEV_SINGLE_USER: "false"
     command: >
       sh -c "
       set -e;

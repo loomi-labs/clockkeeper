@@ -214,10 +214,28 @@ func (h *ClockKeeperServiceHandler) UpdateGameRoles(ctx context.Context, req *co
 		return nil, err
 	}
 
+	if g.State == game.StateCompleted {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
+	}
+
 	// Validate all role IDs exist in the registry.
 	for _, id := range req.Msg.SelectedRoleIds {
 		if _, ok := h.registry.Character(id); !ok {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown character: %s", id))
+		}
+	}
+
+	// Once the game is running, role changes are additive only — removing a role
+	// would orphan grimoire state, deaths and night-order progress.
+	if g.State == game.StateInProgress {
+		requested := make(map[string]bool, len(req.Msg.SelectedRoleIds))
+		for _, id := range req.Msg.SelectedRoleIds {
+			requested[id] = true
+		}
+		for _, id := range g.SelectedRoles {
+			if !requested[id] {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("cannot remove role %s while game is in progress", id))
+			}
 		}
 	}
 
@@ -767,6 +785,8 @@ func (h *ClockKeeperServiceHandler) DuplicateGame(ctx context.Context, req *conn
 		SetSelectedBluffs(src.SelectedBluffs).
 		SetTravellerAlignments(src.TravellerAlignments).
 		SetBagSubstitutions(src.BagSubstitutions).
+		SetGrimoirePlayerNames(src.GrimoirePlayerNames).
+		SetGrimoirePositions(src.GrimoirePositions).
 		SetState(game.StateSetup).
 		Save(ctx)
 	if err != nil {

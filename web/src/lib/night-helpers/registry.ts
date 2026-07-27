@@ -146,4 +146,6 @@ export const NIGHT_HELPERS: Record<string, NightHelperDef> = {
   monk: { nights: ["other"], component: TokenPickHelper },
   ravenkeeper: { nights: ["other"], component: RavenkeeperHelper },
   scarletwoman: { nights: ["other"], component: ScarletWomanHelper },
+  bureaucrat: { nights: ["first", "other"], component: TokenPickHelper },
+  thief: { nights: ["first", "other"], component: TokenPickHelper },
 };

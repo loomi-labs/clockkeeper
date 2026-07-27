@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
-  import type { DisplayCard } from "~/lib/info-cards";
+  import { characterTokenCard } from "~/lib/info-cards";
   import { iconSuffix } from "~/lib/team-styles";
   import PlayerPickerPopover from "./PlayerPickerPopover.svelte";
 
@@ -70,22 +70,17 @@
   // with the learned character baked in so it needs no show-time pick.
   function showCard() {
     if (!shownChar) return;
-    const card: DisplayCard = {
-      id: `dyn:ravenkeeper-${shownChar.id}`,
-      title: "",
-      body: "",
-      characters: [
+    ctx.onshowcard?.(
+      characterTokenCard(
         {
           id: shownChar.id,
           name: shownChar.name,
           edition: shownChar.edition,
-          iconSuffix: iconSuffix(shownChar.team ?? Team.UNSPECIFIED),
+          team: shownChar.team ?? Team.UNSPECIFIED,
         },
-      ],
-      kind: "standard",
-      accent: "neutral",
-    };
-    ctx.onshowcard?.(card);
+        "ravenkeeper",
+      ),
+    );
   }
 </script>
 

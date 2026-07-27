@@ -10,16 +10,18 @@ control:
 
 - The **Empath** helper counts evil neighbours for you.
 - The **Chef** helper counts pairs of adjacent evils.
-- The **Undertaker** helper names the player executed on the previous day.
+- The **Undertaker** helper names the player executed on the previous day and can
+  show that character's token card.
 - The **Fortune Teller** helper lets you pick two players and tells you whether a
   Demon (or Red Herring) is among them.
 - The **Washerwoman / Librarian / Investigator** helper lets you pick the
   "shown" player and a decoy, then attaches the reminder tokens and shows the
   matching info card. The shown character defaults to the seat's token but can
   be overridden from the script's characters of that category.
-- The **Butler**, **Poisoner** and **Monk** helpers are single-player token
-  pickers (`TokenPickHelper`): pick a seat to attach the "Master" / "Poisoned" /
-  "Safe" reminder token, kept in sync with manual grimoire attachment.
+- The **Butler**, **Poisoner**, **Monk**, **Bureaucrat** and **Thief** helpers are
+  single-player token pickers (`TokenPickHelper`): pick a seat to attach the
+  "Master" / "Poisoned" / "Safe" / "3 Votes" / "Negative Vote" reminder token,
+  kept in sync with manual grimoire attachment.
 - The **Ravenkeeper** helper renders only the night the Ravenkeeper dies: pick a
   player to learn their displayed character and show the character-token card.
 - The **Scarlet Woman** helper is an alert that fires when the Demon dies with
@@ -96,7 +98,7 @@ Legend for "Night": F = has a first-night action, O = has an other-night action,
 | Chef          | Townsfolk | F     | ChefHelper           | Implemented. Counts adjacent evil pairs; range under Recluse/Spy.                                                                                                                                    |
 | Empath        | Townsfolk | FO    | EmpathHelper         | Implemented. Counts evil neighbours; range under Recluse/Spy.                                                                                                                                        |
 | Fortuneteller | Townsfolk | FO    | FortuneTellerHelper  | Implemented. Two-player pick; Red Herring aware (Set-Red-Herring button attaches the token) plus a compact "Demon: …" display; Recluse-may-yes.                                                      |
-| Undertaker    | Townsfolk | O     | UndertakerHelper     | Implemented. Names yesterday's execution.                                                                                                                                                            |
+| Undertaker    | Townsfolk | O     | UndertakerHelper     | Implemented. Names yesterday's execution, plus a "Show card" button that shows the bare character-token card for the executed player's displayed character.                                            |
 | Monk          | Townsfolk | O     | TokenPickHelper      | Implemented. Single-player picker (`TokenPickHelper`, excludes the Monk's own seat) that attaches the "Safe" (protected) reminder token; acts on other nights only.                                  |
 | Ravenkeeper   | Townsfolk | O     | RavenkeeperHelper    | Implemented. Conditional — renders only the night the Ravenkeeper died (via `diedTonight`). Pick a player to learn their displayed character; shows the bare character-token card.                   |
 | Virgin        | Townsfolk | -     | none                 | No helper. Day-time nomination trigger; nothing to compute at night. Has a "No Ability" reminder the ST places manually.                                                                             |
@@ -113,19 +115,17 @@ Legend for "Night": F = has a first-night action, O = has an other-night action,
 | Baron         | Minion    | -     | none                 | No helper. Passive setup modifier (+2 Outsiders); affects the bag at setup, not at night.                                                                                                            |
 | Imp           | Demon     | O     | none (demon kill)    | Uses the existing demon-kill picker. Star pass is a revertible promotion: when the Imp dies, `onstarpass` opens the prompt to promote a Minion to the Demon ("Imp (ex Baron)"), overlaid via `rolePromotions` and reversible.                                         |
 | Beggar        | Traveller | -     | none                 | No helper. Day-time voting ability; no night action.                                                                                                                                                 |
-| Bureaucrat    | Traveller | FO    | none                 | No helper planned. Attaches a "3 Votes" reminder to a player each night, but as a Traveller it is outside the core MVP scope; a Monk-style picker could be added later.                              |
+| Bureaucrat    | Traveller | FO    | TokenPickHelper      | Implemented. Single-player picker (excludes the Bureaucrat's own seat) that attaches the "3 Votes" reminder token; acts on both nights.                                                               |
 | Gunslinger    | Traveller | -     | none                 | No helper. Day-time execution ability; no night action.                                                                                                                                              |
 | Scapegoat     | Traveller | -     | none                 | No helper. Passive execution-redirect; no ST input.                                                                                                                                                  |
-| Thief         | Traveller | FO    | none                 | No helper planned. Attaches a "Negative Vote" reminder each night; Traveller, out of core scope. Monk-style picker possible later.                                                                   |
+| Thief         | Traveller | FO    | TokenPickHelper      | Implemented. Single-player picker (excludes the Thief's own seat) that attaches the "Negative Vote" reminder token; acts on both nights.                                                              |
 
 ## Summary
 
-- **Implemented (12):** Empath, Chef, Undertaker, Fortune Teller, Washerwoman,
-  Librarian, Investigator, Butler, Poisoner, Monk (these three via the shared
-  `TokenPickHelper`), Ravenkeeper (conditional died-at-night reveal), and Scarlet
-  Woman (Demon-death promotion alert).
-- **Proposed (single-player token pickers):** the Traveller pickers Bureaucrat
-  and Thief (later).
+- **Implemented (14):** Empath, Chef, Undertaker, Fortune Teller, Washerwoman,
+  Librarian, Investigator, Butler, Poisoner, Monk, Bureaucrat, Thief (these five
+  via the shared `TokenPickHelper`), Ravenkeeper (conditional died-at-night
+  reveal), and Scarlet Woman (Demon-death promotion alert).
 - **Proposed (conditional / event-driven):** Imp (star pass — now a revertible
   promotion via `onstarpass` + `rolePromotions`), Spy ("show grimoire" note).
 - **No helper (passive or day-only):** Virgin, Slayer, Soldier, Mayor, Recluse,

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
+  import { characterTokenCard } from "~/lib/info-cards";
   import { iconSuffix } from "~/lib/team-styles";
 
   let { entryId, ctx }: { entryId: string; ctx: NightHelperContext } = $props();
@@ -9,6 +10,25 @@
   const playerId = $derived(ctx.playerIdForEntry(entryId));
   const status = $derived(playerId ? ctx.statuses.get(playerId) : undefined);
   const impaired = $derived(!!status && (status.poisoned || status.drunk));
+
+  // The bare character-token card for the executed player's DISPLAYED character
+  // — the icon IS the card, so the Storyteller can show the Undertaker's info
+  // across the table instead of describing it.
+  function showCard() {
+    if (!executed) return;
+    const p = executed.player;
+    ctx.onshowcard?.(
+      characterTokenCard(
+        {
+          id: p.characterId,
+          name: p.characterName,
+          edition: p.edition,
+          team: p.team,
+        },
+        "undertaker",
+      ),
+    );
+  }
 </script>
 
 {#if !executed}
@@ -40,6 +60,17 @@
     <p class="mt-1 text-[11px] text-muted">
       (died today &mdash; cause unrecorded)
     </p>
+  {/if}
+  {#if ctx.onshowcard}
+    <div class="mt-2 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onclick={showCard}
+        class="rounded border border-purple-400 px-2 py-1 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-950/40"
+      >
+        Show card
+      </button>
+    </div>
   {/if}
   {#if impaired}
     <div

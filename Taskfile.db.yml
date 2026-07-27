@@ -19,6 +19,12 @@ tasks:
         echo "Postgres did not become ready in 60s" >&2
         exit 1
       - task: migrate
+      - task: seed
+
+  seed:
+    desc: Load dev seed data (idempotent, local only)
+    cmds:
+      - docker compose exec -T postgres psql -U postgres -d clockkeeper -v ON_ERROR_STOP=1 -f - < scripts/seed-dev.sql
 
   migrate:new:
     desc: Generate a new migration from schema changes

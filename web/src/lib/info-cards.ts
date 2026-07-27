@@ -281,6 +281,28 @@ export function noOutsidersCard(): DisplayCard {
   };
 }
 
+/** Bare character-token card: the icon IS the card (empty title/body → icon-only display). */
+export function characterTokenCard(
+  char: { id: string; name: string; edition: string; team: Team },
+  idPrefix: string,
+): DisplayCard {
+  return {
+    id: `dyn:${idPrefix}-${char.id}`,
+    title: "",
+    body: "",
+    characters: [
+      {
+        id: char.id,
+        name: char.name,
+        edition: char.edition,
+        iconSuffix: iconSuffix(char.team),
+      },
+    ],
+    kind: "standard",
+    accent: "neutral",
+  };
+}
+
 /**
  * Map a stored custom {@link InfoCard} to a {@link DisplayCard}.
  *

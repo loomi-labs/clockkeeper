@@ -20,6 +20,7 @@
   import PlayerPickerPopover from "./night-helpers/PlayerPickerPopover.svelte";
   import type { PlayerStatus } from "~/lib/night-helpers/status";
   import type { NightHelperContext } from "~/lib/night-helpers/registry";
+  import { NIGHT_HELPERS } from "~/lib/night-helpers/registry";
 
   let {
     game,
@@ -928,6 +929,21 @@
           ? guideVisualDone
           : (completedActions?.has(entry.id) ?? false)}
         {@const entryIsDead = isGuideTarget ? guideVisualDead : entry.isDead}
+        <!-- A dead seat whose night helper fires BECAUSE it died tonight (the
+             Ravenkeeper). The row-level dimming would make the helper look
+             disabled, and child CSS cannot undo a parent's opacity — so the
+             container drops the dead styling and gets a purple ring instead.
+             Icon/name stay dead-styled: the seat really is dead. -->
+        {@const actsTonight =
+          entryIsDead &&
+          !entry.isSpecial &&
+          !entry.actsAsId &&
+          entry.inPlay &&
+          !!helperContext &&
+          !!helperContext.diedTonight?.has(
+            helperContext.playerIdForEntry(entry.id) ?? "",
+          ) &&
+          !!NIGHT_HELPERS[entry.id]?.nights.includes(helperContext.night)}
         {#if entry.isSpecial}
           {@const isInteractive = !NON_INTERACTIVE_SPECIALS.has(entry.id)}
           <div class="overflow-hidden rounded-lg" data-entry={entry.id}>
@@ -968,6 +984,14 @@
                       </button>
                     {/if}
                     {#if bluffs && bluffs.length > 0}
+                      {#if onshowcard}
+                        <button
+                          onclick={() => onshowcard?.("std:notinplay")}
+                          class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
+                        >
+                          Show card: Not in play
+                        </button>
+                      {/if}
                       <span class="text-xs font-semibold text-secondary"
                         >Bluffs:</span
                       >
@@ -1007,14 +1031,6 @@
                             /></svg
                           >
                           Edit
-                        </button>
-                      {/if}
-                      {#if onshowcard}
-                        <button
-                          onclick={() => onshowcard?.("std:notinplay")}
-                          class="rounded border border-border px-2 py-0.5 text-xs text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500"
-                        >
-                          Show card: Not in play
                         </button>
                       {/if}
                     {:else if oneditbluffs}
@@ -1295,8 +1311,12 @@
               class="card-slate relative flex items-center gap-2 border px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5 {isDone
                 ? 'opacity-50 border-l-4 border-l-green-500'
                 : ''} {entryIsDead
-                ? (unselectedColors[effectiveTeam(entry.id, entry.team ?? 0)] ??
-                    'border-border/50') + ' opacity-40 border-dashed'
+                ? actsTonight
+                  ? (teamCardColors[effectiveTeam(entry.id, entry.team ?? 0)] ??
+                      'border-border') + ' ring-2 ring-purple-400/70'
+                  : (unselectedColors[
+                      effectiveTeam(entry.id, entry.team ?? 0)
+                    ] ?? 'border-border/50') + ' opacity-40 border-dashed'
                 : entry.inPlay
                   ? (teamCardColors[effectiveTeam(entry.id, entry.team ?? 0)] ??
                     'border-border')
@@ -1343,6 +1363,10 @@
                 {#if entryIsDead}<span
                     class="ml-2 text-xs text-red-500 dark:text-red-400"
                     >Dead</span
+                  >{/if}
+                {#if actsTonight}<span
+                    class="ml-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/20 dark:text-purple-300"
+                    >Died tonight &mdash; acts now</span
                   >{/if}
                 {#if !entry.isSpecial}
                   {@const status = statusForEntry(entry.id)}
