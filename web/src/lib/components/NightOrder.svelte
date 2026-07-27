@@ -978,7 +978,10 @@
              Ravenkeeper). The row-level dimming would make the helper look
              disabled, and child CSS cannot undo a parent's opacity — so the
              container drops the dead styling and gets a purple ring instead.
-             Icon/name stay dead-styled: the seat really is dead. -->
+             Icon/name stay dead-styled: the seat really is dead.
+             `triggersOnOwnDeath` is required: a helper merely being active
+             tonight is not enough (an Undertaker who died tonight does NOT
+             act), only helpers whose trigger IS their own death qualify. -->
         {@const actsTonight =
           entryIsDead &&
           !entry.isSpecial &&
@@ -988,6 +991,7 @@
           !!helperContext.diedTonight?.has(
             helperContext.playerIdForEntry(entry.id) ?? "",
           ) &&
+          !!NIGHT_HELPERS[entry.id]?.triggersOnOwnDeath &&
           !!NIGHT_HELPERS[entry.id]?.nights.includes(helperContext.night)}
         {#if entry.isSpecial}
           {@const isInteractive = !NON_INTERACTIVE_SPECIALS.has(entry.id)}

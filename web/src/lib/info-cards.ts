@@ -9,8 +9,11 @@ import type {
   Character,
   Game,
   InfoCard,
-  Team,
 } from "./gen/clockkeeper/v1/clockkeeper_pb";
+// Type-only: `CharacterRef` is the canonical `{ id, name, edition, team }` shape
+// (see `night-helpers/helpers.ts`). Erased at compile time, so this module stays
+// pure and no runtime import cycle is created.
+import type { CharacterRef } from "./night-helpers/helpers";
 import { iconSuffix } from "./team-styles";
 
 /** The standard info tokens (eight official + the ad-hoc character token). */
@@ -246,12 +249,7 @@ export function generateStandardCards(game: Game): DisplayCard[] {
  * The shown character is the DISPLAYED character of the picked "right" seat
  * (bag-sub aware), whatever that seat's team.
  */
-export function firstNightInfoCard(shownCharacter: {
-  id: string;
-  name: string;
-  edition: string;
-  team: Team;
-}): DisplayCard {
+export function firstNightInfoCard(shownCharacter: CharacterRef): DisplayCard {
   return {
     id: `dyn:firstnight-${shownCharacter.id}`,
     title: `ONE OF THESE PLAYERS IS THE ${shownCharacter.name.toUpperCase()}`,
@@ -283,7 +281,7 @@ export function noOutsidersCard(): DisplayCard {
 
 /** Bare character-token card: the icon IS the card (empty title/body → icon-only display). */
 export function characterTokenCard(
-  char: { id: string; name: string; edition: string; team: Team },
+  char: CharacterRef,
   idPrefix: string,
 ): DisplayCard {
   return {

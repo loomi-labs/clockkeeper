@@ -46,7 +46,11 @@ about individual helper components:
    statuses, picks, and the various callbacks).
 2. **Register it** in `web/src/lib/night-helpers/registry.ts` by adding one entry
    to `NIGHT_HELPERS`: `characterId -> { nights, component }`. `nights` gates the
-   helper to the first night, other nights, or both.
+   helper to the first night, other nights, or both. Optionally set
+   `triggersOnOwnDeath: true` when the character acts *because* its own seat died
+   (only the Ravenkeeper today) — the night sheet uses that flag to keep such a
+   dead row live-styled and badge it "Died tonight — acts now". Any other dead
+   seat stays dimmed, since dead players do not act.
 
 The dispatcher (`NightEntryHelper.svelte`) looks up the entry by character id and
 `night`, and renders the registered component. The page assembles a single

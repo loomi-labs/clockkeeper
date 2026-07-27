@@ -1,14 +1,9 @@
 <script lang="ts">
-  import type { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
+  import type { CharacterRef } from "~/lib/night-helpers/helpers";
   import { iconSuffix } from "~/lib/team-styles";
 
   /** A character reduced to what the picker needs (matches `scriptCharacters`). */
-  interface PickableCharacter {
-    id: string;
-    name: string;
-    team: Team;
-    edition: string;
-  }
+  type PickableCharacter = CharacterRef;
 
   let {
     title,

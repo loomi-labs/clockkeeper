@@ -36,6 +36,13 @@ func (s *ServeCmd) Run() error {
 		slog.Warn("DISCORD_CLIENT_ID or DISCORD_CLIENT_SECRET not set — Discord login unavailable, anonymous-only mode")
 	}
 
+	// Loudest possible signal at startup: this flag collapses every anonymous
+	// session onto one shared local account, so any data isolation between
+	// devices/browsers is gone. Local development only.
+	if webConfig.DevSingleUser {
+		slog.Warn("DEV_SINGLE_USER enabled — all anonymous sessions share one local account; never enable in production")
+	}
+
 	db, sqlDB, err := database.NewClient(dbConfig)
 	if err != nil {
 		return err

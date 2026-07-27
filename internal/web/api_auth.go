@@ -225,7 +225,9 @@ func (h *ClockKeeperServiceHandler) createDevSingleUserSession(ctx context.Conte
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	slog.Warn("DEV_SINGLE_USER is enabled — all anonymous sessions share one local user", "user_id", u.ID)
+	// Debug, not Warn: the startup warning (cmd/server.go) is the signal that the
+	// flag is on. Warning per request would drown out real warnings in dev.
+	slog.Debug("dev single-user session issued", "user_id", u.ID)
 
 	return connect.NewResponse(&clockkeeperv1.CreateAnonymousSessionResponse{
 		Token: token,

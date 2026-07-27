@@ -19,9 +19,8 @@ import FirstNightInfoHelper from "~/lib/components/night-helpers/FirstNightInfoH
 import TokenPickHelper from "~/lib/components/night-helpers/TokenPickHelper.svelte";
 import RavenkeeperHelper from "~/lib/components/night-helpers/RavenkeeperHelper.svelte";
 import ScarletWomanHelper from "~/lib/components/night-helpers/ScarletWomanHelper.svelte";
-import type { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
 import type { DisplayCard } from "~/lib/info-cards";
-import type { HelperPlayer } from "./helpers";
+import type { CharacterRef, HelperPlayer } from "./helpers";
 import type { PlayerStatus } from "./status";
 
 /** Which night(s) a helper is relevant for. */
@@ -69,9 +68,7 @@ export interface NightHelperContext {
    * (Undertaker, Ravenkeeper) is grimoire truth and must use
    * `HelperPlayer.trueCharacter` instead — the Drunk is learned as the Drunk.
    */
-  displayedCharacterOf?: (
-    playerId: string,
-  ) => { id: string; name: string; edition: string; team: Team } | undefined;
+  displayedCharacterOf?: (playerId: string) => CharacterRef | undefined;
   /**
    * First-night info picks, keyed by helper character id (the entry id).
    * `rightId` is the seat showing the revealed character; `wrongId` is the decoy
@@ -108,12 +105,7 @@ export interface NightHelperContext {
    */
   tokenHolder?: (characterId: string, tokenText: string) => string | undefined;
   /** The current script's characters (for pickers that offer characters). */
-  scriptCharacters?: ReadonlyArray<{
-    id: string;
-    name: string;
-    team: Team;
-    edition: string;
-  }>;
+  scriptCharacters?: ReadonlyArray<CharacterRef>;
 
   // ── Event-driven / promotion helpers (Ravenkeeper, Scarlet Woman, Imp) ──
   // All optional: the page wires them in for the relevant nights. Helpers that
@@ -132,6 +124,14 @@ export interface NightHelperContext {
 export interface NightHelperDef {
   nights: ReadonlyArray<NightKind>;
   component: Component<{ entryId: string; ctx: NightHelperContext }>;
+  /**
+   * True when the helper fires BECAUSE its own seat died — the seat is dead yet
+   * still acts this night (the Ravenkeeper). Dead seats normally do not act, so
+   * the night sheet uses this flag (not mere helper activity) to decide whether
+   * a dead row keeps its live styling and gets the "Died tonight — acts now"
+   * badge. Leave unset for every helper whose character acts while alive.
+   */
+  triggersOnOwnDeath?: boolean;
 }
 
 /** Character id -> helper definition. */
@@ -149,7 +149,11 @@ export const NIGHT_HELPERS: Record<string, NightHelperDef> = {
   poisoner: { nights: ["first", "other"], component: TokenPickHelper },
   butler: { nights: ["first", "other"], component: TokenPickHelper },
   monk: { nights: ["other"], component: TokenPickHelper },
-  ravenkeeper: { nights: ["other"], component: RavenkeeperHelper },
+  ravenkeeper: {
+    nights: ["other"],
+    component: RavenkeeperHelper,
+    triggersOnOwnDeath: true,
+  },
   scarletwoman: { nights: ["other"], component: ScarletWomanHelper },
   bureaucrat: { nights: ["first", "other"], component: TokenPickHelper },
   thief: { nights: ["first", "other"], component: TokenPickHelper },
