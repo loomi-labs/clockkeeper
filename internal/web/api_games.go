@@ -13,6 +13,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 	"github.com/loomi-labs/clockkeeper/internal/botc"
@@ -764,6 +765,13 @@ func (h *ClockKeeperServiceHandler) DeleteGame(ctx context.Context, req *connect
 	if _, err := tx.Phase.Delete().Where(phase.HasGameWith(game.ID(g.ID))).Exec(ctx); err != nil {
 		_ = tx.Rollback()
 		slog.Error("delete phases failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Delete token bag registrations.
+	if _, err := tx.Registration.Delete().Where(registration.GameID(g.ID)).Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		slog.Error("delete registrations failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 

@@ -36,6 +36,17 @@ var gameStateToProto = map[game.State]clockkeeperv1.GameState{
 	game.StateCompleted:  clockkeeperv1.GameState_GAME_STATE_COMPLETED,
 }
 
+var tokenBagPhaseMap = map[game.TokenBagPhase]clockkeeperv1.TokenBagPhase{
+	game.TokenBagPhaseInactive: clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_INACTIVE,
+	game.TokenBagPhaseOpen:     clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_OPEN,
+	game.TokenBagPhaseClosed:   clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_CLOSED,
+	game.TokenBagPhaseRevealed: clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_REVEALED,
+}
+
+func tokenBagPhaseToProto(p game.TokenBagPhase) clockkeeperv1.TokenBagPhase {
+	return tokenBagPhaseMap[p]
+}
+
 var phaseTypeToProto = map[phase.Type]clockkeeperv1.PhaseType{
 	phase.TypeNight: clockkeeperv1.PhaseType_PHASE_TYPE_NIGHT,
 	phase.TypeDay:   clockkeeperv1.PhaseType_PHASE_TYPE_DAY,
@@ -201,6 +212,35 @@ func spotifyStatusToProto(conn *ent.SpotifyConnection) *clockkeeperv1.SpotifySta
 	}
 }
 
+func registrationToProto(r *ent.Registration) *clockkeeperv1.TokenBagPlayer {
+	return &clockkeeperv1.TokenBagPlayer{
+		RegistrationId:  int64(r.ID),
+		Name:            r.Name,
+		ViaSharedDevice: r.ViaSharedDevice,
+		LeftNeighborId:  int64(r.LeftNeighborID),
+		RightNeighborId: int64(r.RightNeighborID),
+	}
+}
+
+// tokenBagToProto builds the storyteller's view of a token bag. It carries the
+// join and shared codes and is therefore only ever returned to the game's owner.
+func tokenBagToProto(g *ent.Game, regs []*ent.Registration) *clockkeeperv1.TokenBag {
+	bag := &clockkeeperv1.TokenBag{
+		Phase:   tokenBagPhaseToProto(g.TokenBagPhase),
+		Players: make([]*clockkeeperv1.TokenBagPlayer, len(regs)),
+	}
+	if g.TokenBagJoinCode != nil {
+		bag.JoinCode = *g.TokenBagJoinCode
+	}
+	if g.TokenBagSharedCode != nil {
+		bag.SharedCode = *g.TokenBagSharedCode
+	}
+	for i, r := range regs {
+		bag.Players[i] = registrationToProto(r)
+	}
+	return bag
+}
+
 func entScriptToProto(s *ent.Script, registry *botc.Registry) *clockkeeperv1.Script {
 	proto := &clockkeeperv1.Script{
 		Id:           int64(s.ID),
@@ -319,6 +359,15 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 		SelectedBluffCharacters:     charactersToProto(bluffChars),
 		BagSubstitutions:            bagSubstitutionsToProto(g.BagSubstitutions),
 		RolePromotions:              rolePromotionsToProto(g.RolePromotions),
+		TokenBagPhase:               tokenBagPhaseToProto(g.TokenBagPhase),
+	}
+
+	// Token bag codes are nil until the storyteller first opens registration.
+	if g.TokenBagJoinCode != nil {
+		proto.TokenBagJoinCode = *g.TokenBagJoinCode
+	}
+	if g.TokenBagSharedCode != nil {
+		proto.TokenBagSharedCode = *g.TokenBagSharedCode
 	}
 
 	// Populate traveller alignments.
