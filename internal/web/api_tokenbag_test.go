@@ -409,6 +409,29 @@ func TestResetTokenBag_RejectedOnAnUnopenedBag(t *testing.T) {
 	assert.Contains(t, err.Error(), "has not been opened")
 }
 
+// Once the game runs the reveal is history — a reset would only destroy the
+// record of who holds which role.
+func TestResetTokenBag_RejectedOnceTheGameHasStarted(t *testing.T) {
+	h := testHandler(t)
+	bag := createBagGame(t, h)
+	_, _ = joinBag(t, h, bag.joinCode, "Alice")
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"chef": "Alice"})
+	closeBag(t, h, bag)
+	revealBag(t, h, bag)
+
+	_, err := h.StartGame(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.StartGameRequest{
+		GameId: bag.gameID,
+	}))
+	require.NoError(t, err)
+
+	_, err = h.ResetTokenBag(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.ResetTokenBagRequest{
+		GameId: bag.gameID,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), "can only be reset during setup")
+}
+
 // Redoing the setup is the reason the reset exists: the second reveal has to
 // deal the roles the grimoire names NOW, not the ones from the first attempt.
 func TestResetTokenBag_ThenRevealAgainDealsTheNewAssignments(t *testing.T) {

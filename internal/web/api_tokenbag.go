@@ -405,6 +405,11 @@ func (h *ClockKeeperServiceHandler) ResetTokenBag(ctx context.Context, req *conn
 	if g.TokenBagPhase == game.TokenBagPhaseInactive {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("the token bag has not been opened yet"))
 	}
+	// Once the game has started the reveal is history; wiping the snapshots
+	// mid-game would only destroy the record of who holds which role.
+	if g.State != game.StateSetup {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("the token bag can only be reset during setup"))
+	}
 
 	tx, err := h.db.Tx(ctx)
 	if err != nil {
@@ -421,12 +426,21 @@ func (h *ClockKeeperServiceHandler) ResetTokenBag(ctx context.Context, req *conn
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	if _, err := tx.Game.UpdateOneID(g.ID).
+	// Conditional on state so a StartGame that commits between our read above
+	// and this write cannot be crossed: 0 affected rows means the game left
+	// setup, and the registration wipe above rolls back with us.
+	affected, err := tx.Game.Update().
+		Where(game.ID(g.ID), game.StateEQ(game.StateSetup)).
 		SetTokenBagPhase(game.TokenBagPhaseClosed).
-		Save(ctx); err != nil {
+		Save(ctx)
+	if err != nil {
 		_ = tx.Rollback()
 		slog.Error("reset token bag failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+	if affected == 0 {
+		_ = tx.Rollback()
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("the token bag can only be reset during setup"))
 	}
 
 	if err := tx.Commit(); err != nil {
