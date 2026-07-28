@@ -43,7 +43,10 @@
     onregistrants: (registrants: BagRegistrants) => void;
     /** Arranges the grimoire; resolves to an error message, or null on success. */
     onarrange: (orderedNames: string[]) => Promise<string | null>;
-    /** Flushes pending page state to the server before the reveal reads it. */
+    /**
+     * Flushes pending page state to the server before the reveal reads it.
+     * REJECTS when the state did not make it, and the reveal is abandoned.
+     */
     onbeforereveal: () => Promise<void>;
   } = $props();
 
@@ -66,6 +69,8 @@
   let arrangeConflicts = $state<string[]>([]);
   let arrangeError = $state<string | null>(null);
   let arranged = $state(false);
+  /** Why the reveal did not happen. Set when the pre-reveal flush failed. */
+  let revealError = $state<string | null>(null);
 
   onMount(() => {
     origin = window.location.origin;
@@ -160,11 +165,22 @@
     arrangeConflicts = [];
     arrangeError = null;
     arranged = false;
+    revealError = null;
   }
 
   function openQr(label: string, url: string) {
     qrModal = { label, url };
     copied = false;
+  }
+
+  /**
+   * Escape closes the QR modal. On window rather than on the overlay: the
+   * overlay is not focusable, so a keydown only ever reached it if the focus
+   * happened to be inside it — Escape did nothing right after opening the modal
+   * from the card button. Bound only while the modal is open.
+   */
+  function onModalKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") qrModal = null;
   }
 
   async function copyLink(url: string) {
@@ -216,8 +232,16 @@
     confirming = null;
     await run(async () => {
       // Seat names are read server-side, so a debounced save still in flight
-      // would make the reveal act on stale assignments.
-      await onbeforereveal();
+      // would make the reveal act on stale assignments. If that save cannot be
+      // landed, ABORT: revealing on assignments the server never saw deals real
+      // players the wrong characters, and a reveal cannot be taken back.
+      try {
+        await onbeforereveal();
+      } catch {
+        revealError =
+          "Could not save the role assignments — nothing was revealed. Check your connection and try again.";
+        return false;
+      }
       return await bag.reveal();
     });
   }
@@ -228,7 +252,10 @@
   }
 </script>
 
-<svelte:window bind:innerWidth={viewportWidth} />
+<svelte:window
+  bind:innerWidth={viewportWidth}
+  onkeydown={qrModal ? onModalKeydown : undefined}
+/>
 
 {#snippet qrCard(label: string, url: string)}
   <button
@@ -363,6 +390,13 @@
       {#if arrangeError}
         <p class="text-xs text-amber-600 dark:text-amber-400">{arrangeError}</p>
       {/if}
+      {#if revealError}
+        <p
+          class="rounded-lg border border-error-border bg-error-bg px-3 py-2 text-xs text-error-text"
+        >
+          {revealError}
+        </p>
+      {/if}
       {#if arranged}
         <p class="text-xs text-green-600 dark:text-green-400">
           Grimoire arranged ✓
@@ -435,13 +469,7 @@
 </div>
 
 {#if qrModal}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center"
-    onkeydown={(e) => {
-      if (e.key === "Escape") qrModal = null;
-    }}
-  >
+  <div class="fixed inset-0 z-50 flex items-center justify-center">
     <button
       type="button"
       tabindex="-1"

@@ -71,3 +71,31 @@ export function mapSeatingToRoles(
 
   return missing.length > 0 ? { missing } : { roleIds };
 }
+
+/**
+ * The full list of seats to lay out on the circle: the ring the players picked,
+ * followed by every other in-play seat the ring did not cover.
+ *
+ * Without the tail, `circleLayout` would only space the seats it was given and
+ * the rest would keep whatever position they had — usually the same default
+ * spot, so several tokens end up stacked on top of each other. Appending them
+ * gives every seat its own place on the circle; the picked ring still comes
+ * first, so the players' own order is what the arrangement follows.
+ *
+ * Duplicates are dropped (two grimoire seats can carry the same name, which
+ * `mapSeatingToRoles` resolves to one role id) so no seat silently loses its
+ * position to a later one.
+ */
+export function seatOrderForLayout(
+  mappedRoleIds: readonly string[],
+  inPlayRoleIds: readonly string[],
+): string[] {
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const roleId of [...mappedRoleIds, ...inPlayRoleIds]) {
+    if (roleId === "" || seen.has(roleId)) continue;
+    seen.add(roleId);
+    order.push(roleId);
+  }
+  return order;
+}

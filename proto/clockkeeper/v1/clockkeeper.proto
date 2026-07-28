@@ -886,7 +886,10 @@ message GetTokenBagSeatingRequest {
 }
 
 message GetTokenBagSeatingResponse {
-  repeated int64 ordered_registration_ids = 1; // clockwise seating; only meaningful when complete = true
+  // Seating order CLOCKWISE AS SEEN FROM ABOVE the table. Players face inward,
+  // so the next id is the previous player's LEFT-hand neighbor. Only meaningful
+  // when complete = true.
+  repeated int64 ordered_registration_ids = 1;
   bool complete = 2;
   repeated string conflicts = 3; // human-readable conflict/gap descriptions
 }

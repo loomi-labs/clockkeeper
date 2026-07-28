@@ -48,8 +48,15 @@
   import PlayerAssignmentPanel from "~/lib/components/PlayerAssignmentPanel.svelte";
   import NameChipsBar from "~/lib/components/NameChipsBar.svelte";
   import TokenBagPanel from "~/lib/components/tokenbag/TokenBagPanel.svelte";
-  import { mapSeatingToRoles } from "~/lib/tokenbag-arrange";
-  import { deriveNameSource, type BagRegistrants } from "~/lib/tokenbag-names";
+  import {
+    mapSeatingToRoles,
+    seatOrderForLayout,
+  } from "~/lib/tokenbag-arrange";
+  import {
+    assignedSeatNames,
+    deriveNameSource,
+    type BagRegistrants,
+  } from "~/lib/tokenbag-names";
   import InfoCardPicker from "~/lib/components/InfoCardPicker.svelte";
   import InfoCardDisplay from "~/lib/components/InfoCardDisplay.svelte";
   import StarPassPrompt from "~/lib/components/StarPassPrompt.svelte";
@@ -1556,35 +1563,40 @@
   // Debounced save to server
   let grimoireSaveTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  // The save itself, extracted from the debounce wrapper so it can also be
-  // awaited directly (see flushGrimoireSave).
+  /**
+   * The save itself, extracted from the debounce wrapper so it can also be
+   * awaited directly (see flushGrimoireSave).
+   *
+   * THROWS on failure — the debounced path swallows it, the flush path does not.
+   * A caller that is about to hand the server authority over this state (the
+   * token bag reveal) has to be able to tell that the state never arrived.
+   */
   async function doSaveGrimoireState() {
     if (!game) return;
     const allPositions: Record<string, { x: number; y: number }> = {};
     for (const [id, pos] of grimoirePositions) allPositions[id] = pos;
     for (const [id, pos] of reminderPositions) allPositions[id] = pos;
-    try {
-      const encodedAttachments: Record<string, string> = {};
-      for (const [rid, att] of reminderAttachments) {
-        encodedAttachments[rid] = `${att.playerId}:${att.angle}`;
-      }
-      await client.updateGrimoireState({
-        gameId: game.id,
-        positions: allPositions,
-        playerNames: Object.fromEntries(grimoireNames),
-        gameNotes: Object.fromEntries(grimoireGameNotes),
-        roundNotes: Object.fromEntries(grimoireRoundNotes),
-        reminderAttachments: encodedAttachments,
-      });
-    } catch (err) {
-      console.error("Failed to save grimoire state", err);
+    const encodedAttachments: Record<string, string> = {};
+    for (const [rid, att] of reminderAttachments) {
+      encodedAttachments[rid] = `${att.playerId}:${att.angle}`;
     }
+    await client.updateGrimoireState({
+      gameId: game.id,
+      positions: allPositions,
+      playerNames: Object.fromEntries(grimoireNames),
+      gameNotes: Object.fromEntries(grimoireGameNotes),
+      roundNotes: Object.fromEntries(grimoireRoundNotes),
+      reminderAttachments: encodedAttachments,
+    });
   }
 
   function saveGrimoireState() {
     clearTimeout(grimoireSaveTimeout);
     grimoireSaveTimeout = setTimeout(() => {
-      void doSaveGrimoireState();
+      // Background save: nothing is waiting on it, and the next edit retries.
+      void doSaveGrimoireState().catch((err) => {
+        console.error("Failed to save grimoire state", err);
+      });
     }, 500);
   }
 
@@ -1594,6 +1606,10 @@
    * Needed before an RPC that reads the seat names server-side (the token bag
    * reveal), where a still-pending save would make the server act on the
    * assignments as they were half a second ago.
+   *
+   * REJECTS if the save fails, and callers must abort what they were about to do:
+   * revealing on assignments the server never received would deal the wrong
+   * tokens to real people, which no later edit can take back.
    */
   async function flushGrimoireSave() {
     clearTimeout(grimoireSaveTimeout);
@@ -2193,6 +2209,17 @@
     }
   });
 
+  // The role ids that have a seat at the table: roles plus travellers in play.
+  // grimoireNames can still hold entries for characters swapped out of the
+  // script, and those seats do not exist any more.
+  const inPlaySeatIds = $derived.by(() => {
+    if (!game) return [];
+    return [
+      ...(game.selectedCharacters ?? []),
+      ...(game.selectedTravellerCharacters ?? []),
+    ].map((c) => c.id);
+  });
+
   // Seats (roles in play) shown in the setup Players panel.
   const assignmentPanelPlayers = $derived.by(() => {
     if (!game) return [];
@@ -2262,8 +2289,13 @@
     }
   }
 
-  // Set of assigned name values (for the name chip bar's used-name detection).
-  const assignedNameValues = $derived(new Set(grimoireNames.values()));
+  // Set of assigned name values, for the name chip bar's used-name detection and
+  // the Token Bag panel's assigned / unassigned badges. In-play seats only — a
+  // name left behind on a seat that is no longer in the script is not assigned
+  // to anything (and the server's reveal takes the same view).
+  const assignedNameValues = $derived(
+    assignedSeatNames(inPlaySeatIds, grimoireNames),
+  );
 
   // --- Digital Token Bag ---
   // The panel's latest report, mirrored out of TokenBagPanel. While the bag owns
@@ -2312,18 +2344,25 @@
   ): Promise<string | null> {
     // The lookup below reads local state, but the seat names must also be on the
     // server before the reveal that usually follows.
-    await flushGrimoireSave();
+    try {
+      await flushGrimoireSave();
+    } catch (err) {
+      return getErrorMessage(err, "Failed to save the grimoire");
+    }
     const mapped = mapSeatingToRoles(orderedNames, grimoireNames);
     if ("missing" in mapped) {
       return `Assign all registered players to roles first — missing: ${mapped.missing.join(", ")}`;
     }
     if (mapped.roleIds.length === 0) return "No seated players to arrange.";
-    // grimoireNames is keyed by role id only, so nothing here can touch the
-    // `reminder-*` / `bagsub-reminder-*` entries that share grimoirePositions.
-    const seats = circleLayout(mapped.roleIds.length, 0, 0, 300);
+    // Seats the ring did not name still need a spot of their own, or they stay
+    // stacked wherever they were. grimoireNames and inPlaySeatIds are keyed by
+    // role id only, so nothing here can touch the `reminder-*` /
+    // `bagsub-reminder-*` entries that share grimoirePositions.
+    const seatIds = seatOrderForLayout(mapped.roleIds, inPlaySeatIds);
+    const seats = circleLayout(seatIds.length, 0, 0, 300);
     const next = new Map(grimoirePositions);
-    for (let i = 0; i < mapped.roleIds.length; i++) {
-      next.set(mapped.roleIds[i], seats[i]);
+    for (let i = 0; i < seatIds.length; i++) {
+      next.set(seatIds[i], seats[i]);
     }
     grimoirePositions = next;
     saveGrimoireState();

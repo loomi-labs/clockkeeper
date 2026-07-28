@@ -309,6 +309,31 @@ describe("normalizeName", () => {
     expect(normalizeName("An\u0001a")).toBe("ana");
     expect(normalizeName("An \u0001 a")).toBe("an a");
   });
+
+  // Mirrors TestNormalizeName_DropsFormatCharacters in
+  // internal/web/api_tokenbag_test.go. Invisible characters must not let two
+  // names that read identically at the table compare as different people.
+  it("drops format characters, so a zero-width name collides with the plain one", () => {
+    expect(normalizeName("An\u200ba")).toBe("ana"); // zero-width space
+    expect(normalizeName("An\u200da")).toBe("ana"); // zero-width joiner
+    expect(normalizeName("An\u200ca")).toBe("ana"); // zero-width non-joiner
+    expect(normalizeName("An\u00ada")).toBe("ana"); // soft hyphen
+    expect(normalizeName("\u202eAna")).toBe("ana"); // right-to-left override
+    expect(normalizeName("\ufeffAna")).toBe("ana"); // byte order mark
+  });
+
+  // Go classifies U+FEFF as a format character, not as whitespace (JavaScript's
+  // own \s disagrees), so stripping it must not split a name in two.
+  it("does not let a stripped format character split a name", () => {
+    expect(normalizeName("An\ufeffa Belle")).toBe("ana belle");
+  });
+
+  // The other direction: Go's unicode.IsSpace covers U+0085, which \s omits.
+  it("separates on every rune Go calls whitespace", () => {
+    expect(normalizeName("Ana\u0085Belle")).toBe("ana belle");
+    expect(normalizeName("Ana\u00a0Belle")).toBe("ana belle");
+    expect(normalizeName("Ana\u3000Belle")).toBe("ana belle");
+  });
 });
 
 describe("unassignedRegistrants", () => {

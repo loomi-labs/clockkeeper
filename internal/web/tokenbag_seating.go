@@ -24,9 +24,17 @@ var seatingIDRef = regexp.MustCompile(`#(\d+)`)
 // computeSeating derives the clockwise seating order from the players' neighbor
 // picks.
 //
-// Every pick contributes one directed edge "successor = the player sitting
-// clockwise": r.RightID = b yields r->b, r.LeftID = a yields a->r. Two players
-// agreeing on the same edge contribute it once.
+// ORIENTATION INVARIANT — the returned order is the seating CLOCKWISE AS SEEN
+// FROM ABOVE the table. Players sit in a circle facing inward, so a player's
+// LEFT-hand neighbor is the next seat clockwise from above, and their RIGHT-hand
+// neighbor is the previous one. (Stand in the circle facing the middle: your
+// left hand points the way the clock hands sweep when the table is drawn from
+// above.) Get this backwards and the arranged grimoire is a mirror image of the
+// real table.
+//
+// Every pick therefore contributes one directed edge "successor = the player
+// sitting clockwise": r.LeftID = a yields r->a, r.RightID = b yields b->r. Two
+// players agreeing on the same edge contribute it once.
 //
 // order is returned only when the edges form a single Hamiltonian cycle over
 // ALL claims — a partial order is never guessed. In that case order starts at
@@ -96,11 +104,13 @@ func computeSeating(claims []seatingClaim) (order []int, complete bool, conflict
 	}
 
 	for _, c := range sorted {
+		// See the orientation invariant above: left = next clockwise, right =
+		// previous clockwise.
 		if c.RightID != 0 {
-			addEdge(c.ID, c.ID, c.RightID)
+			addEdge(c.ID, c.RightID, c.ID)
 		}
 		if c.LeftID != 0 {
-			addEdge(c.ID, c.LeftID, c.ID)
+			addEdge(c.ID, c.ID, c.LeftID)
 		}
 	}
 

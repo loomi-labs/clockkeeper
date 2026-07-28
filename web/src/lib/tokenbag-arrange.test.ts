@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { mapSeatingToRoles, seatingNames } from "./tokenbag-arrange";
+import {
+  mapSeatingToRoles,
+  seatOrderForLayout,
+  seatingNames,
+} from "./tokenbag-arrange";
 
 describe("seatingNames", () => {
   const players = [
@@ -94,5 +98,50 @@ describe("mapSeatingToRoles", () => {
     expect(mapSeatingToRoles([], new Map([["imp", "Bob"]]))).toEqual({
       roleIds: [],
     });
+  });
+});
+
+describe("seatOrderForLayout", () => {
+  it("keeps the picked ring first and appends the in-play seats it missed", () => {
+    // Only Alice and Bob picked neighbors; the other three seats still need a
+    // place on the circle or they stay stacked on top of each other.
+    expect(
+      seatOrderForLayout(
+        ["imp", "chef"],
+        ["washerwoman", "chef", "imp", "mayor", "scapegoat"],
+      ),
+    ).toEqual(["imp", "chef", "washerwoman", "mayor", "scapegoat"]);
+  });
+
+  it("appends in the order the seats are in play", () => {
+    expect(seatOrderForLayout([], ["chef", "imp", "mayor"])).toEqual([
+      "chef",
+      "imp",
+      "mayor",
+    ]);
+  });
+
+  it("changes nothing when the ring already covers every seat", () => {
+    expect(seatOrderForLayout(["imp", "chef"], ["chef", "imp"])).toEqual([
+      "imp",
+      "chef",
+    ]);
+  });
+
+  it("drops duplicates so no seat loses its position to a later one", () => {
+    expect(
+      seatOrderForLayout(["chef", "chef"], ["chef", "imp", "imp"]),
+    ).toEqual(["chef", "imp"]);
+  });
+
+  it("ignores empty role ids", () => {
+    expect(seatOrderForLayout(["", "chef"], ["", "imp"])).toEqual([
+      "chef",
+      "imp",
+    ]);
+  });
+
+  it("returns nothing when there are no seats at all", () => {
+    expect(seatOrderForLayout([], [])).toEqual([]);
   });
 });

@@ -24,6 +24,31 @@ export type BagRegistrants = {
   gameId: string;
 };
 
+/**
+ * The seat names that are actually taken: the grimoire names of the roles IN
+ * PLAY, and nothing else.
+ *
+ * `grimoirePlayerNames` is never pruned when the Storyteller swaps a character
+ * out of the script, so it keeps names on seats that no longer exist. Counting
+ * those as "assigned" would badge a registrant as dealt in — and enable Reveal —
+ * for a role nobody is holding, while the server (which restricts the same map to
+ * the roles in play) refuses the reveal.
+ *
+ * MIRRORS the `inPlay` filter in `RevealTokenBag`
+ * (`internal/web/api_tokenbag.go`); the server is the authority.
+ */
+export function assignedSeatNames(
+  inPlayRoleIds: readonly string[],
+  grimoireNames: ReadonlyMap<string, string>,
+): Set<string> {
+  const names = new Set<string>();
+  for (const roleId of inPlayRoleIds) {
+    const name = grimoireNames.get(roleId);
+    if (name !== undefined && name !== "") names.add(name);
+  }
+  return names;
+}
+
 export type NameSourceInput = {
   /** The panel's latest report, or null if it never reported (or was cleared). */
   registrants: BagRegistrants | null;

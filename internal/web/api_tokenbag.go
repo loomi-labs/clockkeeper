@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"sort"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -85,6 +87,10 @@ func (h *ClockKeeperServiceHandler) CloseTokenBagRegistration(ctx context.Contex
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
 		return nil, err
+	}
+
+	if g.State == game.StateCompleted {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
 	}
 
 	if g.TokenBagPhase != game.TokenBagPhaseOpen {
@@ -180,19 +186,51 @@ func (h *ClockKeeperServiceHandler) RemoveTokenBagRegistration(ctx context.Conte
 // case- and whitespace-insensitively; every registered player must have exactly
 // one role, while grimoire names nobody registered under are ignored (the
 // storyteller may have typed names for players sitting without a phone).
+//
+// Only roles ACTUALLY IN PLAY (selected_roles + selected_travellers) can be
+// dealt out. grimoire_player_names is never pruned when the storyteller swaps a
+// character out of the script, so it keeps stale role_id keys around; handing a
+// player a token off one of those would reveal a character nobody holds.
 func (h *ClockKeeperServiceHandler) RevealTokenBag(ctx context.Context, req *connect.Request[clockkeeperv1.RevealTokenBagRequest]) (*connect.Response[clockkeeperv1.RevealTokenBagResponse], error) {
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
 		return nil, err
 	}
 
+	if g.State == game.StateCompleted {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
+	}
+
 	if g.TokenBagPhase != game.TokenBagPhaseClosed {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("close token bag registration before revealing"))
+	}
+
+	// Seats that exist: the roles and travellers the storyteller put in play.
+	inPlay := make(map[string]bool, len(g.SelectedRoles)+len(g.SelectedTravellers))
+	var unknownRoles []string
+	for _, roleID := range slices.Concat(g.SelectedRoles, g.SelectedTravellers) {
+		if inPlay[roleID] {
+			continue
+		}
+		inPlay[roleID] = true
+		if _, ok := h.registry.Character(roleID); !ok {
+			// A seat the registry cannot resolve would blow up as a CodeInternal
+			// the moment its player asked for their token. Better to refuse the
+			// reveal and tell the storyteller which id is broken.
+			unknownRoles = append(unknownRoles, roleID)
+		}
+	}
+	if len(unknownRoles) > 0 {
+		sort.Strings(unknownRoles)
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("these roles are in play but unknown: %s — fix the script selection before revealing", strings.Join(unknownRoles, ", ")))
 	}
 
 	// Invert the grimoire map: normalized player name -> role ids.
 	rolesByName := make(map[string][]string, len(g.GrimoirePlayerNames))
 	for roleID, name := range g.GrimoirePlayerNames {
+		if !inPlay[roleID] {
+			continue // stale key from a character that left the script
+		}
 		_, normalized, err := normalizeName(name)
 		if err != nil {
 			continue // blank or oversized grimoire entry — nothing to match
@@ -563,6 +601,13 @@ type newRegistration struct {
 // secret is always generated (the schema requires its hash); shared-device joins
 // discard the raw value.
 func (h *ClockKeeperServiceHandler) createRegistration(ctx context.Context, g *ent.Game, rawName string, viaSharedDevice bool) (*newRegistration, error) {
+	if g.State == game.StateCompleted {
+		// A finished game's QR codes are still floating around on paper; joining
+		// one must not silently work. Covers both JoinTokenBag and
+		// JoinTokenBagShared, which are the only ways in.
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
+	}
+
 	if g.TokenBagPhase != game.TokenBagPhaseOpen {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("token bag registration is not open"))
 	}

@@ -16,6 +16,16 @@ func (c *Config) SpotifyConfigured() bool {
 	return c.SpotifyClientID != "" && c.SpotifyClientSecret != "" && c.SpotifyRedirectURI != ""
 }
 
+// defaultRateLimitAnon is the anonymous request budget, per minute, per IP.
+//
+// Token bag players are unauthenticated, so every phone at one table shares this
+// SINGLE budget — they all sit behind the same venue NAT. At 300/min the burst
+// (see NewRateLimitInterceptor: max(rate/3, 5)) is 100 requests, which absorbs a
+// full table of 15 phones scanning the QR code at the same moment, each spending
+// a handful of requests on the way in. Several rooms behind one NAT need it
+// raised; see .env.example.
+const defaultRateLimitAnon = 300
+
 // Config holds web server configuration.
 type Config struct {
 	Listen              string
@@ -58,7 +68,7 @@ func LoadConfigFromEnv() *Config {
 		SpotifyClientID:     env.GetString("SPOTIFY_CLIENT_ID", ""),
 		SpotifyClientSecret: spotifySecret,
 		SpotifyRedirectURI:  env.GetString("SPOTIFY_REDIRECT_URI", ""),
-		RateLimitAnon:       env.GetInt("RATE_LIMIT_ANON", 120),
+		RateLimitAnon:       env.GetInt("RATE_LIMIT_ANON", defaultRateLimitAnon),
 		RateLimitAuth:       env.GetInt("RATE_LIMIT_AUTH", 120),
 		AnonymousMaxAge:     env.GetDuration("ANONYMOUS_MAX_AGE", "8760h"),
 		DevSingleUser:       env.GetBool("DEV_SINGLE_USER", false),

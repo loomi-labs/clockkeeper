@@ -61,9 +61,14 @@ func hashSecret(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// normalizeName cleans a player-typed name into its display form (control
-// characters dropped, whitespace runs collapsed to single spaces, trimmed) and
-// the case-folded form used to enforce uniqueness within a game.
+// normalizeName cleans a player-typed name into its display form (control and
+// format characters dropped, whitespace runs collapsed to single spaces,
+// trimmed) and the case-folded form used to enforce uniqueness within a game.
+//
+// DUPLICATED LOGIC — mirrored by `normalizeName` in `web/src/lib/tokenbag.ts`,
+// which the Storyteller UI uses to tell which registrants already hold a
+// grimoire seat. This side is the authority (it owns per-game uniqueness); keep
+// the two in sync, including the exact classes of dropped runes below.
 func normalizeName(raw string) (display string, normalized string, err error) {
 	var b strings.Builder
 	pendingSpace := false
@@ -71,8 +76,11 @@ func normalizeName(raw string) (display string, normalized string, err error) {
 		switch {
 		case unicode.IsSpace(r):
 			pendingSpace = true
-		case unicode.IsControl(r):
-			// Dropped: control characters have no place in a display name.
+		case unicode.IsControl(r) || unicode.In(r, unicode.Cf):
+			// Dropped: control characters have no place in a display name, and
+			// neither do format characters — a zero-width space or a bidi
+			// override (U+202E) would let "An<ZWSP>a" register alongside "Ana"
+			// and read identically at the table.
 		default:
 			if pendingSpace && b.Len() > 0 {
 				b.WriteRune(' ')
@@ -206,27 +214,39 @@ func (h *ClockKeeperServiceHandler) buildWatchSnapshot(g *ent.Game, regs []*ent.
 	if selfReg != nil {
 		snapshot.SelfRegistrationId = int64(selfReg.ID)
 		if g.TokenBagPhase == game.TokenBagPhaseRevealed && selfReg.AssignedRoleID != "" {
-			c, err := resolveTokenCharacter(g, selfReg.AssignedRoleID, h.registry)
-			if err != nil {
-				return nil, err
+			// Degraded, never fatal: an assigned role the registry cannot resolve
+			// any more (a character removed from the data set, a substitution
+			// pointing at nothing) leaves self_token unset. Failing instead would
+			// abort the watch STREAM, and the player's phone would reconnect
+			// forever — for a fault no reconnect can fix. Everything else in the
+			// snapshot (phase, the other players) is still correct and useful.
+			// One log line per snapshot; RevealTokenBag pre-validates the seats,
+			// so reaching this is a data-integrity bug worth seeing.
+			if c, ok := tokenCharacter(g, selfReg.AssignedRoleID, h.registry); ok {
+				snapshot.SelfToken = characterToProto(c)
+			} else {
+				slog.Warn("token bag snapshot without a resolvable self token",
+					"game_id", g.ID, "registration_id", selfReg.ID, "role_id", selfReg.AssignedRoleID)
 			}
-			snapshot.SelfToken = characterToProto(c)
 		}
 	}
 
 	return snapshot, nil
 }
 
-// resolveTokenCharacter maps a registration's assigned role id to the character
-// the player actually holds. Bag substitutions win: a seat that drew the Drunk
-// holds the townsfolk token the substitution names, and must never learn the
-// Drunk id.
+// tokenCharacter maps a registration's assigned role id to the character the
+// player actually holds. Bag substitutions win: a seat that drew the Drunk holds
+// the townsfolk token the substitution names, and must never learn the Drunk id.
 //
 // role_promotions are intentionally ignored — reveal happens at game start,
 // before any star pass; the snapshot stores the original role.
-func resolveTokenCharacter(g *ent.Game, roleID string, registry *botc.Registry) (*botc.Character, error) {
+//
+// ok is false for an empty role id and for one the registry does not know. It
+// does not log: callers decide whether the miss is fatal (see
+// resolveTokenCharacter) or degradable (see buildWatchSnapshot).
+func tokenCharacter(g *ent.Game, roleID string, registry *botc.Registry) (*botc.Character, bool) {
 	if roleID == "" {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no token assigned yet"))
+		return nil, false
 	}
 
 	resolved := roleID
@@ -237,9 +257,19 @@ func resolveTokenCharacter(g *ent.Game, roleID string, registry *botc.Registry) 
 		}
 	}
 
-	c, ok := registry.Character(resolved)
+	return registry.Character(resolved)
+}
+
+// resolveTokenCharacter is the request/response flavour of tokenCharacter, for
+// the single-shot RPCs that have nothing to fall back on.
+func resolveTokenCharacter(g *ent.Game, roleID string, registry *botc.Registry) (*botc.Character, error) {
+	if roleID == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no token assigned yet"))
+	}
+
+	c, ok := tokenCharacter(g, roleID, registry)
 	if !ok {
-		slog.Error("token character not in registry", "role_id", resolved, "game_id", g.ID)
+		slog.Error("token character not in registry", "role_id", roleID, "game_id", g.ID)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 	return c, nil

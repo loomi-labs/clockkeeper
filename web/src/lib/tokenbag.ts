@@ -220,17 +220,26 @@ export function neighborOptions(
 // Name matching
 // ---------------------------------------------------------------------------
 
-// Control characters, per Go's unicode.IsControl (Latin-1 range only).
-const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/g;
+// Go's unicode.IsSpace, spelled out: JavaScript's own `\s` is not the same set
+// (it omits U+0085 and adds U+FEFF, which Go classifies as a format character
+// and this function therefore drops instead of turning into a space).
+const GO_SPACE =
+  /[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/g;
+
+// Go's unicode.IsControl (category Cc) plus unicode.Cf: zero-width spaces and
+// joiners, soft hyphens, bidi overrides such as U+202E, the BOM. Dropped
+// outright, so two names that read identically at the table cannot both
+// register.
+const GO_DROPPED = /[\p{Cc}\p{Cf}]/gu;
 
 /**
  * Case-folds and collapses a name the way the backend does, so a registrant can
  * be matched against a grimoire seat name typed by the Storyteller.
  *
  * DUPLICATED LOGIC — the authority is `normalizeName` in
- * `internal/web/tokenbag_helpers.go` (drop control characters, collapse
- * whitespace runs to single spaces, trim, lowercase). It has to exist on both
- * sides: the server owns uniqueness, but this comparison is a pure client-side
+ * `internal/web/tokenbag_helpers.go` (drop control AND format characters,
+ * collapse whitespace runs to single spaces, trim, lowercase). It has to exist
+ * on both sides: the server owns uniqueness, but this comparison is a pure client-side
  * UI affordance (which registrants are still unassigned) with no RPC to ask.
  * Keep the two in sync.
  */
@@ -238,8 +247,8 @@ export function normalizeName(raw: string): string {
   return (
     raw
       // Whitespace first: Go classifies tab/newline as space, not as control.
-      .replace(/\s/g, " ")
-      .replace(CONTROL_CHARS, "")
+      .replace(GO_SPACE, " ")
+      .replace(GO_DROPPED, "")
       .replace(/ +/g, " ")
       .trim()
       .toLowerCase()

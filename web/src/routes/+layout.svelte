@@ -29,20 +29,27 @@
     initTheme();
     initSidebar();
 
-    // Fetch auth config from server.
-    try {
-      const config = await rawClient.getAuthConfig({});
-      auth.discordAvailable = !!config.discordClientId;
-      auth.discordClientId = config.discordClientId;
-      spotify.available = !!config.spotifyClientId;
-      spotify.clientId = config.spotifyClientId;
-    } catch {
-      // Server may be unavailable — continue with defaults.
+    const isPublic = isPublicPath(page.url.pathname);
+
+    // Fetch auth config from server — but not on public routes. A token bag
+    // player's phone renders no Discord or Spotify affordance, and these
+    // requests all land on ONE per-IP anon budget shared by the whole table, so
+    // skipping it is a request per phone that a 15-player table gets back.
+    if (!isPublic) {
+      try {
+        const config = await rawClient.getAuthConfig({});
+        auth.discordAvailable = !!config.discordClientId;
+        auth.discordClientId = config.discordClientId;
+        spotify.available = !!config.spotifyClientId;
+        spotify.clientId = config.spotifyClientId;
+      } catch {
+        // Server may be unavailable — continue with defaults.
+      }
     }
 
     // Public routes never mint a session — a player scanning a token bag QR
     // code must not be handed a Storyteller identity.
-    if (!getToken() && !isPublicPath(page.url.pathname)) {
+    if (!getToken() && !isPublic) {
       // Auto-create anonymous session.
       try {
         const resp = await rawClient.createAnonymousSession({});

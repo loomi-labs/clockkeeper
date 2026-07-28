@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { deriveNameSource, type NameSourceInput } from "./tokenbag-names";
+import {
+  assignedSeatNames,
+  deriveNameSource,
+  type NameSourceInput,
+} from "./tokenbag-names";
 
 const PRESETS = ["Pia", "Quin"];
 
@@ -93,5 +97,36 @@ describe("deriveNameSource", () => {
     const source = deriveNameSource(input({ isSetup: false, presetNames }));
     source.names.push("Rex");
     expect(presetNames).toEqual(["Pia"]);
+  });
+});
+
+describe("assignedSeatNames", () => {
+  const grimoire = new Map([
+    ["washerwoman", "Alice"],
+    ["chef", "Bob"],
+    ["imp", ""],
+  ]);
+
+  it("collects the names of the seats in play", () => {
+    expect([
+      ...assignedSeatNames(["washerwoman", "chef", "imp"], grimoire),
+    ]).toEqual(["Alice", "Bob"]);
+  });
+
+  // The heart of it: a name stranded on a character that left the script is not
+  // assigned to anything, and the server's reveal takes the same view.
+  it("ignores names on seats that are no longer in play", () => {
+    expect([...assignedSeatNames(["chef"], grimoire)]).toEqual(["Bob"]);
+    expect([...assignedSeatNames([], grimoire)]).toEqual([]);
+  });
+
+  it("ignores in-play seats with no name", () => {
+    expect([...assignedSeatNames(["imp"], grimoire)]).toEqual([]);
+  });
+
+  it("keeps the original spelling, so the caller can normalize it", () => {
+    expect([
+      ...assignedSeatNames(["imp"], new Map([["imp", "  ANA   b "]])),
+    ]).toEqual(["  ANA   b "]);
   });
 });

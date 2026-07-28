@@ -28,7 +28,9 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 40, RightID: 10},
 				{ID: 10, RightID: 30},
 			},
-			wantOrder:    []int{10, 30, 50, 20, 40},
+			// #50 is on #30's right, so #30 sits clockwise of #50 (right =
+			// counter-clockwise). Following that round: 10 -> 40 -> 20 -> 50 -> 30.
+			wantOrder:    []int{10, 40, 20, 50, 30},
 			wantComplete: true,
 		},
 		{
@@ -38,7 +40,8 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 2, LeftID: 1, RightID: 3},
 				{ID: 3, LeftID: 2, RightID: 1},
 			},
-			wantOrder:    []int{1, 2, 3},
+			// #1's left is #3, so #3 is clockwise of #1: 1 -> 3 -> 2.
+			wantOrder:    []int{1, 3, 2},
 			wantComplete: true,
 		},
 		{
@@ -48,6 +51,28 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 7},
 			},
 			wantOrder:    []int{4, 7},
+			wantComplete: true,
+		},
+		{
+			// Hand-derived, from the physical table. Players face inward, so a
+			// player's LEFT-hand neighbor is the next seat CLOCKWISE seen from
+			// above, and their right-hand neighbor is the previous one.
+			//
+			//   Ana(1) says her left is Bob(2)     => Bob is clockwise of Ana  => 1 -> 2
+			//   Bob(2) says his right is Ana(1)    => Ana is counter-clockwise
+			//                                         of Bob                  => 1 -> 2 (agrees)
+			//   Cara(3) says her left is Ana(1)    => Ana is clockwise of Cara => 3 -> 1
+			//   Cara(3) says her right is Bob(2)   => Bob is counter-clockwise
+			//                                         of Cara                 => 2 -> 3
+			//
+			// Clockwise from the lowest id: Ana, Bob, Cara.
+			name: "asymmetric three-player table, clockwise from above",
+			claims: []seatingClaim{
+				{ID: 1, LeftID: 2},
+				{ID: 2, RightID: 1},
+				{ID: 3, LeftID: 1, RightID: 2},
+			},
+			wantOrder:    []int{1, 2, 3},
 			wantComplete: true,
 		},
 		{
@@ -70,26 +95,30 @@ func TestComputeSeating(t *testing.T) {
 			wantConflicts: []string{"no neighbor picks yet: #1, #2, #3"},
 		},
 		{
-			name: "two players claim the same clockwise neighbor",
+			// Both #1 and #2 say #3 sits on their right, which puts each of them
+			// clockwise of #3 — #3 cannot have two.
+			name: "two players claim the same player on their right",
 			claims: []seatingClaim{
 				{ID: 1, RightID: 3},
 				{ID: 2, RightID: 3},
 				{ID: 3},
 			},
 			wantConflicts: []string{
-				"#3 has two different players sitting counter-clockwise: #1 and #2",
+				"#3 has two different players sitting clockwise: #1 and #2",
 				"no neighbor picks yet: #3",
 			},
 		},
 		{
-			name: "a player ends up with two different clockwise neighbors",
+			// #2 on #1's right puts #2 counter-clockwise of #1; #1 on #3's left
+			// puts #3 counter-clockwise of #1 too.
+			name: "a player ends up with two different counter-clockwise neighbors",
 			claims: []seatingClaim{
 				{ID: 1, RightID: 2},
 				{ID: 2},
 				{ID: 3, LeftID: 1},
 			},
 			wantConflicts: []string{
-				"#1 has two different players sitting clockwise: #2 and #3",
+				"#1 has two different players sitting counter-clockwise: #2 and #3",
 				"no neighbor picks yet: #2",
 			},
 		},
@@ -101,7 +130,7 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 3},
 			},
 			wantConflicts: []string{
-				"#2 has two different players sitting counter-clockwise: #1 and #3",
+				"#2 has two different players sitting clockwise: #1 and #3",
 				"no neighbor picks yet: #3",
 			},
 		},
@@ -115,7 +144,7 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 5, RightID: 4},
 			},
 			wantConflicts: []string{
-				"these players form a closed circle that leaves the others out: #1, #2, #3",
+				"these players form a closed circle that leaves the others out: #1, #3, #2",
 				"these players form a closed circle that leaves the others out: #4, #5",
 			},
 		},

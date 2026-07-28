@@ -13,6 +13,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/internal/database"
@@ -900,6 +901,15 @@ func validateTokenBag(t *testing.T, ctx context.Context, db *sql.DB, client *ent
 		SetSecretHash("secret-hash-alice").
 		Save(ctx); err == nil {
 		t.Error("expected a unique constraint violation for a duplicate secret hash")
+	}
+
+	// Leave the seed data as it was found: later validators in the same run share
+	// this database, and a stray registration on the seed game would surprise
+	// them (the two failed creates above rolled back, so only Alice persisted).
+	if _, err := client.Registration.Delete().
+		Where(registration.GameID(g.ID)).
+		Exec(ctx); err != nil {
+		t.Fatalf("failed to clean up registrations: %v", err)
 	}
 }
 

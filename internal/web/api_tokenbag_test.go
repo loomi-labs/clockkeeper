@@ -24,11 +24,27 @@ type bagGame struct {
 	sharedCode string
 }
 
-// createBagGame creates a user, a game and opens its token bag.
+// bagTestRoles are the roles these tests put in play. Reveal only deals roles
+// the storyteller selected, so every grimoire name a test writes has to name one
+// of these — see setSelectedRoles for a test that needs a different set.
+var bagTestRoles = []string{"chef", "imp", "mayor", "drunk"}
+
+// setSelectedRoles puts an exact set of roles in play, bypassing the RPC so a
+// test can also select a role id the registry does not know.
+func setSelectedRoles(t *testing.T, h *ClockKeeperServiceHandler, gameID int64, roleIDs ...string) {
+	t.Helper()
+
+	_, err := h.db.Game.UpdateOneID(int(gameID)).SetSelectedRoles(roleIDs).Save(context.Background())
+	require.NoError(t, err)
+}
+
+// createBagGame creates a user, a game with bagTestRoles in play, and opens its
+// token bag.
 func createBagGame(t *testing.T, h *ClockKeeperServiceHandler) bagGame {
 	t.Helper()
 
 	ownerID, gameID := createTestGame(t, h)
+	setSelectedRoles(t, h, gameID, bagTestRoles...)
 
 	resp, err := h.OpenTokenBagRegistration(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.OpenTokenBagRegistrationRequest{
 		GameId: gameID,
@@ -412,6 +428,103 @@ func TestJoinTokenBag_RejectsInvalidNames(t *testing.T) {
 	}
 }
 
+// The QR codes handed out at the start of the evening are still lying on the
+// table when the game ends. None of them may keep working.
+func TestTokenBagRPCs_RejectedOnCompletedGame(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	ownerID, g := startedGame(t, h)
+
+	open, err := h.OpenTokenBagRegistration(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.OpenTokenBagRegistrationRequest{
+		GameId: g.Id,
+	}))
+	require.NoError(t, err)
+	joinCode := open.Msg.TokenBag.JoinCode
+	sharedCode := open.Msg.TokenBag.SharedCode
+
+	_, err = h.EndGame(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.EndGameRequest{GameId: g.Id}))
+	require.NoError(t, err)
+
+	t.Run("join", func(t *testing.T) {
+		_, err := h.JoinTokenBag(ctx, connect.NewRequest(&clockkeeperv1.JoinTokenBagRequest{
+			JoinCode: joinCode,
+			Name:     "Alice",
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+		assert.Contains(t, err.Error(), "completed")
+	})
+
+	t.Run("join via shared device", func(t *testing.T) {
+		_, err := h.JoinTokenBagShared(ctx, connect.NewRequest(&clockkeeperv1.JoinTokenBagSharedRequest{
+			SharedCode: sharedCode,
+			Name:       "Bob",
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+		assert.Contains(t, err.Error(), "completed")
+	})
+
+	t.Run("close registration", func(t *testing.T) {
+		_, err := h.CloseTokenBagRegistration(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.CloseTokenBagRegistrationRequest{
+			GameId: g.Id,
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+		assert.Contains(t, err.Error(), "completed")
+	})
+
+	t.Run("reveal", func(t *testing.T) {
+		_, err := h.RevealTokenBag(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.RevealTokenBagRequest{
+			GameId: g.Id,
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+		assert.Contains(t, err.Error(), "completed")
+	})
+}
+
+// Format characters are invisible, so two names that differ only by one read as
+// the same name at a physical table. Mirrored by web/src/lib/tokenbag.ts.
+func TestNormalizeName_DropsFormatCharacters(t *testing.T) {
+	plainDisplay, plain, err := normalizeName("Ana")
+	require.NoError(t, err)
+
+	cases := map[string]string{
+		"zero width space":       "An\u200ba",
+		"zero width joiner":      "An\u200da",
+		"zero width non-joiner":  "An\u200ca",
+		"soft hyphen":            "An\u00ada",
+		"right-to-left override": "\u202eAna",
+		"byte order mark":        "\ufeffAna",
+	}
+	for label, raw := range cases {
+		t.Run(label, func(t *testing.T) {
+			require.NotEqual(t, "Ana", raw, "the raw name must actually differ")
+			display, normalized, err := normalizeName(raw)
+			require.NoError(t, err)
+			assert.Equal(t, plainDisplay, display)
+			assert.Equal(t, plain, normalized, "must collide with a plain %q", plainDisplay)
+		})
+	}
+}
+
+// The collision above is what makes the uniqueness constraint hold: an invisible
+// character must not buy a second registration under someone else's name.
+func TestJoinTokenBag_RejectsAZeroWidthDuplicate(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	bag := createBagGame(t, h)
+	joinBag(t, h, bag.joinCode, "Ana")
+
+	_, err := h.JoinTokenBag(ctx, connect.NewRequest(&clockkeeperv1.JoinTokenBagRequest{
+		JoinCode: bag.joinCode,
+		Name:     "An\u200ba",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeAlreadyExists, connect.CodeOf(err))
+}
+
 func TestNormalizeName_BoundsMatchTheSchema(t *testing.T) {
 	// The longest accepted name is bounded by whichever limit bites first.
 	display, normalized, err := normalizeName(strings.Repeat("a", maxTokenBagNameRunes))
@@ -626,7 +739,10 @@ func TestGetTokenBagSeating_CompleteCircleAndNamedConflicts(t *testing.T) {
 	require.Len(t, resp.Msg.Conflicts, 1)
 	assert.Equal(t, "no neighbor picks yet: Alice, Bob, Carol", resp.Msg.Conflicts[0])
 
-	// Alice -> Bob -> Carol -> Alice.
+	// Every player names the next one as sitting on their RIGHT: Bob is on
+	// Alice's right, Carol on Bob's, Alice on Carol's. A right-hand neighbor sits
+	// counter-clockwise seen from above, so the clockwise ring is the other way
+	// round: Alice, Carol, Bob.
 	for secret, right := range map[string]int64{aliceSecret: bobID, bobSecret: carolID, carolSecret: aliceID} {
 		_, err := h.SetTokenBagNeighbors(ctx, connect.NewRequest(&clockkeeperv1.SetTokenBagNeighborsRequest{
 			RegistrationSecret:  secret,
@@ -641,7 +757,7 @@ func TestGetTokenBagSeating_CompleteCircleAndNamedConflicts(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, resp.Msg.Complete)
 	assert.Empty(t, resp.Msg.Conflicts)
-	assert.Equal(t, []int64{aliceID, bobID, carolID}, resp.Msg.OrderedRegistrationIds)
+	assert.Equal(t, []int64{aliceID, carolID, bobID}, resp.Msg.OrderedRegistrationIds)
 
 	// Carol contradicts Alice about who sits clockwise of Alice.
 	_, err = h.SetTokenBagNeighbors(ctx, connect.NewRequest(&clockkeeperv1.SetTokenBagNeighborsRequest{
@@ -759,6 +875,93 @@ func TestRevealTokenBag_AssignsRolesIgnoringExtraGrimoireNames(t *testing.T) {
 	bobToken, err := h.GetMyToken(ctx, connect.NewRequest(&clockkeeperv1.GetMyTokenRequest{RegistrationSecret: bobSecret}))
 	require.NoError(t, err)
 	assert.Equal(t, "imp", bobToken.Msg.Character.Id, "one player's secret must never reveal another's token")
+}
+
+// grimoire_player_names keeps the seats of characters the storyteller swapped
+// out of the script. Dealing a token off one of those would hand a player a
+// character nobody is holding, so a stale key counts for nothing.
+func TestRevealTokenBag_IgnoresNamesOnRolesNoLongerInPlay(t *testing.T) {
+	h := testHandler(t)
+	bag := createBagGame(t, h)
+	joinBag(t, h, bag.joinCode, "Alice")
+
+	// "washerwoman" was in the script when Alice's name was typed, and has since
+	// been swapped out — its grimoire entry is left behind.
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"washerwoman": "Alice"})
+	closeBag(t, h, bag)
+
+	_, err := h.RevealTokenBag(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.RevealTokenBagRequest{
+		GameId: bag.gameID,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), "no role assigned to")
+	assert.Contains(t, err.Error(), "Alice")
+
+	assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_CLOSED, getBag(t, h, bag).Phase)
+}
+
+// The same stale entry used to make an honest assignment look ambiguous, which
+// blocked the reveal with a conflict the storyteller could not see or fix.
+func TestRevealTokenBag_StaleSeatDoesNotCreateAmbiguity(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	bag := createBagGame(t, h)
+	aliceID, _ := joinBag(t, h, bag.joinCode, "Alice")
+
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{
+		"chef":        "Alice", // in play
+		"washerwoman": "Alice", // left over from a character that is not
+	})
+	closeBag(t, h, bag)
+
+	resp, err := h.RevealTokenBag(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.RevealTokenBagRequest{
+		GameId: bag.gameID,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_REVEALED, resp.Msg.TokenBag.Phase)
+
+	alice, err := h.db.Registration.Get(ctx, int(aliceID))
+	require.NoError(t, err)
+	assert.Equal(t, "chef", alice.AssignedRoleID, "only the seat in play can be dealt")
+}
+
+// An in-play role id the registry cannot resolve would surface as a CodeInternal
+// the moment its player asked for their token. Refuse the reveal and name it.
+func TestRevealTokenBag_RejectsInPlayRoleUnknownToTheRegistry(t *testing.T) {
+	h := testHandler(t)
+	bag := createBagGame(t, h)
+	joinBag(t, h, bag.joinCode, "Alice")
+	setSelectedRoles(t, h, bag.gameID, "chef", "no-such-character")
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"chef": "Alice"})
+	closeBag(t, h, bag)
+
+	_, err := h.RevealTokenBag(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.RevealTokenBagRequest{
+		GameId: bag.gameID,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err), "a broken script selection is the storyteller's to fix, not a 500")
+	assert.Contains(t, err.Error(), "no-such-character")
+
+	assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_CLOSED, getBag(t, h, bag).Phase)
+}
+
+// Travellers hold seats too, so a traveller's grimoire name must be dealable.
+func TestRevealTokenBag_DealsSelectedTravellers(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	bag := createBagGame(t, h)
+	scapegoatID, _ := joinBag(t, h, bag.joinCode, "Trav")
+
+	_, err := h.db.Game.UpdateOneID(int(bag.gameID)).SetSelectedTravellers([]string{"scapegoat"}).Save(ctx)
+	require.NoError(t, err)
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"scapegoat": "Trav"})
+	closeBag(t, h, bag)
+	revealBag(t, h, bag)
+
+	trav, err := h.db.Registration.Get(ctx, int(scapegoatID))
+	require.NoError(t, err)
+	assert.Equal(t, "scapegoat", trav.AssignedRoleID)
 }
 
 func TestRevealTokenBag_BagSubstitutionHidesTheDrunk(t *testing.T) {

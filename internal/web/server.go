@@ -105,12 +105,23 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
+// applyWriteDeadline reports whether a request path gets the per-request write
+// deadline. Everything does except the token bag watch stream, whose liveness
+// comes from its heartbeat and the client's context rather than from a deadline.
+//
+// Split out of the middleware so the decision — the part that can actually be
+// wrong — is a pure function of the path and unit-testable; the
+// ResponseController call around it has no observable result to assert on.
+func applyWriteDeadline(path string) bool {
+	return path != watchTokenBagPath
+}
+
 // perRequestWriteDeadline gives every request the write deadline that
 // http.Server.WriteTimeout used to enforce globally, except the token bag watch
 // stream, whose liveness comes from its heartbeat and the client's context.
 func perRequestWriteDeadline(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != watchTokenBagPath {
+		if applyWriteDeadline(r.URL.Path) {
 			// Errors mean the ResponseWriter has no deadline support; then the
 			// request simply runs without one, as it would have anyway.
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(writeTimeout))
