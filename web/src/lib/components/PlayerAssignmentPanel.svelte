@@ -25,6 +25,8 @@
     onrandomize,
     onclearall,
     onmanagepresets,
+    renameLockedIds,
+    renameLockedHint = "This name cannot be edited here",
   }: {
     players: PanelPlayer[];
     presetNames: string[];
@@ -36,7 +38,13 @@
     onassigninorder: () => void;
     onrandomize?: () => void;
     onclearall: () => void;
-    onmanagepresets: () => void;
+    // Omitted when the name list is not the Storyteller's to edit (e.g. it comes
+    // from Token Bag registration) — the "Manage names" button then disappears.
+    onmanagepresets?: () => void;
+    // Seats whose name is owned elsewhere: the rename pencil is shown disabled
+    // with `renameLockedHint` as its tooltip.
+    renameLockedIds?: ReadonlySet<string>;
+    renameLockedHint?: string;
   } = $props();
 
   let openPlayerId = $state<string | null>(null);
@@ -59,6 +67,10 @@
     presetNames.filter((n) => !assignedNames.has(n)),
   );
   const anyAssigned = $derived(players.some((p) => p.name));
+
+  function isRenameLocked(id: string): boolean {
+    return renameLockedIds?.has(id) === true;
+  }
 
   function toggleDropdown(id: string) {
     openPlayerId = openPlayerId === id ? null : id;
@@ -212,9 +224,14 @@
                   {/if}
                   <button
                     onclick={() => startEdit(p.id, p.name ?? "")}
-                    class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-indigo-500"
-                    aria-label="Rename {p.name}"
-                    title="Rename {p.name}"
+                    disabled={isRenameLocked(p.id)}
+                    class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-indigo-500 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted"
+                    aria-label={isRenameLocked(p.id)
+                      ? renameLockedHint
+                      : `Rename ${p.name}`}
+                    title={isRenameLocked(p.id)
+                      ? renameLockedHint
+                      : `Rename ${p.name}`}
                   >
                     <svg
                       class="h-3 w-3"
@@ -364,12 +381,14 @@
           Clear all
         </button>
       {/if}
-      <button
-        onclick={onmanagepresets}
-        class="ml-auto rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-indigo-400 hover:text-indigo-500"
-      >
-        Manage names
-      </button>
+      {#if onmanagepresets}
+        <button
+          onclick={onmanagepresets}
+          class="ml-auto rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-indigo-400 hover:text-indigo-500"
+        >
+          Manage names
+        </button>
+      {/if}
     </div>
   {/if}
 </div>

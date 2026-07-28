@@ -47,6 +47,9 @@
   import { spotify, syncPhase, switchToSlot } from "~/lib/spotify.svelte";
   import PlayerAssignmentPanel from "~/lib/components/PlayerAssignmentPanel.svelte";
   import NameChipsBar from "~/lib/components/NameChipsBar.svelte";
+  import TokenBagPanel from "~/lib/components/tokenbag/TokenBagPanel.svelte";
+  import { mapSeatingToRoles } from "~/lib/tokenbag-arrange";
+  import { deriveNameSource, type BagRegistrants } from "~/lib/tokenbag-names";
   import InfoCardPicker from "~/lib/components/InfoCardPicker.svelte";
   import InfoCardDisplay from "~/lib/components/InfoCardDisplay.svelte";
   import StarPassPrompt from "~/lib/components/StarPassPrompt.svelte";
@@ -472,6 +475,8 @@
         return;
       }
       grimoireInitialized = false;
+      // Another game's registrants must never seed this one's name list.
+      bagRegistrants = null;
       loadGame(gameId);
     });
   });
@@ -1550,30 +1555,50 @@
 
   // Debounced save to server
   let grimoireSaveTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  // The save itself, extracted from the debounce wrapper so it can also be
+  // awaited directly (see flushGrimoireSave).
+  async function doSaveGrimoireState() {
+    if (!game) return;
+    const allPositions: Record<string, { x: number; y: number }> = {};
+    for (const [id, pos] of grimoirePositions) allPositions[id] = pos;
+    for (const [id, pos] of reminderPositions) allPositions[id] = pos;
+    try {
+      const encodedAttachments: Record<string, string> = {};
+      for (const [rid, att] of reminderAttachments) {
+        encodedAttachments[rid] = `${att.playerId}:${att.angle}`;
+      }
+      await client.updateGrimoireState({
+        gameId: game.id,
+        positions: allPositions,
+        playerNames: Object.fromEntries(grimoireNames),
+        gameNotes: Object.fromEntries(grimoireGameNotes),
+        roundNotes: Object.fromEntries(grimoireRoundNotes),
+        reminderAttachments: encodedAttachments,
+      });
+    } catch (err) {
+      console.error("Failed to save grimoire state", err);
+    }
+  }
+
   function saveGrimoireState() {
     clearTimeout(grimoireSaveTimeout);
-    grimoireSaveTimeout = setTimeout(async () => {
-      if (!game) return;
-      const allPositions: Record<string, { x: number; y: number }> = {};
-      for (const [id, pos] of grimoirePositions) allPositions[id] = pos;
-      for (const [id, pos] of reminderPositions) allPositions[id] = pos;
-      try {
-        const encodedAttachments: Record<string, string> = {};
-        for (const [rid, att] of reminderAttachments) {
-          encodedAttachments[rid] = `${att.playerId}:${att.angle}`;
-        }
-        await client.updateGrimoireState({
-          gameId: game.id,
-          positions: allPositions,
-          playerNames: Object.fromEntries(grimoireNames),
-          gameNotes: Object.fromEntries(grimoireGameNotes),
-          roundNotes: Object.fromEntries(grimoireRoundNotes),
-          reminderAttachments: encodedAttachments,
-        });
-      } catch (err) {
-        console.error("Failed to save grimoire state", err);
-      }
+    grimoireSaveTimeout = setTimeout(() => {
+      void doSaveGrimoireState();
     }, 500);
+  }
+
+  /**
+   * Persists the grimoire NOW, cancelling any pending debounced save.
+   *
+   * Needed before an RPC that reads the seat names server-side (the token bag
+   * reveal), where a still-pending save would make the server act on the
+   * assignments as they were half a second ago.
+   */
+  async function flushGrimoireSave() {
+    clearTimeout(grimoireSaveTimeout);
+    grimoireSaveTimeout = undefined;
+    await doSaveGrimoireState();
   }
 
   // Grimoire event handlers
@@ -1715,9 +1740,16 @@
   }
 
   function handleGrimoirePlayerRename(id: string, name: string) {
+    // A registrant's name is theirs, not the Storyteller's: editing it here would
+    // desync the reveal lookup. The token has no way to render a disabled input,
+    // so the edit is refused with the same wording as the panel's tooltip.
+    if (bagRenameLockedIds.has(id)) {
+      showGrimoireHint(BAG_RENAME_HINT);
+      return;
+    }
     // Empty/whitespace name unassigns the seat (deletes the key) instead of
     // storing an empty string; preset-name duplicates steal from other seats.
-    grimoireNames = assignNameInMap(grimoireNames, id, name, presetNames);
+    grimoireNames = assignNameInMap(grimoireNames, id, name, effectiveNames);
     saveGrimoireState();
   }
   function handleGrimoirePlayerToggleDeath(id: string) {
@@ -2193,7 +2225,12 @@
   }
 
   function assignNameToPlayer(playerId: string, name: string) {
-    grimoireNames = assignNameInMap(grimoireNames, playerId, name, presetNames);
+    grimoireNames = assignNameInMap(
+      grimoireNames,
+      playerId,
+      name,
+      effectiveNames,
+    );
     saveGrimoireState();
     selectedChipName = null;
   }
@@ -2227,6 +2264,71 @@
 
   // Set of assigned name values (for the name chip bar's used-name detection).
   const assignedNameValues = $derived(new Set(grimoireNames.values()));
+
+  // --- Digital Token Bag ---
+  // The panel's latest report, mirrored out of TokenBagPanel. While the bag owns
+  // the name list, the assignment UI offers registrants instead of the
+  // Storyteller's saved presets, so the names it writes into the grimoire match
+  // what the server looks up at reveal time.
+  //
+  // The panel only lives in the setup tab of a game in setup, so its last report
+  // outlives the situation it described (the game starts, or another game is
+  // opened). `deriveNameSource` re-checks the report against the page as it is
+  // NOW and falls back to presets whenever it no longer applies; clearing it in
+  // the route effect below is the second line of defence.
+  let bagRegistrants = $state<BagRegistrants | null>(null);
+  function handleBagRegistrants(report: BagRegistrants) {
+    bagRegistrants = report;
+  }
+
+  const nameSource = $derived(
+    deriveNameSource({
+      registrants: bagRegistrants,
+      gameId: game ? String(game.id) : "",
+      isSetup,
+      presetNames,
+      grimoireNames,
+    }),
+  );
+  const bagActive = $derived(nameSource.bagActive);
+  const effectiveNames = $derived(nameSource.names);
+  /**
+   * Seats holding a registrant's name, before the reveal. Renaming one of these
+   * would break the by-name match the reveal depends on (and the Storyteller
+   * cannot fix it from here — the name belongs to the player who typed it), so
+   * the rename affordances are disabled for exactly these seats. Assigning and
+   * unassigning stay available, and after the reveal renaming is free again.
+   */
+  const bagRenameLockedIds = $derived(nameSource.renameLockedIds);
+  const BAG_RENAME_HINT = "Names are managed by Token Bag registration";
+
+  /**
+   * Seats the grimoire in the clockwise order the players picked. All-or-nothing:
+   * a ring that cannot be fully resolved to seats is reported back to the panel
+   * rather than half-applied.
+   */
+  async function handleBagArrange(
+    orderedNames: string[],
+  ): Promise<string | null> {
+    // The lookup below reads local state, but the seat names must also be on the
+    // server before the reveal that usually follows.
+    await flushGrimoireSave();
+    const mapped = mapSeatingToRoles(orderedNames, grimoireNames);
+    if ("missing" in mapped) {
+      return `Assign all registered players to roles first — missing: ${mapped.missing.join(", ")}`;
+    }
+    if (mapped.roleIds.length === 0) return "No seated players to arrange.";
+    // grimoireNames is keyed by role id only, so nothing here can touch the
+    // `reminder-*` / `bagsub-reminder-*` entries that share grimoirePositions.
+    const seats = circleLayout(mapped.roleIds.length, 0, 0, 300);
+    const next = new Map(grimoirePositions);
+    for (let i = 0; i < mapped.roleIds.length; i++) {
+      next.set(mapped.roleIds[i], seats[i]);
+    }
+    grimoirePositions = next;
+    saveGrimoireState();
+    return null;
+  }
 
   function handleChipTap(name: string) {
     if (selectedChipName === name) {
@@ -2666,11 +2768,13 @@
           <!-- Name chips bar -->
           {#if showNameChips && !isFullscreen}
             <NameChipsBar
-              {presetNames}
+              presetNames={effectiveNames}
               assignedNames={assignedNameValues}
               onpickname={handleChipTap}
               onunassignname={unassignNameByValue}
-              onmanagepresets={() => (showPlayerPresets = true)}
+              onmanagepresets={bagActive
+                ? undefined
+                : () => (showPlayerPresets = true)}
               onclose={() => (showNameChips = false)}
               selectedName={selectedChipName}
             />
@@ -2752,18 +2856,32 @@
             />
           </div>
 
+          <!-- Digital Token Bag — players register their own names here -->
+          <TokenBagPanel
+            gameId={game.id}
+            playerCount={game.playerCount}
+            assignedNames={assignedNameValues}
+            onregistrants={handleBagRegistrants}
+            onarrange={handleBagArrange}
+            onbeforereveal={flushGrimoireSave}
+          />
+
           <!-- Players — assign names to the seats (roles) in play -->
           <PlayerAssignmentPanel
             players={assignmentPanelPlayers}
-            {presetNames}
+            presetNames={effectiveNames}
             lockedIds={lockedNameIds}
             onassign={assignNameToPlayer}
             onunassign={unassignPlayerName}
             ontogglelock={toggleNameLock}
-            onassigninorder={() => handleAssignPresets(presetNames)}
-            onrandomize={() => handleAssignPresets(shuffled(presetNames))}
+            onassigninorder={() => handleAssignPresets(effectiveNames)}
+            onrandomize={() => handleAssignPresets(shuffled(effectiveNames))}
             onclearall={clearAllPlayerNames}
-            onmanagepresets={() => (showPlayerPresets = true)}
+            onmanagepresets={bagActive
+              ? undefined
+              : () => (showPlayerPresets = true)}
+            renameLockedIds={bagRenameLockedIds}
+            renameLockedHint={BAG_RENAME_HINT}
           />
 
           <!-- Characters — click to toggle selection (script + extra merged) -->
@@ -3023,11 +3141,13 @@
         <!-- Name chips bar (setup grimoire) -->
         {#if showNameChips}
           <NameChipsBar
-            {presetNames}
+            presetNames={effectiveNames}
             assignedNames={assignedNameValues}
             onpickname={handleChipTap}
             onunassignname={unassignNameByValue}
-            onmanagepresets={() => (showPlayerPresets = true)}
+            onmanagepresets={bagActive
+              ? undefined
+              : () => (showPlayerPresets = true)}
             onclose={() => (showNameChips = false)}
             selectedName={selectedChipName}
           />
