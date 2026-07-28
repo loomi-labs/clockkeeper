@@ -13,6 +13,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	_ "github.com/loomi-labs/clockkeeper/ent/runtime"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/internal/database"
@@ -50,6 +51,7 @@ var migrationValidators = map[string]func(t *testing.T, ctx context.Context, db 
 	"20260724121808_add_info_cards":                    validateInfoCards,
 	"20260724195230_add_role_promotions":               validateRolePromotions,
 	"20260727125505_add_spotify_connection":            validateSpotifyConnection,
+	"20260728130152_add_token_bag":                     validateTokenBag,
 }
 
 // TestMigrationCoverage ensures every migration file has a registered validator.
@@ -124,6 +126,7 @@ func TestSchemaCompleteness(t *testing.T) {
 		"game.go",
 		"infocard.go",
 		"phase.go",
+		"registration.go",
 		"script.go",
 		"spotifyconnection.go",
 		"user.go",
@@ -763,6 +766,150 @@ func validateSpotifyConnection(t *testing.T, ctx context.Context, db *sql.DB, cl
 		SetRefreshToken("refresh-token-2").
 		Save(ctx); err == nil {
 		t.Error("expected a unique constraint violation for a second connection")
+	}
+}
+
+// validateTokenBag checks the token bag columns on games and the registrations
+// table (NOT NULL FK to games plus the unique name/secret indexes).
+func validateTokenBag(t *testing.T, ctx context.Context, db *sql.DB, client *ent.Client) {
+	t.Helper()
+
+	// token_bag_phase defaults to 'inactive'.
+	var colDefault string
+	err := db.QueryRowContext(ctx,
+		`SELECT column_default FROM information_schema.columns
+		 WHERE table_name = 'games' AND column_name = 'token_bag_phase'`).Scan(&colDefault)
+	if err != nil {
+		t.Fatalf("token_bag_phase column should exist on games: %v", err)
+	}
+	if !strings.Contains(colDefault, "inactive") {
+		t.Errorf("expected token_bag_phase default 'inactive', got %q", colDefault)
+	}
+
+	// The join/shared codes are only generated on demand, so they stay nullable.
+	for _, col := range []string{"token_bag_join_code", "token_bag_shared_code"} {
+		var nullable string
+		err := db.QueryRowContext(ctx,
+			`SELECT is_nullable FROM information_schema.columns
+			 WHERE table_name = 'games' AND column_name = $1`, col).Scan(&nullable)
+		if err != nil {
+			t.Fatalf("%s column should exist on games: %v", col, err)
+		}
+		if nullable != "YES" {
+			t.Errorf("expected %s to be nullable, got is_nullable=%q", col, nullable)
+		}
+	}
+
+	// Every index the schema declares must be unique.
+	for _, idx := range []string{
+		"games_token_bag_join_code_key",
+		"games_token_bag_shared_code_key",
+		"registration_name_normalized_game_id",
+		"registration_secret_hash",
+	} {
+		var isUnique bool
+		err := db.QueryRowContext(ctx,
+			`SELECT i.indisunique
+			 FROM pg_class c
+			 JOIN pg_index i ON i.indexrelid = c.oid
+			 WHERE c.relname = $1`, idx).Scan(&isUnique)
+		if err != nil {
+			t.Fatalf("index %s should exist: %v", idx, err)
+		}
+		if !isUnique {
+			t.Errorf("expected index %s to be unique", idx)
+		}
+	}
+
+	// registrations.game_id must be a NOT NULL column with an FK to games.
+	var nullable string
+	err = db.QueryRowContext(ctx,
+		`SELECT is_nullable FROM information_schema.columns
+		 WHERE table_name = 'registrations' AND column_name = 'game_id'`).Scan(&nullable)
+	if err != nil {
+		t.Fatalf("game_id column should exist on registrations: %v", err)
+	}
+	if nullable != "NO" {
+		t.Errorf("expected registrations.game_id to be NOT NULL, got is_nullable=%q", nullable)
+	}
+
+	var fkCount int
+	err = db.QueryRowContext(ctx,
+		`SELECT COUNT(*)
+		 FROM information_schema.table_constraints tc
+		 JOIN information_schema.key_column_usage kcu
+		   ON tc.constraint_name = kcu.constraint_name
+		 WHERE tc.table_name = 'registrations'
+		   AND tc.constraint_type = 'FOREIGN KEY'
+		   AND kcu.column_name = 'game_id'`).Scan(&fkCount)
+	if err != nil {
+		t.Fatalf("failed to check foreign key: %v", err)
+	}
+	if fkCount == 0 {
+		t.Error("expected a foreign key on registrations.game_id")
+	}
+
+	// A round-trip through Ent proves the columns line up with the schema.
+	g, err := client.Game.Query().Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			t.Skip("seed data was cleaned up by a later migration")
+		}
+		t.Fatalf("failed to query game: %v", err)
+	}
+	if g.TokenBagPhase != game.TokenBagPhaseInactive {
+		t.Errorf("expected token_bag_phase %q, got %q", game.TokenBagPhaseInactive, g.TokenBagPhase)
+	}
+	if g.TokenBagJoinCode != nil || g.TokenBagSharedCode != nil {
+		t.Error("expected both token bag codes to be nil by default")
+	}
+
+	reg, err := client.Registration.Create().
+		SetGameID(g.ID).
+		SetName("Alice").
+		SetNameNormalized("alice").
+		SetSecretHash("secret-hash-alice").
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create registration: %v", err)
+	}
+	if reg.ViaSharedDevice {
+		t.Error("expected via_shared_device to default to false")
+	}
+	if reg.LeftNeighborID != 0 || reg.RightNeighborID != 0 {
+		t.Error("expected both neighbor ids to be unset by default")
+	}
+	if reg.AssignedRoleID != "" {
+		t.Errorf("expected empty assigned_role_id, got %q", reg.AssignedRoleID)
+	}
+
+	// The same normalized name cannot be registered twice in one game.
+	if _, err := client.Registration.Create().
+		SetGameID(g.ID).
+		SetName("ALICE").
+		SetNameNormalized("alice").
+		SetSecretHash("secret-hash-other").
+		Save(ctx); err == nil {
+		t.Error("expected a unique constraint violation for a duplicate normalized name")
+	}
+
+	// Secret hashes are unique across all games.
+	if _, err := client.Registration.Create().
+		SetGameID(g.ID).
+		SetName("Bob").
+		SetNameNormalized("bob").
+		SetSecretHash("secret-hash-alice").
+		Save(ctx); err == nil {
+		t.Error("expected a unique constraint violation for a duplicate secret hash")
+	}
+
+	// Leave the seed data as it was found: later validators in the same run share
+	// this database, and a stray registration on the seed game would surprise
+	// them (the two failed creates above rolled back, so only Alice persisted).
+	if _, err := client.Registration.Delete().
+		Where(registration.GameID(g.ID)).
+		Exec(ctx); err != nil {
+		t.Fatalf("failed to clean up registrations: %v", err)
 	}
 }
 

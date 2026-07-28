@@ -26,7 +26,9 @@
     ondragname?: (name: string, ev: DragEvent) => void;
     // Click the "x" on an assigned chip.
     onunassignname: (name: string) => void;
-    onmanagepresets: () => void;
+    // Omitted when the name list is not the Storyteller's to edit (e.g. it comes
+    // from Token Bag registration) — the "Edit" chip then disappears.
+    onmanagepresets?: () => void;
     onclose: () => void;
     // Currently selected chip (assign mode). Optional — when provided the chip
     // is highlighted and a hint is shown, matching the original behavior.
@@ -97,25 +99,27 @@
         {/if}
       {/each}
     {/if}
-    <button
-      onclick={onmanagepresets}
-      class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted transition-colors hover:border-indigo-400 hover:text-indigo-500"
-      title="Edit player presets"
-    >
-      <svg
-        class="inline h-3 w-3"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        stroke-width="2"
-        ><path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="M12 4v16m8-8H4"
-        /></svg
+    {#if onmanagepresets}
+      <button
+        onclick={onmanagepresets}
+        class="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted transition-colors hover:border-indigo-400 hover:text-indigo-500"
+        title="Edit player presets"
       >
-      Edit
-    </button>
+        <svg
+          class="inline h-3 w-3"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+          ><path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 4v16m8-8H4"
+          /></svg
+        >
+        Edit
+      </button>
+    {/if}
     {#if selectedName}
       <span class="text-xs text-indigo-500 ml-auto"
         >Tap a player to assign "{selectedName}"</span

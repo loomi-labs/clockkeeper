@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -184,6 +185,48 @@ func (_c *GameCreate) SetNillableState(v *game.State) *GameCreate {
 	return _c
 }
 
+// SetTokenBagPhase sets the "token_bag_phase" field.
+func (_c *GameCreate) SetTokenBagPhase(v game.TokenBagPhase) *GameCreate {
+	_c.mutation.SetTokenBagPhase(v)
+	return _c
+}
+
+// SetNillableTokenBagPhase sets the "token_bag_phase" field if the given value is not nil.
+func (_c *GameCreate) SetNillableTokenBagPhase(v *game.TokenBagPhase) *GameCreate {
+	if v != nil {
+		_c.SetTokenBagPhase(*v)
+	}
+	return _c
+}
+
+// SetTokenBagJoinCode sets the "token_bag_join_code" field.
+func (_c *GameCreate) SetTokenBagJoinCode(v string) *GameCreate {
+	_c.mutation.SetTokenBagJoinCode(v)
+	return _c
+}
+
+// SetNillableTokenBagJoinCode sets the "token_bag_join_code" field if the given value is not nil.
+func (_c *GameCreate) SetNillableTokenBagJoinCode(v *string) *GameCreate {
+	if v != nil {
+		_c.SetTokenBagJoinCode(*v)
+	}
+	return _c
+}
+
+// SetTokenBagSharedCode sets the "token_bag_shared_code" field.
+func (_c *GameCreate) SetTokenBagSharedCode(v string) *GameCreate {
+	_c.mutation.SetTokenBagSharedCode(v)
+	return _c
+}
+
+// SetNillableTokenBagSharedCode sets the "token_bag_shared_code" field if the given value is not nil.
+func (_c *GameCreate) SetNillableTokenBagSharedCode(v *string) *GameCreate {
+	if v != nil {
+		_c.SetTokenBagSharedCode(*v)
+	}
+	return _c
+}
+
 // SetOwnerID sets the "owner" edge to the User entity by ID.
 func (_c *GameCreate) SetOwnerID(id int) *GameCreate {
 	_c.mutation.SetOwnerID(id)
@@ -213,6 +256,21 @@ func (_c *GameCreate) AddPhases(v ...*Phase) *GameCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddPhaseIDs(ids...)
+}
+
+// AddRegistrationIDs adds the "registrations" edge to the Registration entity by IDs.
+func (_c *GameCreate) AddRegistrationIDs(ids ...int) *GameCreate {
+	_c.mutation.AddRegistrationIDs(ids...)
+	return _c
+}
+
+// AddRegistrations adds the "registrations" edges to the Registration entity.
+func (_c *GameCreate) AddRegistrations(v ...*Registration) *GameCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddRegistrationIDs(ids...)
 }
 
 // Mutation returns the GameMutation object of the builder.
@@ -310,6 +368,10 @@ func (_c *GameCreate) defaults() {
 		v := game.DefaultState
 		_c.mutation.SetState(v)
 	}
+	if _, ok := _c.mutation.TokenBagPhase(); !ok {
+		v := game.DefaultTokenBagPhase
+		_c.mutation.SetTokenBagPhase(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -357,6 +419,14 @@ func (_c *GameCreate) check() error {
 	if v, ok := _c.mutation.State(); ok {
 		if err := game.StateValidator(v); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Game.state": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.TokenBagPhase(); !ok {
+		return &ValidationError{Name: "token_bag_phase", err: errors.New(`ent: missing required field "Game.token_bag_phase"`)}
+	}
+	if v, ok := _c.mutation.TokenBagPhase(); ok {
+		if err := game.TokenBagPhaseValidator(v); err != nil {
+			return &ValidationError{Name: "token_bag_phase", err: fmt.Errorf(`ent: validator failed for field "Game.token_bag_phase": %w`, err)}
 		}
 	}
 	if len(_c.mutation.OwnerIDs()) == 0 {
@@ -463,6 +533,18 @@ func (_c *GameCreate) createSpec() (*Game, *sqlgraph.CreateSpec) {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
 		_node.State = value
 	}
+	if value, ok := _c.mutation.TokenBagPhase(); ok {
+		_spec.SetField(game.FieldTokenBagPhase, field.TypeEnum, value)
+		_node.TokenBagPhase = value
+	}
+	if value, ok := _c.mutation.TokenBagJoinCode(); ok {
+		_spec.SetField(game.FieldTokenBagJoinCode, field.TypeString, value)
+		_node.TokenBagJoinCode = &value
+	}
+	if value, ok := _c.mutation.TokenBagSharedCode(); ok {
+		_spec.SetField(game.FieldTokenBagSharedCode, field.TypeString, value)
+		_node.TokenBagSharedCode = &value
+	}
 	if nodes := _c.mutation.OwnerIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -506,6 +588,22 @@ func (_c *GameCreate) createSpec() (*Game, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.RegistrationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.RegistrationsTable,
+			Columns: []string{game.RegistrationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registration.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

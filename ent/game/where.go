@@ -90,6 +90,16 @@ func TravellerCount(v int) predicate.Game {
 	return predicate.Game(sql.FieldEQ(FieldTravellerCount, v))
 }
 
+// TokenBagJoinCode applies equality check predicate on the "token_bag_join_code" field. It's identical to TokenBagJoinCodeEQ.
+func TokenBagJoinCode(v string) predicate.Game {
+	return predicate.Game(sql.FieldEQ(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagSharedCode applies equality check predicate on the "token_bag_shared_code" field. It's identical to TokenBagSharedCodeEQ.
+func TokenBagSharedCode(v string) predicate.Game {
+	return predicate.Game(sql.FieldEQ(FieldTokenBagSharedCode, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Game {
 	return predicate.Game(sql.FieldEQ(FieldCreatedAt, v))
@@ -475,6 +485,176 @@ func StateNotIn(vs ...State) predicate.Game {
 	return predicate.Game(sql.FieldNotIn(FieldState, vs...))
 }
 
+// TokenBagPhaseEQ applies the EQ predicate on the "token_bag_phase" field.
+func TokenBagPhaseEQ(v TokenBagPhase) predicate.Game {
+	return predicate.Game(sql.FieldEQ(FieldTokenBagPhase, v))
+}
+
+// TokenBagPhaseNEQ applies the NEQ predicate on the "token_bag_phase" field.
+func TokenBagPhaseNEQ(v TokenBagPhase) predicate.Game {
+	return predicate.Game(sql.FieldNEQ(FieldTokenBagPhase, v))
+}
+
+// TokenBagPhaseIn applies the In predicate on the "token_bag_phase" field.
+func TokenBagPhaseIn(vs ...TokenBagPhase) predicate.Game {
+	return predicate.Game(sql.FieldIn(FieldTokenBagPhase, vs...))
+}
+
+// TokenBagPhaseNotIn applies the NotIn predicate on the "token_bag_phase" field.
+func TokenBagPhaseNotIn(vs ...TokenBagPhase) predicate.Game {
+	return predicate.Game(sql.FieldNotIn(FieldTokenBagPhase, vs...))
+}
+
+// TokenBagJoinCodeEQ applies the EQ predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeEQ(v string) predicate.Game {
+	return predicate.Game(sql.FieldEQ(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeNEQ applies the NEQ predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeNEQ(v string) predicate.Game {
+	return predicate.Game(sql.FieldNEQ(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeIn applies the In predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeIn(vs ...string) predicate.Game {
+	return predicate.Game(sql.FieldIn(FieldTokenBagJoinCode, vs...))
+}
+
+// TokenBagJoinCodeNotIn applies the NotIn predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeNotIn(vs ...string) predicate.Game {
+	return predicate.Game(sql.FieldNotIn(FieldTokenBagJoinCode, vs...))
+}
+
+// TokenBagJoinCodeGT applies the GT predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeGT(v string) predicate.Game {
+	return predicate.Game(sql.FieldGT(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeGTE applies the GTE predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeGTE(v string) predicate.Game {
+	return predicate.Game(sql.FieldGTE(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeLT applies the LT predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeLT(v string) predicate.Game {
+	return predicate.Game(sql.FieldLT(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeLTE applies the LTE predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeLTE(v string) predicate.Game {
+	return predicate.Game(sql.FieldLTE(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeContains applies the Contains predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeContains(v string) predicate.Game {
+	return predicate.Game(sql.FieldContains(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeHasPrefix applies the HasPrefix predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeHasPrefix(v string) predicate.Game {
+	return predicate.Game(sql.FieldHasPrefix(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeHasSuffix applies the HasSuffix predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeHasSuffix(v string) predicate.Game {
+	return predicate.Game(sql.FieldHasSuffix(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeIsNil applies the IsNil predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldTokenBagJoinCode))
+}
+
+// TokenBagJoinCodeNotNil applies the NotNil predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldTokenBagJoinCode))
+}
+
+// TokenBagJoinCodeEqualFold applies the EqualFold predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeEqualFold(v string) predicate.Game {
+	return predicate.Game(sql.FieldEqualFold(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagJoinCodeContainsFold applies the ContainsFold predicate on the "token_bag_join_code" field.
+func TokenBagJoinCodeContainsFold(v string) predicate.Game {
+	return predicate.Game(sql.FieldContainsFold(FieldTokenBagJoinCode, v))
+}
+
+// TokenBagSharedCodeEQ applies the EQ predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeEQ(v string) predicate.Game {
+	return predicate.Game(sql.FieldEQ(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeNEQ applies the NEQ predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeNEQ(v string) predicate.Game {
+	return predicate.Game(sql.FieldNEQ(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeIn applies the In predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeIn(vs ...string) predicate.Game {
+	return predicate.Game(sql.FieldIn(FieldTokenBagSharedCode, vs...))
+}
+
+// TokenBagSharedCodeNotIn applies the NotIn predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeNotIn(vs ...string) predicate.Game {
+	return predicate.Game(sql.FieldNotIn(FieldTokenBagSharedCode, vs...))
+}
+
+// TokenBagSharedCodeGT applies the GT predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeGT(v string) predicate.Game {
+	return predicate.Game(sql.FieldGT(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeGTE applies the GTE predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeGTE(v string) predicate.Game {
+	return predicate.Game(sql.FieldGTE(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeLT applies the LT predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeLT(v string) predicate.Game {
+	return predicate.Game(sql.FieldLT(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeLTE applies the LTE predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeLTE(v string) predicate.Game {
+	return predicate.Game(sql.FieldLTE(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeContains applies the Contains predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeContains(v string) predicate.Game {
+	return predicate.Game(sql.FieldContains(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeHasPrefix applies the HasPrefix predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeHasPrefix(v string) predicate.Game {
+	return predicate.Game(sql.FieldHasPrefix(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeHasSuffix applies the HasSuffix predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeHasSuffix(v string) predicate.Game {
+	return predicate.Game(sql.FieldHasSuffix(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeIsNil applies the IsNil predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeIsNil() predicate.Game {
+	return predicate.Game(sql.FieldIsNull(FieldTokenBagSharedCode))
+}
+
+// TokenBagSharedCodeNotNil applies the NotNil predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeNotNil() predicate.Game {
+	return predicate.Game(sql.FieldNotNull(FieldTokenBagSharedCode))
+}
+
+// TokenBagSharedCodeEqualFold applies the EqualFold predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeEqualFold(v string) predicate.Game {
+	return predicate.Game(sql.FieldEqualFold(FieldTokenBagSharedCode, v))
+}
+
+// TokenBagSharedCodeContainsFold applies the ContainsFold predicate on the "token_bag_shared_code" field.
+func TokenBagSharedCodeContainsFold(v string) predicate.Game {
+	return predicate.Game(sql.FieldContainsFold(FieldTokenBagSharedCode, v))
+}
+
 // HasOwner applies the HasEdge predicate on the "owner" edge.
 func HasOwner() predicate.Game {
 	return predicate.Game(func(s *sql.Selector) {
@@ -536,6 +716,29 @@ func HasPhases() predicate.Game {
 func HasPhasesWith(preds ...predicate.Phase) predicate.Game {
 	return predicate.Game(func(s *sql.Selector) {
 		step := newPhasesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasRegistrations applies the HasEdge predicate on the "registrations" edge.
+func HasRegistrations() predicate.Game {
+	return predicate.Game(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, RegistrationsTable, RegistrationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasRegistrationsWith applies the HasEdge predicate on the "registrations" edge with a given conditions (other predicates).
+func HasRegistrationsWith(preds ...predicate.Registration) predicate.Game {
+	return predicate.Game(func(s *sql.Selector) {
+		step := newRegistrationsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

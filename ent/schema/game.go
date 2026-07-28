@@ -70,6 +70,9 @@ func (Game) Fields() []ent.Field {
 		field.Enum("state").
 			Values("setup", "in_progress", "completed").
 			Default("setup"),
+		field.Enum("token_bag_phase").Values("inactive", "open", "closed", "revealed").Default("inactive"),
+		field.String("token_bag_join_code").Optional().Nillable().Unique(),
+		field.String("token_bag_shared_code").Optional().Nillable().Unique(),
 	}
 }
 
@@ -78,5 +81,6 @@ func (Game) Edges() []ent.Edge {
 		edge.From("owner", User.Type).Ref("games").Field("user_id").Required().Unique(),
 		edge.From("script", Script.Type).Ref("games").Field("script_id").Required().Unique(),
 		edge.To("phases", Phase.Type),
+		edge.To("registrations", Registration.Type),
 	}
 }

@@ -16,24 +16,37 @@ import (
 	"github.com/loomi-labs/clockkeeper/internal/botc"
 )
 
+// writeTimeout bounds how long a handler may take to write its response. It is
+// applied per request rather than through http.Server.WriteTimeout, which would
+// also kill long-lived streams.
+const writeTimeout = 60 * time.Second
+
+// watchTokenBagPath is the HTTP path of the WatchTokenBag stream. It comes from
+// the generated procedure name, like the skipAuth entry for the same route, so
+// the two cannot drift apart.
+const watchTokenBagPath = clockkeeperv1connect.ClockKeeperServiceWatchTokenBagProcedure
+
 // Server is the HTTP server that serves the API and frontend.
 type Server struct {
 	config      *Config
 	httpServer  *http.Server
 	cancelFunc  context.CancelFunc
 	rateLimiter *RateLimitInterceptor
+	hub         *TokenBagHub
 }
 
 // NewServer creates a new web server with all services wired.
 func NewServer(config *Config, db *ent.Client, registry *botc.Registry, staticFiles fs.FS, characterIcons fs.FS) *Server {
 	auth := NewAuthInterceptor(config.JWTSecretKey)
 	rateLimiter := NewRateLimitInterceptor(config.RateLimitAnon, config.RateLimitAuth)
+	hub := NewTokenBagHub()
 
 	handler := &ClockKeeperServiceHandler{
 		config:   config,
 		db:       db,
 		auth:     auth,
 		registry: registry,
+		hub:      hub,
 	}
 
 	mux := http.NewServeMux()
@@ -61,15 +74,18 @@ func NewServer(config *Config, db *ent.Client, registry *botc.Registry, staticFi
 	return &Server{
 		config: config,
 		httpServer: &http.Server{
-			Addr:           config.Listen,
-			Handler:        securityHeaders(mux),
-			ReadTimeout:    30 * time.Second,
-			WriteTimeout:   60 * time.Second,
+			Addr:        config.Listen,
+			Handler:     securityHeaders(perRequestWriteDeadline(mux)),
+			ReadTimeout: 30 * time.Second,
+			// No global write timeout — perRequestWriteDeadline applies it to
+			// everything except the watch stream, which must stay open for hours.
+			WriteTimeout:   0,
 			IdleTimeout:    120 * time.Second,
 			MaxHeaderBytes: 1 << 20, // 1 MB
 		},
 		cancelFunc:  cancel,
 		rateLimiter: rateLimiter,
+		hub:         hub,
 	}
 }
 
@@ -83,7 +99,35 @@ func (s *Server) ListenAndServe() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.cancelFunc()       // Stop cleanup goroutine.
 	s.rateLimiter.Stop() // Stop rate limiter goroutine.
+	// Before the HTTP shutdown: it waits for in-flight requests, and a watch
+	// stream never finishes on its own.
+	s.hub.Close()
 	return s.httpServer.Shutdown(ctx)
+}
+
+// applyWriteDeadline reports whether a request path gets the per-request write
+// deadline. Everything does except the token bag watch stream, whose liveness
+// comes from its heartbeat and the client's context rather than from a deadline.
+//
+// Split out of the middleware so the decision — the part that can actually be
+// wrong — is a pure function of the path and unit-testable; the
+// ResponseController call around it has no observable result to assert on.
+func applyWriteDeadline(path string) bool {
+	return path != watchTokenBagPath
+}
+
+// perRequestWriteDeadline gives every request the write deadline that
+// http.Server.WriteTimeout used to enforce globally, except the token bag watch
+// stream, whose liveness comes from its heartbeat and the client's context.
+func perRequestWriteDeadline(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if applyWriteDeadline(r.URL.Path) {
+			// Errors mean the ResponseWriter has no deadline support; then the
+			// request simply runs without one, as it would have anyway.
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(writeTimeout))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // securityHeaders wraps a handler with standard security response headers.

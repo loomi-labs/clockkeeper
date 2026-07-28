@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1/clockkeeperv1connect"
 )
 
 type contextKey string
@@ -43,11 +44,24 @@ func NewAuthInterceptor(secretKey string) *AuthInterceptor {
 	return &AuthInterceptor{secretKey: []byte(secretKey)}
 }
 
-// skipAuth lists procedures that don't require authentication.
+// skipAuth lists procedures that don't require authentication. Both the auth
+// and the rate limit interceptor consult it, so these routes are limited by
+// peer IP instead of by user.
+//
+// The token bag entries are reachable by anyone with a code: players scan a QR
+// link and never sign in. Their credential travels in the payload — a bag code
+// or a registration secret — and each handler validates it.
 var skipAuth = map[string]bool{
-	"/clockkeeper.v1.ClockKeeperService/LoginWithDiscord":       true,
-	"/clockkeeper.v1.ClockKeeperService/CreateAnonymousSession": true,
-	"/clockkeeper.v1.ClockKeeperService/GetAuthConfig":          true,
+	clockkeeperv1connect.ClockKeeperServiceLoginWithDiscordProcedure:       true,
+	clockkeeperv1connect.ClockKeeperServiceCreateAnonymousSessionProcedure: true,
+	clockkeeperv1connect.ClockKeeperServiceGetAuthConfigProcedure:          true,
+
+	clockkeeperv1connect.ClockKeeperServiceJoinTokenBagProcedure:         true,
+	clockkeeperv1connect.ClockKeeperServiceSetTokenBagNeighborsProcedure: true,
+	clockkeeperv1connect.ClockKeeperServiceGetMyTokenProcedure:           true,
+	clockkeeperv1connect.ClockKeeperServiceWatchTokenBagProcedure:        true,
+	clockkeeperv1connect.ClockKeeperServiceJoinTokenBagSharedProcedure:   true,
+	clockkeeperv1connect.ClockKeeperServiceRevealTokenSharedProcedure:    true,
 }
 
 func (a *AuthInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {

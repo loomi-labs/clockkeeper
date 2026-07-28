@@ -18,6 +18,9 @@ type InfoCard func(*sql.Selector)
 // Phase is the predicate function for phase builders.
 type Phase func(*sql.Selector)
 
+// Registration is the predicate function for registration builders.
+type Registration func(*sql.Selector)
+
 // Script is the predicate function for script builders.
 type Script func(*sql.Selector)
 

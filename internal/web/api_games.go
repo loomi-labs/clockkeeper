@@ -13,6 +13,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/death"
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
 	"github.com/loomi-labs/clockkeeper/internal/botc"
@@ -767,6 +768,13 @@ func (h *ClockKeeperServiceHandler) DeleteGame(ctx context.Context, req *connect
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// Delete token bag registrations.
+	if _, err := tx.Registration.Delete().Where(registration.GameID(g.ID)).Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		slog.Error("delete registrations failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
 	// Delete the game.
 	if err := tx.Game.DeleteOneID(g.ID).Exec(ctx); err != nil {
 		_ = tx.Rollback()
@@ -778,6 +786,9 @@ func (h *ClockKeeperServiceHandler) DeleteGame(ctx context.Context, req *connect
 		slog.Error("commit failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+
+	// Token bag watchers are still connected to a game that no longer exists.
+	h.publishTokenBag(g.ID)
 
 	return connect.NewResponse(&clockkeeperv1.DeleteGameResponse{}), nil
 }

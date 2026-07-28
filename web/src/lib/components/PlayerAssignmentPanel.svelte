@@ -1,11 +1,17 @@
 <script lang="ts">
   import type { Team } from "~/lib/gen/clockkeeper/v1/clockkeeper_pb";
   import { iconSuffix } from "~/lib/team-styles";
+  import type { SeatRegistration } from "~/lib/tokenbag-names";
+  import SourceIcon from "./tokenbag/SourceIcon.svelte";
 
-  // Setup-tab panel for assigning player names to seats. Seats are the roles
-  // in play; names come from the global preset list plus free-text entry.
-  // Pure name-map logic lives in `~/lib/player-names.ts`; this component only
-  // renders and emits intent (onassign / onunassign / ...).
+  // The seat list of the setup-tab Players panel: one row per role in play, each
+  // with the name assigned to it. Names come from the preset list (or the Token
+  // Bag registrants, whichever owns them) plus free-text entry.
+  //
+  // Bare on purpose — the card shell, the header and the action bar belong to
+  // `tokenbag/PlayersPanel.svelte`, which mounts this. Pure name-map logic lives
+  // in `~/lib/player-names.ts`; this component only renders and emits intent
+  // (onassign / onunassign / ontogglelock).
   interface PanelPlayer {
     id: string;
     characterName: string;
@@ -21,10 +27,8 @@
     onassign,
     onunassign,
     ontogglelock,
-    onassigninorder,
-    onrandomize,
-    onclearall,
-    onmanagepresets,
+    seatMeta,
+    showNeighborCaptions = false,
   }: {
     players: PanelPlayer[];
     presetNames: string[];
@@ -33,10 +37,12 @@
     onassign: (playerId: string, name: string) => void;
     onunassign: (playerId: string) => void;
     ontogglelock: (playerId: string) => void;
-    onassigninorder: () => void;
-    onrandomize?: () => void;
-    onclearall: () => void;
-    onmanagepresets: () => void;
+    // What the Token Bag knows about the registrant sitting in each seat: where
+    // they joined from, and who they picked as neighbors.
+    seatMeta?: ReadonlyMap<string, SeatRegistration>;
+    // Neighbor picks are only meaningful once registration is closed, so the
+    // caption line is drawn on request rather than whenever picks exist.
+    showNeighborCaptions?: boolean;
   } = $props();
 
   let openPlayerId = $state<string | null>(null);
@@ -58,7 +64,6 @@
   const unusedPresets = $derived(
     presetNames.filter((n) => !assignedNames.has(n)),
   );
-  const anyAssigned = $derived(players.some((p) => p.name));
 
   function toggleDropdown(id: string) {
     openPlayerId = openPlayerId === id ? null : id;
@@ -118,17 +123,14 @@
   });
 </script>
 
-<div class="rounded-lg border border-border bg-surface p-4">
-  <div class="mb-3 flex items-center justify-between">
-    <h3 class="text-sm font-semibold text-secondary">Players</h3>
-  </div>
-
-  {#if players.length === 0}
-    <p class="text-sm text-muted">Select or randomize roles first.</p>
-  {:else}
-    <div class="divide-y divide-border">
-      {#each players as p, i (p.id)}
-        <div class="flex items-center gap-3 py-1.5">
+{#if players.length === 0}
+  <p class="text-sm text-muted">Select or randomize roles first.</p>
+{:else}
+  <div class="divide-y divide-border">
+    {#each players as p, i (p.id)}
+      {@const meta = seatMeta?.get(p.id)}
+      <div class="py-1.5">
+        <div class="flex items-center gap-3">
           <span class="w-6 shrink-0 text-center text-xs text-muted"
             >{i + 1}</span
           >
@@ -169,6 +171,9 @@
                   class="inline-flex items-center gap-1 rounded-full border border-border bg-element pl-2.5 pr-1 py-0.5 text-xs font-medium text-primary"
                 >
                   {p.name}
+                  {#if meta}
+                    <SourceIcon viaShared={meta.viaShared} />
+                  {/if}
                   {#if lockedIds.has(p.id)}
                     <button
                       onclick={() => ontogglelock(p.id)}
@@ -334,42 +339,14 @@
             {/if}
           </div>
         </div>
-      {/each}
-    </div>
 
-    <div
-      class="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3"
-    >
-      <button
-        onclick={onassigninorder}
-        disabled={presetNames.length === 0}
-        class="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500 disabled:opacity-40 disabled:hover:border-border disabled:hover:text-secondary"
-      >
-        Assign in order
-      </button>
-      {#if onrandomize}
-        <button
-          onclick={onrandomize}
-          disabled={presetNames.length === 0}
-          class="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-secondary transition-colors hover:border-indigo-400 hover:text-indigo-500 disabled:opacity-40 disabled:hover:border-border disabled:hover:text-secondary"
-        >
-          Randomize
-        </button>
-      {/if}
-      {#if anyAssigned}
-        <button
-          onclick={onclearall}
-          class="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-red-300 hover:text-red-500"
-        >
-          Clear all
-        </button>
-      {/if}
-      <button
-        onclick={onmanagepresets}
-        class="ml-auto rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-indigo-400 hover:text-indigo-500"
-      >
-        Manage names
-      </button>
-    </div>
-  {/if}
-</div>
+        {#if showNeighborCaptions && meta && (meta.leftName || meta.rightName)}
+          <!-- Who this player says they are sitting between. -->
+          <p class="pl-20 text-[11px] text-secondary">
+            ⇐ {meta.leftName ?? "—"} · {meta.rightName ?? "—"} ⇒
+          </p>
+        {/if}
+      </div>
+    {/each}
+  </div>
+{/if}

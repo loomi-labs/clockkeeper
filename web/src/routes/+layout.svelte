@@ -12,6 +12,7 @@
     logout,
   } from "~/lib/auth.svelte";
   import { rawClient } from "~/lib/api";
+  import { isPublicPath } from "~/lib/public-paths";
   import { initTheme } from "~/lib/theme";
   import { sidebar, initSidebar } from "~/lib/sidebar.svelte";
   import { spotify } from "~/lib/spotify.svelte";
@@ -28,22 +29,27 @@
     initTheme();
     initSidebar();
 
-    // Fetch auth config from server.
-    try {
-      const config = await rawClient.getAuthConfig({});
-      auth.discordAvailable = !!config.discordClientId;
-      auth.discordClientId = config.discordClientId;
-      spotify.available = !!config.spotifyClientId;
-      spotify.clientId = config.spotifyClientId;
-    } catch {
-      // Server may be unavailable — continue with defaults.
+    const isPublic = isPublicPath(page.url.pathname);
+
+    // Fetch auth config from server — but not on public routes. A token bag
+    // player's phone renders no Discord or Spotify affordance, and these
+    // requests all land on ONE per-IP anon budget shared by the whole table, so
+    // skipping it is a request per phone that a 15-player table gets back.
+    if (!isPublic) {
+      try {
+        const config = await rawClient.getAuthConfig({});
+        auth.discordAvailable = !!config.discordClientId;
+        auth.discordClientId = config.discordClientId;
+        spotify.available = !!config.spotifyClientId;
+        spotify.clientId = config.spotifyClientId;
+      } catch {
+        // Server may be unavailable — continue with defaults.
+      }
     }
 
-    const isAuthPath =
-      page.url.pathname.startsWith("/login") ||
-      page.url.pathname.startsWith("/auth/");
-
-    if (!getToken() && !isAuthPath) {
+    // Public routes never mint a session — a player scanning a token bag QR
+    // code must not be handed a Storyteller identity.
+    if (!getToken() && !isPublic) {
       // Auto-create anonymous session.
       try {
         const resp = await rawClient.createAnonymousSession({});
@@ -59,7 +65,7 @@
   });
 </script>
 
-{#if page.url.pathname.startsWith("/login") || page.url.pathname.startsWith("/auth/")}
+{#if isPublicPath(page.url.pathname)}
   {@render children()}
 {:else if initialized && auth.isAuthenticated}
   <div class="min-h-dvh text-primary">

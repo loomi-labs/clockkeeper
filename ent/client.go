@@ -19,6 +19,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -37,6 +38,8 @@ type Client struct {
 	InfoCard *InfoCardClient
 	// Phase is the client for interacting with the Phase builders.
 	Phase *PhaseClient
+	// Registration is the client for interacting with the Registration builders.
+	Registration *RegistrationClient
 	// Script is the client for interacting with the Script builders.
 	Script *ScriptClient
 	// SpotifyConnection is the client for interacting with the SpotifyConnection builders.
@@ -58,6 +61,7 @@ func (c *Client) init() {
 	c.Game = NewGameClient(c.config)
 	c.InfoCard = NewInfoCardClient(c.config)
 	c.Phase = NewPhaseClient(c.config)
+	c.Registration = NewRegistrationClient(c.config)
 	c.Script = NewScriptClient(c.config)
 	c.SpotifyConnection = NewSpotifyConnectionClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -157,6 +161,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Game:              NewGameClient(cfg),
 		InfoCard:          NewInfoCardClient(cfg),
 		Phase:             NewPhaseClient(cfg),
+		Registration:      NewRegistrationClient(cfg),
 		Script:            NewScriptClient(cfg),
 		SpotifyConnection: NewSpotifyConnectionClient(cfg),
 		User:              NewUserClient(cfg),
@@ -183,6 +188,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Game:              NewGameClient(cfg),
 		InfoCard:          NewInfoCardClient(cfg),
 		Phase:             NewPhaseClient(cfg),
+		Registration:      NewRegistrationClient(cfg),
 		Script:            NewScriptClient(cfg),
 		SpotifyConnection: NewSpotifyConnectionClient(cfg),
 		User:              NewUserClient(cfg),
@@ -215,7 +221,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Death, c.Game, c.InfoCard, c.Phase, c.Script, c.SpotifyConnection, c.User,
+		c.Death, c.Game, c.InfoCard, c.Phase, c.Registration, c.Script,
+		c.SpotifyConnection, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -225,7 +232,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Death, c.Game, c.InfoCard, c.Phase, c.Script, c.SpotifyConnection, c.User,
+		c.Death, c.Game, c.InfoCard, c.Phase, c.Registration, c.Script,
+		c.SpotifyConnection, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -242,6 +250,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.InfoCard.mutate(ctx, m)
 	case *PhaseMutation:
 		return c.Phase.mutate(ctx, m)
+	case *RegistrationMutation:
+		return c.Registration.mutate(ctx, m)
 	case *ScriptMutation:
 		return c.Script.mutate(ctx, m)
 	case *SpotifyConnectionMutation:
@@ -551,6 +561,22 @@ func (c *GameClient) QueryPhases(_m *Game) *PhaseQuery {
 			sqlgraph.From(game.Table, game.FieldID, id),
 			sqlgraph.To(phase.Table, phase.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, game.PhasesTable, game.PhasesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryRegistrations queries the registrations edge of a Game.
+func (c *GameClient) QueryRegistrations(_m *Game) *RegistrationQuery {
+	query := (&RegistrationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(game.Table, game.FieldID, id),
+			sqlgraph.To(registration.Table, registration.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, game.RegistrationsTable, game.RegistrationsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -894,6 +920,155 @@ func (c *PhaseClient) mutate(ctx context.Context, m *PhaseMutation) (Value, erro
 		return (&PhaseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Phase mutation op: %q", m.Op())
+	}
+}
+
+// RegistrationClient is a client for the Registration schema.
+type RegistrationClient struct {
+	config
+}
+
+// NewRegistrationClient returns a client for the Registration from the given config.
+func NewRegistrationClient(c config) *RegistrationClient {
+	return &RegistrationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `registration.Hooks(f(g(h())))`.
+func (c *RegistrationClient) Use(hooks ...Hook) {
+	c.hooks.Registration = append(c.hooks.Registration, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `registration.Intercept(f(g(h())))`.
+func (c *RegistrationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Registration = append(c.inters.Registration, interceptors...)
+}
+
+// Create returns a builder for creating a Registration entity.
+func (c *RegistrationClient) Create() *RegistrationCreate {
+	mutation := newRegistrationMutation(c.config, OpCreate)
+	return &RegistrationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Registration entities.
+func (c *RegistrationClient) CreateBulk(builders ...*RegistrationCreate) *RegistrationCreateBulk {
+	return &RegistrationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RegistrationClient) MapCreateBulk(slice any, setFunc func(*RegistrationCreate, int)) *RegistrationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RegistrationCreateBulk{err: fmt.Errorf("calling to RegistrationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RegistrationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RegistrationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Registration.
+func (c *RegistrationClient) Update() *RegistrationUpdate {
+	mutation := newRegistrationMutation(c.config, OpUpdate)
+	return &RegistrationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RegistrationClient) UpdateOne(_m *Registration) *RegistrationUpdateOne {
+	mutation := newRegistrationMutation(c.config, OpUpdateOne, withRegistration(_m))
+	return &RegistrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RegistrationClient) UpdateOneID(id int) *RegistrationUpdateOne {
+	mutation := newRegistrationMutation(c.config, OpUpdateOne, withRegistrationID(id))
+	return &RegistrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Registration.
+func (c *RegistrationClient) Delete() *RegistrationDelete {
+	mutation := newRegistrationMutation(c.config, OpDelete)
+	return &RegistrationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RegistrationClient) DeleteOne(_m *Registration) *RegistrationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RegistrationClient) DeleteOneID(id int) *RegistrationDeleteOne {
+	builder := c.Delete().Where(registration.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RegistrationDeleteOne{builder}
+}
+
+// Query returns a query builder for Registration.
+func (c *RegistrationClient) Query() *RegistrationQuery {
+	return &RegistrationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRegistration},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Registration entity by its id.
+func (c *RegistrationClient) Get(ctx context.Context, id int) (*Registration, error) {
+	return c.Query().Where(registration.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RegistrationClient) GetX(ctx context.Context, id int) *Registration {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGame queries the game edge of a Registration.
+func (c *RegistrationClient) QueryGame(_m *Registration) *GameQuery {
+	query := (&GameClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(registration.Table, registration.FieldID, id),
+			sqlgraph.To(game.Table, game.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, registration.GameTable, registration.GameColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *RegistrationClient) Hooks() []Hook {
+	return c.hooks.Registration
+}
+
+// Interceptors returns the client interceptors.
+func (c *RegistrationClient) Interceptors() []Interceptor {
+	return c.inters.Registration
+}
+
+func (c *RegistrationClient) mutate(ctx context.Context, m *RegistrationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RegistrationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RegistrationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RegistrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RegistrationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Registration mutation op: %q", m.Op())
 	}
 }
 
@@ -1411,9 +1586,11 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Death, Game, InfoCard, Phase, Script, SpotifyConnection, User []ent.Hook
+		Death, Game, InfoCard, Phase, Registration, Script, SpotifyConnection,
+		User []ent.Hook
 	}
 	inters struct {
-		Death, Game, InfoCard, Phase, Script, SpotifyConnection, User []ent.Interceptor
+		Death, Game, InfoCard, Phase, Registration, Script, SpotifyConnection,
+		User []ent.Interceptor
 	}
 )

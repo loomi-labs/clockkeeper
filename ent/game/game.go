@@ -56,12 +56,20 @@ const (
 	FieldRolePromotions = "role_promotions"
 	// FieldState holds the string denoting the state field in the database.
 	FieldState = "state"
+	// FieldTokenBagPhase holds the string denoting the token_bag_phase field in the database.
+	FieldTokenBagPhase = "token_bag_phase"
+	// FieldTokenBagJoinCode holds the string denoting the token_bag_join_code field in the database.
+	FieldTokenBagJoinCode = "token_bag_join_code"
+	// FieldTokenBagSharedCode holds the string denoting the token_bag_shared_code field in the database.
+	FieldTokenBagSharedCode = "token_bag_shared_code"
 	// EdgeOwner holds the string denoting the owner edge name in mutations.
 	EdgeOwner = "owner"
 	// EdgeScript holds the string denoting the script edge name in mutations.
 	EdgeScript = "script"
 	// EdgePhases holds the string denoting the phases edge name in mutations.
 	EdgePhases = "phases"
+	// EdgeRegistrations holds the string denoting the registrations edge name in mutations.
+	EdgeRegistrations = "registrations"
 	// Table holds the table name of the game in the database.
 	Table = "games"
 	// OwnerTable is the table that holds the owner relation/edge.
@@ -85,6 +93,13 @@ const (
 	PhasesInverseTable = "phases"
 	// PhasesColumn is the table column denoting the phases relation/edge.
 	PhasesColumn = "game_id"
+	// RegistrationsTable is the table that holds the registrations relation/edge.
+	RegistrationsTable = "registrations"
+	// RegistrationsInverseTable is the table name for the Registration entity.
+	// It exists in this package in order to avoid circular dependency with the "registration" package.
+	RegistrationsInverseTable = "registrations"
+	// RegistrationsColumn is the table column denoting the registrations relation/edge.
+	RegistrationsColumn = "game_id"
 )
 
 // Columns holds all SQL columns for game fields.
@@ -110,6 +125,9 @@ var Columns = []string{
 	FieldGrimoireReminderAttachments,
 	FieldRolePromotions,
 	FieldState,
+	FieldTokenBagPhase,
+	FieldTokenBagJoinCode,
+	FieldTokenBagSharedCode,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -186,6 +204,34 @@ func StateValidator(s State) error {
 	}
 }
 
+// TokenBagPhase defines the type for the "token_bag_phase" enum field.
+type TokenBagPhase string
+
+// TokenBagPhaseInactive is the default value of the TokenBagPhase enum.
+const DefaultTokenBagPhase = TokenBagPhaseInactive
+
+// TokenBagPhase values.
+const (
+	TokenBagPhaseInactive TokenBagPhase = "inactive"
+	TokenBagPhaseOpen     TokenBagPhase = "open"
+	TokenBagPhaseClosed   TokenBagPhase = "closed"
+	TokenBagPhaseRevealed TokenBagPhase = "revealed"
+)
+
+func (tbp TokenBagPhase) String() string {
+	return string(tbp)
+}
+
+// TokenBagPhaseValidator is a validator for the "token_bag_phase" field enum values. It is called by the builders before save.
+func TokenBagPhaseValidator(tbp TokenBagPhase) error {
+	switch tbp {
+	case TokenBagPhaseInactive, TokenBagPhaseOpen, TokenBagPhaseClosed, TokenBagPhaseRevealed:
+		return nil
+	default:
+		return fmt.Errorf("game: invalid enum value for token_bag_phase field: %q", tbp)
+	}
+}
+
 // OrderOption defines the ordering options for the Game queries.
 type OrderOption func(*sql.Selector)
 
@@ -234,6 +280,21 @@ func ByState(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldState, opts...).ToFunc()
 }
 
+// ByTokenBagPhase orders the results by the token_bag_phase field.
+func ByTokenBagPhase(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTokenBagPhase, opts...).ToFunc()
+}
+
+// ByTokenBagJoinCode orders the results by the token_bag_join_code field.
+func ByTokenBagJoinCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTokenBagJoinCode, opts...).ToFunc()
+}
+
+// ByTokenBagSharedCode orders the results by the token_bag_shared_code field.
+func ByTokenBagSharedCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTokenBagSharedCode, opts...).ToFunc()
+}
+
 // ByOwnerField orders the results by owner field.
 func ByOwnerField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -261,6 +322,20 @@ func ByPhases(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newPhasesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByRegistrationsCount orders the results by registrations count.
+func ByRegistrationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newRegistrationsStep(), opts...)
+	}
+}
+
+// ByRegistrations orders the results by registrations terms.
+func ByRegistrations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newRegistrationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newOwnerStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -280,5 +355,12 @@ func newPhasesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PhasesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PhasesTable, PhasesColumn),
+	)
+}
+func newRegistrationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(RegistrationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, RegistrationsTable, RegistrationsColumn),
 	)
 }

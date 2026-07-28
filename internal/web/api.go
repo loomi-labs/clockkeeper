@@ -2,6 +2,7 @@ package web
 
 import (
 	"sync"
+	"time"
 
 	"github.com/loomi-labs/clockkeeper/ent"
 	"github.com/loomi-labs/clockkeeper/internal/botc"
@@ -13,6 +14,13 @@ type ClockKeeperServiceHandler struct {
 	db       *ent.Client
 	auth     *AuthInterceptor
 	registry *botc.Registry
+
+	// hub wakes the WatchTokenBag streams of a game after every mutation.
+	hub *TokenBagHub
+
+	// watchHeartbeatInterval overrides defaultWatchHeartbeat. Test hook only —
+	// zero means the default.
+	watchHeartbeatInterval time.Duration
 
 	// spotifyMu guards spotifyLocks. Each per-user mutex serializes Spotify
 	// token refreshes so concurrent requests can't race on the rotating

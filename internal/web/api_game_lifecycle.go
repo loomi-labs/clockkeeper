@@ -93,6 +93,11 @@ func (h *ClockKeeperServiceHandler) StartGame(ctx context.Context, req *connect.
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// The game leaving setup takes the role display off the players' phones (see
+	// buildWatchSnapshot's game_started). Their devices only learn about it
+	// through the token bag stream, so it has to be woken here.
+	h.publishTokenBag(g.ID)
+
 	// Re-fetch with eager-loaded phases.
 	g, err = h.getOwnedGame(ctx, g.ID)
 	if err != nil {
@@ -345,6 +350,10 @@ func (h *ClockKeeperServiceHandler) EndGame(ctx context.Context, req *connect.Re
 		slog.Error("commit failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+
+	// Same as StartGame: a state change out of setup is a change the watching
+	// player devices have to see.
+	h.publishTokenBag(g.ID)
 
 	g, err = h.getOwnedGame(ctx, g.ID)
 	if err != nil {

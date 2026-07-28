@@ -80,6 +80,25 @@ service ClockKeeperService {
   rpc GetSpotifyStatus(GetSpotifyStatusRequest) returns (GetSpotifyStatusResponse) {}
   rpc UpdateSpotifyPlaylists(UpdateSpotifyPlaylistsRequest) returns (UpdateSpotifyPlaylistsResponse) {}
   rpc GetSpotifyAccessToken(GetSpotifyAccessTokenRequest) returns (GetSpotifyAccessTokenResponse) {}
+
+  // Token Bag
+  // Storyteller (authenticated, owner-gated):
+  rpc OpenTokenBagRegistration(OpenTokenBagRegistrationRequest) returns (OpenTokenBagRegistrationResponse) {}
+  rpc CloseTokenBagRegistration(CloseTokenBagRegistrationRequest) returns (CloseTokenBagRegistrationResponse) {}
+  rpc AddTokenBagRegistration(AddTokenBagRegistrationRequest) returns (AddTokenBagRegistrationResponse) {}
+  rpc RemoveTokenBagRegistration(RemoveTokenBagRegistrationRequest) returns (RemoveTokenBagRegistrationResponse) {}
+  rpc RevealTokenBag(RevealTokenBagRequest) returns (RevealTokenBagResponse) {}
+  rpc ResetTokenBag(ResetTokenBagRequest) returns (ResetTokenBagResponse) {}
+  rpc GetTokenBag(GetTokenBagRequest) returns (GetTokenBagResponse) {}
+  rpc GetTokenBagSeating(GetTokenBagSeatingRequest) returns (GetTokenBagSeatingResponse) {}
+  // Players (public, credential = registration_secret in payload):
+  rpc JoinTokenBag(JoinTokenBagRequest) returns (JoinTokenBagResponse) {}
+  rpc SetTokenBagNeighbors(SetTokenBagNeighborsRequest) returns (SetTokenBagNeighborsResponse) {}
+  rpc GetMyToken(GetMyTokenRequest) returns (GetMyTokenResponse) {}
+  rpc WatchTokenBag(WatchTokenBagRequest) returns (stream WatchTokenBagResponse) {}
+  // Shared device (public, credential = shared_code):
+  rpc JoinTokenBagShared(JoinTokenBagSharedRequest) returns (JoinTokenBagSharedResponse) {}
+  rpc RevealTokenShared(RevealTokenSharedRequest) returns (RevealTokenSharedResponse) {}
 }
 
 // --- Enums ---
@@ -331,6 +350,9 @@ message Game {
   repeated BagSubstitution bag_substitutions = 23;
   map<string, string> grimoire_reminder_attachments = 24;
   repeated RolePromotion role_promotions = 25;
+  TokenBagPhase token_bag_phase = 26;
+  string token_bag_join_code = 27; // empty when not generated
+  string token_bag_shared_code = 28;
 }
 
 message CreateGameRequest {
@@ -784,4 +806,164 @@ message GetSpotifyAccessTokenRequest {
 message GetSpotifyAccessTokenResponse {
   string access_token = 1;
   int64 expires_at_unix = 2; // unix seconds
+}
+
+// --- Token Bag ---
+
+enum TokenBagPhase {
+  TOKEN_BAG_PHASE_UNSPECIFIED = 0;
+  TOKEN_BAG_PHASE_INACTIVE = 1;
+  TOKEN_BAG_PHASE_OPEN = 2;
+  TOKEN_BAG_PHASE_CLOSED = 3;
+  TOKEN_BAG_PHASE_REVEALED = 4;
+}
+
+message TokenBagPlayer {
+  int64 registration_id = 1;
+  string name = 2;
+  bool via_shared_device = 3;
+  int64 left_neighbor_id = 4; // 0 = unclaimed
+  int64 right_neighbor_id = 5; // 0 = unclaimed
+}
+
+message TokenBag {
+  TokenBagPhase phase = 1;
+  string join_code = 2; // owner view only
+  string shared_code = 3; // owner view only
+  repeated TokenBagPlayer players = 4;
+}
+
+message OpenTokenBagRegistrationRequest {
+  int64 game_id = 1;
+}
+
+message OpenTokenBagRegistrationResponse {
+  TokenBag token_bag = 1;
+}
+
+message CloseTokenBagRegistrationRequest {
+  int64 game_id = 1;
+}
+
+message CloseTokenBagRegistrationResponse {
+  TokenBag token_bag = 1;
+}
+
+message AddTokenBagRegistrationRequest {
+  int64 game_id = 1;
+  string name = 2;
+}
+
+message AddTokenBagRegistrationResponse {
+  TokenBag token_bag = 1;
+}
+
+message RemoveTokenBagRegistrationRequest {
+  int64 game_id = 1;
+  int64 registration_id = 2;
+}
+
+message RemoveTokenBagRegistrationResponse {
+  TokenBag token_bag = 1;
+}
+
+message RevealTokenBagRequest {
+  int64 game_id = 1;
+}
+
+message RevealTokenBagResponse {
+  TokenBag token_bag = 1;
+}
+
+message ResetTokenBagRequest {
+  int64 game_id = 1;
+}
+
+message ResetTokenBagResponse {
+  TokenBag token_bag = 1;
+}
+
+message GetTokenBagRequest {
+  int64 game_id = 1;
+}
+
+message GetTokenBagResponse {
+  TokenBag token_bag = 1;
+}
+
+message GetTokenBagSeatingRequest {
+  int64 game_id = 1;
+}
+
+message GetTokenBagSeatingResponse {
+  // Seating order CLOCKWISE AS SEEN FROM ABOVE the table. Players face inward,
+  // so the next id is the previous player's LEFT-hand neighbor. Only meaningful
+  // when complete = true.
+  repeated int64 ordered_registration_ids = 1;
+  bool complete = 2;
+  repeated string conflicts = 3; // human-readable conflict/gap descriptions
+}
+
+message JoinTokenBagRequest {
+  string join_code = 1;
+  string name = 2;
+}
+
+message JoinTokenBagResponse {
+  int64 registration_id = 1;
+  string registration_secret = 2; // returned once; device stores it
+  WatchTokenBagResponse snapshot = 3;
+}
+
+message SetTokenBagNeighborsRequest {
+  string registration_secret = 1;
+  int64 left_registration_id = 2; // 0 clears
+  int64 right_registration_id = 3; // 0 clears
+}
+
+message SetTokenBagNeighborsResponse {
+  WatchTokenBagResponse snapshot = 1;
+}
+
+message GetMyTokenRequest {
+  string registration_secret = 1;
+}
+
+message GetMyTokenResponse {
+  Character character = 1;
+}
+
+message WatchTokenBagRequest {
+  string code = 1; // join_code or shared_code
+  string registration_secret = 2; // optional; enables self_* fields
+}
+
+message WatchTokenBagResponse {
+  TokenBagPhase phase = 1;
+  string game_name = 2;
+  repeated TokenBagPlayer players = 3;
+  int64 self_registration_id = 4; // 0 = no/invalid secret or removed
+  Character self_token = 5; // set only: valid secret AND phase == REVEALED AND !game_started
+  // The game has left setup. The bag is over: no token is ever sent again, and
+  // the player devices drop whatever they were showing.
+  bool game_started = 6;
+}
+
+message JoinTokenBagSharedRequest {
+  string shared_code = 1;
+  string name = 2;
+}
+
+message JoinTokenBagSharedResponse {
+  int64 registration_id = 1;
+}
+
+message RevealTokenSharedRequest {
+  string shared_code = 1;
+  int64 registration_id = 2;
+}
+
+message RevealTokenSharedResponse {
+  string name = 1;
+  Character character = 2;
 }

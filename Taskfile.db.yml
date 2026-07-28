@@ -1,7 +1,6 @@
 version: "3"
 
 vars:
-  ATLAS_URL: "postgres://postgres:postgres@localhost:5432/clockkeeper?sslmode=disable"
   MIGRATIONS_DIR: "ent/migrate/migrations"
 
 tasks:
@@ -41,7 +40,7 @@ tasks:
       - >
         atlas migrate apply
         --dir "file://{{.MIGRATIONS_DIR}}"
-        --url "{{.ATLAS_URL}}"
+        --url "postgres://postgres:postgres@localhost:${DB_PORT:-5432}/clockkeeper?sslmode=disable"
 
   migrate:status:
     desc: Show migration status
@@ -49,7 +48,7 @@ tasks:
       - >
         atlas migrate status
         --dir "file://{{.MIGRATIONS_DIR}}"
-        --url "{{.ATLAS_URL}}"
+        --url "postgres://postgres:postgres@localhost:${DB_PORT:-5432}/clockkeeper?sslmode=disable"
 
   migrate:create:blank:
     desc: Create a blank migration file
