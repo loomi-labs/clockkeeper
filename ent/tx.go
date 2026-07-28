@@ -20,6 +20,8 @@ type Tx struct {
 	InfoCard *InfoCardClient
 	// Phase is the client for interacting with the Phase builders.
 	Phase *PhaseClient
+	// Registration is the client for interacting with the Registration builders.
+	Registration *RegistrationClient
 	// Script is the client for interacting with the Script builders.
 	Script *ScriptClient
 	// SpotifyConnection is the client for interacting with the SpotifyConnection builders.
@@ -161,6 +163,7 @@ func (tx *Tx) init() {
 	tx.Game = NewGameClient(tx.config)
 	tx.InfoCard = NewInfoCardClient(tx.config)
 	tx.Phase = NewPhaseClient(tx.config)
+	tx.Registration = NewRegistrationClient(tx.config)
 	tx.Script = NewScriptClient(tx.config)
 	tx.SpotifyConnection = NewSpotifyConnectionClient(tx.config)
 	tx.User = NewUserClient(tx.config)

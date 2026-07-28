@@ -61,6 +61,12 @@ type Game struct {
 	RolePromotions []schema.GameRolePromotion `json:"role_promotions,omitempty"`
 	// State holds the value of the "state" field.
 	State game.State `json:"state,omitempty"`
+	// TokenBagPhase holds the value of the "token_bag_phase" field.
+	TokenBagPhase game.TokenBagPhase `json:"token_bag_phase,omitempty"`
+	// TokenBagJoinCode holds the value of the "token_bag_join_code" field.
+	TokenBagJoinCode *string `json:"token_bag_join_code,omitempty"`
+	// TokenBagSharedCode holds the value of the "token_bag_shared_code" field.
+	TokenBagSharedCode *string `json:"token_bag_shared_code,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the GameQuery when eager-loading is set.
 	Edges        GameEdges `json:"edges"`
@@ -75,9 +81,11 @@ type GameEdges struct {
 	Script *Script `json:"script,omitempty"`
 	// Phases holds the value of the phases edge.
 	Phases []*Phase `json:"phases,omitempty"`
+	// Registrations holds the value of the registrations edge.
+	Registrations []*Registration `json:"registrations,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [4]bool
 }
 
 // OwnerOrErr returns the Owner value or an error if the edge
@@ -111,6 +119,15 @@ func (e GameEdges) PhasesOrErr() ([]*Phase, error) {
 	return nil, &NotLoadedError{edge: "phases"}
 }
 
+// RegistrationsOrErr returns the Registrations value or an error if the edge
+// was not loaded in eager-loading.
+func (e GameEdges) RegistrationsOrErr() ([]*Registration, error) {
+	if e.loadedTypes[3] {
+		return e.Registrations, nil
+	}
+	return nil, &NotLoadedError{edge: "registrations"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Game) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -120,7 +137,7 @@ func (*Game) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case game.FieldID, game.FieldUserID, game.FieldScriptID, game.FieldPlayerCount, game.FieldTravellerCount:
 			values[i] = new(sql.NullInt64)
-		case game.FieldName, game.FieldState:
+		case game.FieldName, game.FieldState, game.FieldTokenBagPhase, game.FieldTokenBagJoinCode, game.FieldTokenBagSharedCode:
 			values[i] = new(sql.NullString)
 		case game.FieldCreatedAt, game.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -289,6 +306,26 @@ func (_m *Game) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.State = game.State(value.String)
 			}
+		case game.FieldTokenBagPhase:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field token_bag_phase", values[i])
+			} else if value.Valid {
+				_m.TokenBagPhase = game.TokenBagPhase(value.String)
+			}
+		case game.FieldTokenBagJoinCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field token_bag_join_code", values[i])
+			} else if value.Valid {
+				_m.TokenBagJoinCode = new(string)
+				*_m.TokenBagJoinCode = value.String
+			}
+		case game.FieldTokenBagSharedCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field token_bag_shared_code", values[i])
+			} else if value.Valid {
+				_m.TokenBagSharedCode = new(string)
+				*_m.TokenBagSharedCode = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -315,6 +352,11 @@ func (_m *Game) QueryScript() *ScriptQuery {
 // QueryPhases queries the "phases" edge of the Game entity.
 func (_m *Game) QueryPhases() *PhaseQuery {
 	return NewGameClient(_m.config).QueryPhases(_m)
+}
+
+// QueryRegistrations queries the "registrations" edge of the Game entity.
+func (_m *Game) QueryRegistrations() *RegistrationQuery {
+	return NewGameClient(_m.config).QueryRegistrations(_m)
 }
 
 // Update returns a builder for updating this Game.
@@ -399,6 +441,19 @@ func (_m *Game) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("state=")
 	builder.WriteString(fmt.Sprintf("%v", _m.State))
+	builder.WriteString(", ")
+	builder.WriteString("token_bag_phase=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TokenBagPhase))
+	builder.WriteString(", ")
+	if v := _m.TokenBagJoinCode; v != nil {
+		builder.WriteString("token_bag_join_code=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.TokenBagSharedCode; v != nil {
+		builder.WriteString("token_bag_shared_code=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

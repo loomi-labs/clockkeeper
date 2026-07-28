@@ -9,6 +9,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
@@ -201,6 +202,51 @@ func init() {
 	phaseDescCharacterAlignments := phaseFields[5].Descriptor()
 	// phase.DefaultCharacterAlignments holds the default value on creation for the character_alignments field.
 	phase.DefaultCharacterAlignments = phaseDescCharacterAlignments.Default.(map[string]string)
+	registrationMixin := schema.Registration{}.Mixin()
+	registrationMixinFields0 := registrationMixin[0].Fields()
+	_ = registrationMixinFields0
+	registrationFields := schema.Registration{}.Fields()
+	_ = registrationFields
+	// registrationDescCreatedAt is the schema descriptor for created_at field.
+	registrationDescCreatedAt := registrationMixinFields0[0].Descriptor()
+	// registration.DefaultCreatedAt holds the default value on creation for the created_at field.
+	registration.DefaultCreatedAt = registrationDescCreatedAt.Default.(func() time.Time)
+	// registrationDescUpdatedAt is the schema descriptor for updated_at field.
+	registrationDescUpdatedAt := registrationMixinFields0[1].Descriptor()
+	// registration.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	registration.DefaultUpdatedAt = registrationDescUpdatedAt.Default.(func() time.Time)
+	// registration.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	registration.UpdateDefaultUpdatedAt = registrationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// registrationDescName is the schema descriptor for name field.
+	registrationDescName := registrationFields[1].Descriptor()
+	// registration.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	registration.NameValidator = func() func(string) error {
+		validators := registrationDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// registrationDescNameNormalized is the schema descriptor for name_normalized field.
+	registrationDescNameNormalized := registrationFields[2].Descriptor()
+	// registration.NameNormalizedValidator is a validator for the "name_normalized" field. It is called by the builders before save.
+	registration.NameNormalizedValidator = registrationDescNameNormalized.Validators[0].(func(string) error)
+	// registrationDescSecretHash is the schema descriptor for secret_hash field.
+	registrationDescSecretHash := registrationFields[3].Descriptor()
+	// registration.SecretHashValidator is a validator for the "secret_hash" field. It is called by the builders before save.
+	registration.SecretHashValidator = registrationDescSecretHash.Validators[0].(func(string) error)
+	// registrationDescViaSharedDevice is the schema descriptor for via_shared_device field.
+	registrationDescViaSharedDevice := registrationFields[4].Descriptor()
+	// registration.DefaultViaSharedDevice holds the default value on creation for the via_shared_device field.
+	registration.DefaultViaSharedDevice = registrationDescViaSharedDevice.Default.(bool)
 	scriptMixin := schema.Script{}.Mixin()
 	scriptMixinFields0 := scriptMixin[0].Fields()
 	_ = scriptMixinFields0

@@ -16,6 +16,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -83,6 +84,7 @@ func checkColumn(t, c string) error {
 			game.Table:              game.ValidColumn,
 			infocard.Table:          infocard.ValidColumn,
 			phase.Table:             phase.ValidColumn,
+			registration.Table:      registration.ValidColumn,
 			script.Table:            script.ValidColumn,
 			spotifyconnection.Table: spotifyconnection.ValidColumn,
 			user.Table:              user.ValidColumn,

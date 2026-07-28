@@ -15,6 +15,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
@@ -305,6 +306,60 @@ func (_u *GameUpdate) SetNillableState(v *game.State) *GameUpdate {
 	return _u
 }
 
+// SetTokenBagPhase sets the "token_bag_phase" field.
+func (_u *GameUpdate) SetTokenBagPhase(v game.TokenBagPhase) *GameUpdate {
+	_u.mutation.SetTokenBagPhase(v)
+	return _u
+}
+
+// SetNillableTokenBagPhase sets the "token_bag_phase" field if the given value is not nil.
+func (_u *GameUpdate) SetNillableTokenBagPhase(v *game.TokenBagPhase) *GameUpdate {
+	if v != nil {
+		_u.SetTokenBagPhase(*v)
+	}
+	return _u
+}
+
+// SetTokenBagJoinCode sets the "token_bag_join_code" field.
+func (_u *GameUpdate) SetTokenBagJoinCode(v string) *GameUpdate {
+	_u.mutation.SetTokenBagJoinCode(v)
+	return _u
+}
+
+// SetNillableTokenBagJoinCode sets the "token_bag_join_code" field if the given value is not nil.
+func (_u *GameUpdate) SetNillableTokenBagJoinCode(v *string) *GameUpdate {
+	if v != nil {
+		_u.SetTokenBagJoinCode(*v)
+	}
+	return _u
+}
+
+// ClearTokenBagJoinCode clears the value of the "token_bag_join_code" field.
+func (_u *GameUpdate) ClearTokenBagJoinCode() *GameUpdate {
+	_u.mutation.ClearTokenBagJoinCode()
+	return _u
+}
+
+// SetTokenBagSharedCode sets the "token_bag_shared_code" field.
+func (_u *GameUpdate) SetTokenBagSharedCode(v string) *GameUpdate {
+	_u.mutation.SetTokenBagSharedCode(v)
+	return _u
+}
+
+// SetNillableTokenBagSharedCode sets the "token_bag_shared_code" field if the given value is not nil.
+func (_u *GameUpdate) SetNillableTokenBagSharedCode(v *string) *GameUpdate {
+	if v != nil {
+		_u.SetTokenBagSharedCode(*v)
+	}
+	return _u
+}
+
+// ClearTokenBagSharedCode clears the value of the "token_bag_shared_code" field.
+func (_u *GameUpdate) ClearTokenBagSharedCode() *GameUpdate {
+	_u.mutation.ClearTokenBagSharedCode()
+	return _u
+}
+
 // SetOwnerID sets the "owner" edge to the User entity by ID.
 func (_u *GameUpdate) SetOwnerID(id int) *GameUpdate {
 	_u.mutation.SetOwnerID(id)
@@ -334,6 +389,21 @@ func (_u *GameUpdate) AddPhases(v ...*Phase) *GameUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.AddPhaseIDs(ids...)
+}
+
+// AddRegistrationIDs adds the "registrations" edge to the Registration entity by IDs.
+func (_u *GameUpdate) AddRegistrationIDs(ids ...int) *GameUpdate {
+	_u.mutation.AddRegistrationIDs(ids...)
+	return _u
+}
+
+// AddRegistrations adds the "registrations" edges to the Registration entity.
+func (_u *GameUpdate) AddRegistrations(v ...*Registration) *GameUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddRegistrationIDs(ids...)
 }
 
 // Mutation returns the GameMutation object of the builder.
@@ -372,6 +442,27 @@ func (_u *GameUpdate) RemovePhases(v ...*Phase) *GameUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemovePhaseIDs(ids...)
+}
+
+// ClearRegistrations clears all "registrations" edges to the Registration entity.
+func (_u *GameUpdate) ClearRegistrations() *GameUpdate {
+	_u.mutation.ClearRegistrations()
+	return _u
+}
+
+// RemoveRegistrationIDs removes the "registrations" edge to Registration entities by IDs.
+func (_u *GameUpdate) RemoveRegistrationIDs(ids ...int) *GameUpdate {
+	_u.mutation.RemoveRegistrationIDs(ids...)
+	return _u
+}
+
+// RemoveRegistrations removes "registrations" edges to Registration entities.
+func (_u *GameUpdate) RemoveRegistrations(v ...*Registration) *GameUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveRegistrationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -425,6 +516,11 @@ func (_u *GameUpdate) check() error {
 	if v, ok := _u.mutation.State(); ok {
 		if err := game.StateValidator(v); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Game.state": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TokenBagPhase(); ok {
+		if err := game.TokenBagPhaseValidator(v); err != nil {
+			return &ValidationError{Name: "token_bag_phase", err: fmt.Errorf(`ent: validator failed for field "Game.token_bag_phase": %w`, err)}
 		}
 	}
 	if _u.mutation.OwnerCleared() && len(_u.mutation.OwnerIDs()) > 0 {
@@ -565,6 +661,21 @@ func (_u *GameUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
 	}
+	if value, ok := _u.mutation.TokenBagPhase(); ok {
+		_spec.SetField(game.FieldTokenBagPhase, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.TokenBagJoinCode(); ok {
+		_spec.SetField(game.FieldTokenBagJoinCode, field.TypeString, value)
+	}
+	if _u.mutation.TokenBagJoinCodeCleared() {
+		_spec.ClearField(game.FieldTokenBagJoinCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.TokenBagSharedCode(); ok {
+		_spec.SetField(game.FieldTokenBagSharedCode, field.TypeString, value)
+	}
+	if _u.mutation.TokenBagSharedCodeCleared() {
+		_spec.ClearField(game.FieldTokenBagSharedCode, field.TypeString)
+	}
 	if _u.mutation.OwnerCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -661,6 +772,51 @@ func (_u *GameUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.RegistrationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.RegistrationsTable,
+			Columns: []string{game.RegistrationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registration.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedRegistrationsIDs(); len(nodes) > 0 && !_u.mutation.RegistrationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.RegistrationsTable,
+			Columns: []string{game.RegistrationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registration.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RegistrationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.RegistrationsTable,
+			Columns: []string{game.RegistrationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registration.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -960,6 +1116,60 @@ func (_u *GameUpdateOne) SetNillableState(v *game.State) *GameUpdateOne {
 	return _u
 }
 
+// SetTokenBagPhase sets the "token_bag_phase" field.
+func (_u *GameUpdateOne) SetTokenBagPhase(v game.TokenBagPhase) *GameUpdateOne {
+	_u.mutation.SetTokenBagPhase(v)
+	return _u
+}
+
+// SetNillableTokenBagPhase sets the "token_bag_phase" field if the given value is not nil.
+func (_u *GameUpdateOne) SetNillableTokenBagPhase(v *game.TokenBagPhase) *GameUpdateOne {
+	if v != nil {
+		_u.SetTokenBagPhase(*v)
+	}
+	return _u
+}
+
+// SetTokenBagJoinCode sets the "token_bag_join_code" field.
+func (_u *GameUpdateOne) SetTokenBagJoinCode(v string) *GameUpdateOne {
+	_u.mutation.SetTokenBagJoinCode(v)
+	return _u
+}
+
+// SetNillableTokenBagJoinCode sets the "token_bag_join_code" field if the given value is not nil.
+func (_u *GameUpdateOne) SetNillableTokenBagJoinCode(v *string) *GameUpdateOne {
+	if v != nil {
+		_u.SetTokenBagJoinCode(*v)
+	}
+	return _u
+}
+
+// ClearTokenBagJoinCode clears the value of the "token_bag_join_code" field.
+func (_u *GameUpdateOne) ClearTokenBagJoinCode() *GameUpdateOne {
+	_u.mutation.ClearTokenBagJoinCode()
+	return _u
+}
+
+// SetTokenBagSharedCode sets the "token_bag_shared_code" field.
+func (_u *GameUpdateOne) SetTokenBagSharedCode(v string) *GameUpdateOne {
+	_u.mutation.SetTokenBagSharedCode(v)
+	return _u
+}
+
+// SetNillableTokenBagSharedCode sets the "token_bag_shared_code" field if the given value is not nil.
+func (_u *GameUpdateOne) SetNillableTokenBagSharedCode(v *string) *GameUpdateOne {
+	if v != nil {
+		_u.SetTokenBagSharedCode(*v)
+	}
+	return _u
+}
+
+// ClearTokenBagSharedCode clears the value of the "token_bag_shared_code" field.
+func (_u *GameUpdateOne) ClearTokenBagSharedCode() *GameUpdateOne {
+	_u.mutation.ClearTokenBagSharedCode()
+	return _u
+}
+
 // SetOwnerID sets the "owner" edge to the User entity by ID.
 func (_u *GameUpdateOne) SetOwnerID(id int) *GameUpdateOne {
 	_u.mutation.SetOwnerID(id)
@@ -989,6 +1199,21 @@ func (_u *GameUpdateOne) AddPhases(v ...*Phase) *GameUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.AddPhaseIDs(ids...)
+}
+
+// AddRegistrationIDs adds the "registrations" edge to the Registration entity by IDs.
+func (_u *GameUpdateOne) AddRegistrationIDs(ids ...int) *GameUpdateOne {
+	_u.mutation.AddRegistrationIDs(ids...)
+	return _u
+}
+
+// AddRegistrations adds the "registrations" edges to the Registration entity.
+func (_u *GameUpdateOne) AddRegistrations(v ...*Registration) *GameUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddRegistrationIDs(ids...)
 }
 
 // Mutation returns the GameMutation object of the builder.
@@ -1027,6 +1252,27 @@ func (_u *GameUpdateOne) RemovePhases(v ...*Phase) *GameUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemovePhaseIDs(ids...)
+}
+
+// ClearRegistrations clears all "registrations" edges to the Registration entity.
+func (_u *GameUpdateOne) ClearRegistrations() *GameUpdateOne {
+	_u.mutation.ClearRegistrations()
+	return _u
+}
+
+// RemoveRegistrationIDs removes the "registrations" edge to Registration entities by IDs.
+func (_u *GameUpdateOne) RemoveRegistrationIDs(ids ...int) *GameUpdateOne {
+	_u.mutation.RemoveRegistrationIDs(ids...)
+	return _u
+}
+
+// RemoveRegistrations removes "registrations" edges to Registration entities.
+func (_u *GameUpdateOne) RemoveRegistrations(v ...*Registration) *GameUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveRegistrationIDs(ids...)
 }
 
 // Where appends a list predicates to the GameUpdate builder.
@@ -1093,6 +1339,11 @@ func (_u *GameUpdateOne) check() error {
 	if v, ok := _u.mutation.State(); ok {
 		if err := game.StateValidator(v); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Game.state": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TokenBagPhase(); ok {
+		if err := game.TokenBagPhaseValidator(v); err != nil {
+			return &ValidationError{Name: "token_bag_phase", err: fmt.Errorf(`ent: validator failed for field "Game.token_bag_phase": %w`, err)}
 		}
 	}
 	if _u.mutation.OwnerCleared() && len(_u.mutation.OwnerIDs()) > 0 {
@@ -1250,6 +1501,21 @@ func (_u *GameUpdateOne) sqlSave(ctx context.Context) (_node *Game, err error) {
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(game.FieldState, field.TypeEnum, value)
 	}
+	if value, ok := _u.mutation.TokenBagPhase(); ok {
+		_spec.SetField(game.FieldTokenBagPhase, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.TokenBagJoinCode(); ok {
+		_spec.SetField(game.FieldTokenBagJoinCode, field.TypeString, value)
+	}
+	if _u.mutation.TokenBagJoinCodeCleared() {
+		_spec.ClearField(game.FieldTokenBagJoinCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.TokenBagSharedCode(); ok {
+		_spec.SetField(game.FieldTokenBagSharedCode, field.TypeString, value)
+	}
+	if _u.mutation.TokenBagSharedCodeCleared() {
+		_spec.ClearField(game.FieldTokenBagSharedCode, field.TypeString)
+	}
 	if _u.mutation.OwnerCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -1346,6 +1612,51 @@ func (_u *GameUpdateOne) sqlSave(ctx context.Context) (_node *Game, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(phase.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.RegistrationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.RegistrationsTable,
+			Columns: []string{game.RegistrationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registration.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedRegistrationsIDs(); len(nodes) > 0 && !_u.mutation.RegistrationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.RegistrationsTable,
+			Columns: []string{game.RegistrationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registration.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RegistrationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   game.RegistrationsTable,
+			Columns: []string{game.RegistrationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(registration.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

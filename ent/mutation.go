@@ -16,6 +16,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/infocard"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/schema"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/spotifyconnection"
@@ -35,6 +36,7 @@ const (
 	TypeGame              = "Game"
 	TypeInfoCard          = "InfoCard"
 	TypePhase             = "Phase"
+	TypeRegistration      = "Registration"
 	TypeScript            = "Script"
 	TypeSpotifyConnection = "SpotifyConnection"
 	TypeUser              = "User"
@@ -725,6 +727,9 @@ type GameMutation struct {
 	role_promotions               *[]schema.GameRolePromotion
 	appendrole_promotions         []schema.GameRolePromotion
 	state                         *game.State
+	token_bag_phase               *game.TokenBagPhase
+	token_bag_join_code           *string
+	token_bag_shared_code         *string
 	clearedFields                 map[string]struct{}
 	owner                         *int
 	clearedowner                  bool
@@ -733,6 +738,9 @@ type GameMutation struct {
 	phases                        map[int]struct{}
 	removedphases                 map[int]struct{}
 	clearedphases                 bool
+	registrations                 map[int]struct{}
+	removedregistrations          map[int]struct{}
+	clearedregistrations          bool
 	done                          bool
 	oldValue                      func(context.Context) (*Game, error)
 	predicates                    []predicate.Game
@@ -1820,6 +1828,140 @@ func (m *GameMutation) ResetState() {
 	m.state = nil
 }
 
+// SetTokenBagPhase sets the "token_bag_phase" field.
+func (m *GameMutation) SetTokenBagPhase(gbp game.TokenBagPhase) {
+	m.token_bag_phase = &gbp
+}
+
+// TokenBagPhase returns the value of the "token_bag_phase" field in the mutation.
+func (m *GameMutation) TokenBagPhase() (r game.TokenBagPhase, exists bool) {
+	v := m.token_bag_phase
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTokenBagPhase returns the old "token_bag_phase" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldTokenBagPhase(ctx context.Context) (v game.TokenBagPhase, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTokenBagPhase is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTokenBagPhase requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTokenBagPhase: %w", err)
+	}
+	return oldValue.TokenBagPhase, nil
+}
+
+// ResetTokenBagPhase resets all changes to the "token_bag_phase" field.
+func (m *GameMutation) ResetTokenBagPhase() {
+	m.token_bag_phase = nil
+}
+
+// SetTokenBagJoinCode sets the "token_bag_join_code" field.
+func (m *GameMutation) SetTokenBagJoinCode(s string) {
+	m.token_bag_join_code = &s
+}
+
+// TokenBagJoinCode returns the value of the "token_bag_join_code" field in the mutation.
+func (m *GameMutation) TokenBagJoinCode() (r string, exists bool) {
+	v := m.token_bag_join_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTokenBagJoinCode returns the old "token_bag_join_code" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldTokenBagJoinCode(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTokenBagJoinCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTokenBagJoinCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTokenBagJoinCode: %w", err)
+	}
+	return oldValue.TokenBagJoinCode, nil
+}
+
+// ClearTokenBagJoinCode clears the value of the "token_bag_join_code" field.
+func (m *GameMutation) ClearTokenBagJoinCode() {
+	m.token_bag_join_code = nil
+	m.clearedFields[game.FieldTokenBagJoinCode] = struct{}{}
+}
+
+// TokenBagJoinCodeCleared returns if the "token_bag_join_code" field was cleared in this mutation.
+func (m *GameMutation) TokenBagJoinCodeCleared() bool {
+	_, ok := m.clearedFields[game.FieldTokenBagJoinCode]
+	return ok
+}
+
+// ResetTokenBagJoinCode resets all changes to the "token_bag_join_code" field.
+func (m *GameMutation) ResetTokenBagJoinCode() {
+	m.token_bag_join_code = nil
+	delete(m.clearedFields, game.FieldTokenBagJoinCode)
+}
+
+// SetTokenBagSharedCode sets the "token_bag_shared_code" field.
+func (m *GameMutation) SetTokenBagSharedCode(s string) {
+	m.token_bag_shared_code = &s
+}
+
+// TokenBagSharedCode returns the value of the "token_bag_shared_code" field in the mutation.
+func (m *GameMutation) TokenBagSharedCode() (r string, exists bool) {
+	v := m.token_bag_shared_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTokenBagSharedCode returns the old "token_bag_shared_code" field's value of the Game entity.
+// If the Game object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameMutation) OldTokenBagSharedCode(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTokenBagSharedCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTokenBagSharedCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTokenBagSharedCode: %w", err)
+	}
+	return oldValue.TokenBagSharedCode, nil
+}
+
+// ClearTokenBagSharedCode clears the value of the "token_bag_shared_code" field.
+func (m *GameMutation) ClearTokenBagSharedCode() {
+	m.token_bag_shared_code = nil
+	m.clearedFields[game.FieldTokenBagSharedCode] = struct{}{}
+}
+
+// TokenBagSharedCodeCleared returns if the "token_bag_shared_code" field was cleared in this mutation.
+func (m *GameMutation) TokenBagSharedCodeCleared() bool {
+	_, ok := m.clearedFields[game.FieldTokenBagSharedCode]
+	return ok
+}
+
+// ResetTokenBagSharedCode resets all changes to the "token_bag_shared_code" field.
+func (m *GameMutation) ResetTokenBagSharedCode() {
+	m.token_bag_shared_code = nil
+	delete(m.clearedFields, game.FieldTokenBagSharedCode)
+}
+
 // SetOwnerID sets the "owner" edge to the User entity by id.
 func (m *GameMutation) SetOwnerID(id int) {
 	m.owner = &id
@@ -1941,6 +2083,60 @@ func (m *GameMutation) ResetPhases() {
 	m.removedphases = nil
 }
 
+// AddRegistrationIDs adds the "registrations" edge to the Registration entity by ids.
+func (m *GameMutation) AddRegistrationIDs(ids ...int) {
+	if m.registrations == nil {
+		m.registrations = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.registrations[ids[i]] = struct{}{}
+	}
+}
+
+// ClearRegistrations clears the "registrations" edge to the Registration entity.
+func (m *GameMutation) ClearRegistrations() {
+	m.clearedregistrations = true
+}
+
+// RegistrationsCleared reports if the "registrations" edge to the Registration entity was cleared.
+func (m *GameMutation) RegistrationsCleared() bool {
+	return m.clearedregistrations
+}
+
+// RemoveRegistrationIDs removes the "registrations" edge to the Registration entity by IDs.
+func (m *GameMutation) RemoveRegistrationIDs(ids ...int) {
+	if m.removedregistrations == nil {
+		m.removedregistrations = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.registrations, ids[i])
+		m.removedregistrations[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedRegistrations returns the removed IDs of the "registrations" edge to the Registration entity.
+func (m *GameMutation) RemovedRegistrationsIDs() (ids []int) {
+	for id := range m.removedregistrations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// RegistrationsIDs returns the "registrations" edge IDs in the mutation.
+func (m *GameMutation) RegistrationsIDs() (ids []int) {
+	for id := range m.registrations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetRegistrations resets all changes to the "registrations" edge.
+func (m *GameMutation) ResetRegistrations() {
+	m.registrations = nil
+	m.clearedregistrations = false
+	m.removedregistrations = nil
+}
+
 // Where appends a list predicates to the GameMutation builder.
 func (m *GameMutation) Where(ps ...predicate.Game) {
 	m.predicates = append(m.predicates, ps...)
@@ -1975,7 +2171,7 @@ func (m *GameMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GameMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 23)
 	if m.created_at != nil {
 		fields = append(fields, game.FieldCreatedAt)
 	}
@@ -2036,6 +2232,15 @@ func (m *GameMutation) Fields() []string {
 	if m.state != nil {
 		fields = append(fields, game.FieldState)
 	}
+	if m.token_bag_phase != nil {
+		fields = append(fields, game.FieldTokenBagPhase)
+	}
+	if m.token_bag_join_code != nil {
+		fields = append(fields, game.FieldTokenBagJoinCode)
+	}
+	if m.token_bag_shared_code != nil {
+		fields = append(fields, game.FieldTokenBagSharedCode)
+	}
 	return fields
 }
 
@@ -2084,6 +2289,12 @@ func (m *GameMutation) Field(name string) (ent.Value, bool) {
 		return m.RolePromotions()
 	case game.FieldState:
 		return m.State()
+	case game.FieldTokenBagPhase:
+		return m.TokenBagPhase()
+	case game.FieldTokenBagJoinCode:
+		return m.TokenBagJoinCode()
+	case game.FieldTokenBagSharedCode:
+		return m.TokenBagSharedCode()
 	}
 	return nil, false
 }
@@ -2133,6 +2344,12 @@ func (m *GameMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldRolePromotions(ctx)
 	case game.FieldState:
 		return m.OldState(ctx)
+	case game.FieldTokenBagPhase:
+		return m.OldTokenBagPhase(ctx)
+	case game.FieldTokenBagJoinCode:
+		return m.OldTokenBagJoinCode(ctx)
+	case game.FieldTokenBagSharedCode:
+		return m.OldTokenBagSharedCode(ctx)
 	}
 	return nil, fmt.Errorf("unknown Game field %s", name)
 }
@@ -2282,6 +2499,27 @@ func (m *GameMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetState(v)
 		return nil
+	case game.FieldTokenBagPhase:
+		v, ok := value.(game.TokenBagPhase)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTokenBagPhase(v)
+		return nil
+	case game.FieldTokenBagJoinCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTokenBagJoinCode(v)
+		return nil
+	case game.FieldTokenBagSharedCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTokenBagSharedCode(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Game field %s", name)
 }
@@ -2369,6 +2607,12 @@ func (m *GameMutation) ClearedFields() []string {
 	if m.FieldCleared(game.FieldRolePromotions) {
 		fields = append(fields, game.FieldRolePromotions)
 	}
+	if m.FieldCleared(game.FieldTokenBagJoinCode) {
+		fields = append(fields, game.FieldTokenBagJoinCode)
+	}
+	if m.FieldCleared(game.FieldTokenBagSharedCode) {
+		fields = append(fields, game.FieldTokenBagSharedCode)
+	}
 	return fields
 }
 
@@ -2412,6 +2656,12 @@ func (m *GameMutation) ClearField(name string) error {
 		return nil
 	case game.FieldRolePromotions:
 		m.ClearRolePromotions()
+		return nil
+	case game.FieldTokenBagJoinCode:
+		m.ClearTokenBagJoinCode()
+		return nil
+	case game.FieldTokenBagSharedCode:
+		m.ClearTokenBagSharedCode()
 		return nil
 	}
 	return fmt.Errorf("unknown Game nullable field %s", name)
@@ -2481,13 +2731,22 @@ func (m *GameMutation) ResetField(name string) error {
 	case game.FieldState:
 		m.ResetState()
 		return nil
+	case game.FieldTokenBagPhase:
+		m.ResetTokenBagPhase()
+		return nil
+	case game.FieldTokenBagJoinCode:
+		m.ResetTokenBagJoinCode()
+		return nil
+	case game.FieldTokenBagSharedCode:
+		m.ResetTokenBagSharedCode()
+		return nil
 	}
 	return fmt.Errorf("unknown Game field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *GameMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.owner != nil {
 		edges = append(edges, game.EdgeOwner)
 	}
@@ -2496,6 +2755,9 @@ func (m *GameMutation) AddedEdges() []string {
 	}
 	if m.phases != nil {
 		edges = append(edges, game.EdgePhases)
+	}
+	if m.registrations != nil {
+		edges = append(edges, game.EdgeRegistrations)
 	}
 	return edges
 }
@@ -2518,15 +2780,24 @@ func (m *GameMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case game.EdgeRegistrations:
+		ids := make([]ent.Value, 0, len(m.registrations))
+		for id := range m.registrations {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *GameMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedphases != nil {
 		edges = append(edges, game.EdgePhases)
+	}
+	if m.removedregistrations != nil {
+		edges = append(edges, game.EdgeRegistrations)
 	}
 	return edges
 }
@@ -2541,13 +2812,19 @@ func (m *GameMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case game.EdgeRegistrations:
+		ids := make([]ent.Value, 0, len(m.removedregistrations))
+		for id := range m.removedregistrations {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *GameMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.clearedowner {
 		edges = append(edges, game.EdgeOwner)
 	}
@@ -2556,6 +2833,9 @@ func (m *GameMutation) ClearedEdges() []string {
 	}
 	if m.clearedphases {
 		edges = append(edges, game.EdgePhases)
+	}
+	if m.clearedregistrations {
+		edges = append(edges, game.EdgeRegistrations)
 	}
 	return edges
 }
@@ -2570,6 +2850,8 @@ func (m *GameMutation) EdgeCleared(name string) bool {
 		return m.clearedscript
 	case game.EdgePhases:
 		return m.clearedphases
+	case game.EdgeRegistrations:
+		return m.clearedregistrations
 	}
 	return false
 }
@@ -2600,6 +2882,9 @@ func (m *GameMutation) ResetEdge(name string) error {
 		return nil
 	case game.EdgePhases:
 		m.ResetPhases()
+		return nil
+	case game.EdgeRegistrations:
+		m.ResetRegistrations()
 		return nil
 	}
 	return fmt.Errorf("unknown Game edge %s", name)
@@ -4332,6 +4617,1003 @@ func (m *PhaseMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Phase edge %s", name)
+}
+
+// RegistrationMutation represents an operation that mutates the Registration nodes in the graph.
+type RegistrationMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *int
+	created_at           *time.Time
+	updated_at           *time.Time
+	name                 *string
+	name_normalized      *string
+	secret_hash          *string
+	via_shared_device    *bool
+	left_neighbor_id     *int
+	addleft_neighbor_id  *int
+	right_neighbor_id    *int
+	addright_neighbor_id *int
+	assigned_role_id     *string
+	clearedFields        map[string]struct{}
+	game                 *int
+	clearedgame          bool
+	done                 bool
+	oldValue             func(context.Context) (*Registration, error)
+	predicates           []predicate.Registration
+}
+
+var _ ent.Mutation = (*RegistrationMutation)(nil)
+
+// registrationOption allows management of the mutation configuration using functional options.
+type registrationOption func(*RegistrationMutation)
+
+// newRegistrationMutation creates new mutation for the Registration entity.
+func newRegistrationMutation(c config, op Op, opts ...registrationOption) *RegistrationMutation {
+	m := &RegistrationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeRegistration,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withRegistrationID sets the ID field of the mutation.
+func withRegistrationID(id int) registrationOption {
+	return func(m *RegistrationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Registration
+		)
+		m.oldValue = func(ctx context.Context) (*Registration, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Registration.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withRegistration sets the old Registration of the mutation.
+func withRegistration(node *Registration) registrationOption {
+	return func(m *RegistrationMutation) {
+		m.oldValue = func(context.Context) (*Registration, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m RegistrationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m RegistrationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *RegistrationMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *RegistrationMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Registration.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *RegistrationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *RegistrationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *RegistrationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *RegistrationMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *RegistrationMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *RegistrationMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetGameID sets the "game_id" field.
+func (m *RegistrationMutation) SetGameID(i int) {
+	m.game = &i
+}
+
+// GameID returns the value of the "game_id" field in the mutation.
+func (m *RegistrationMutation) GameID() (r int, exists bool) {
+	v := m.game
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGameID returns the old "game_id" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldGameID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGameID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGameID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGameID: %w", err)
+	}
+	return oldValue.GameID, nil
+}
+
+// ResetGameID resets all changes to the "game_id" field.
+func (m *RegistrationMutation) ResetGameID() {
+	m.game = nil
+}
+
+// SetName sets the "name" field.
+func (m *RegistrationMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *RegistrationMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *RegistrationMutation) ResetName() {
+	m.name = nil
+}
+
+// SetNameNormalized sets the "name_normalized" field.
+func (m *RegistrationMutation) SetNameNormalized(s string) {
+	m.name_normalized = &s
+}
+
+// NameNormalized returns the value of the "name_normalized" field in the mutation.
+func (m *RegistrationMutation) NameNormalized() (r string, exists bool) {
+	v := m.name_normalized
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNameNormalized returns the old "name_normalized" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldNameNormalized(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNameNormalized is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNameNormalized requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNameNormalized: %w", err)
+	}
+	return oldValue.NameNormalized, nil
+}
+
+// ResetNameNormalized resets all changes to the "name_normalized" field.
+func (m *RegistrationMutation) ResetNameNormalized() {
+	m.name_normalized = nil
+}
+
+// SetSecretHash sets the "secret_hash" field.
+func (m *RegistrationMutation) SetSecretHash(s string) {
+	m.secret_hash = &s
+}
+
+// SecretHash returns the value of the "secret_hash" field in the mutation.
+func (m *RegistrationMutation) SecretHash() (r string, exists bool) {
+	v := m.secret_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecretHash returns the old "secret_hash" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldSecretHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecretHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecretHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecretHash: %w", err)
+	}
+	return oldValue.SecretHash, nil
+}
+
+// ResetSecretHash resets all changes to the "secret_hash" field.
+func (m *RegistrationMutation) ResetSecretHash() {
+	m.secret_hash = nil
+}
+
+// SetViaSharedDevice sets the "via_shared_device" field.
+func (m *RegistrationMutation) SetViaSharedDevice(b bool) {
+	m.via_shared_device = &b
+}
+
+// ViaSharedDevice returns the value of the "via_shared_device" field in the mutation.
+func (m *RegistrationMutation) ViaSharedDevice() (r bool, exists bool) {
+	v := m.via_shared_device
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldViaSharedDevice returns the old "via_shared_device" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldViaSharedDevice(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldViaSharedDevice is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldViaSharedDevice requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldViaSharedDevice: %w", err)
+	}
+	return oldValue.ViaSharedDevice, nil
+}
+
+// ResetViaSharedDevice resets all changes to the "via_shared_device" field.
+func (m *RegistrationMutation) ResetViaSharedDevice() {
+	m.via_shared_device = nil
+}
+
+// SetLeftNeighborID sets the "left_neighbor_id" field.
+func (m *RegistrationMutation) SetLeftNeighborID(i int) {
+	m.left_neighbor_id = &i
+	m.addleft_neighbor_id = nil
+}
+
+// LeftNeighborID returns the value of the "left_neighbor_id" field in the mutation.
+func (m *RegistrationMutation) LeftNeighborID() (r int, exists bool) {
+	v := m.left_neighbor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeftNeighborID returns the old "left_neighbor_id" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldLeftNeighborID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeftNeighborID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeftNeighborID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeftNeighborID: %w", err)
+	}
+	return oldValue.LeftNeighborID, nil
+}
+
+// AddLeftNeighborID adds i to the "left_neighbor_id" field.
+func (m *RegistrationMutation) AddLeftNeighborID(i int) {
+	if m.addleft_neighbor_id != nil {
+		*m.addleft_neighbor_id += i
+	} else {
+		m.addleft_neighbor_id = &i
+	}
+}
+
+// AddedLeftNeighborID returns the value that was added to the "left_neighbor_id" field in this mutation.
+func (m *RegistrationMutation) AddedLeftNeighborID() (r int, exists bool) {
+	v := m.addleft_neighbor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearLeftNeighborID clears the value of the "left_neighbor_id" field.
+func (m *RegistrationMutation) ClearLeftNeighborID() {
+	m.left_neighbor_id = nil
+	m.addleft_neighbor_id = nil
+	m.clearedFields[registration.FieldLeftNeighborID] = struct{}{}
+}
+
+// LeftNeighborIDCleared returns if the "left_neighbor_id" field was cleared in this mutation.
+func (m *RegistrationMutation) LeftNeighborIDCleared() bool {
+	_, ok := m.clearedFields[registration.FieldLeftNeighborID]
+	return ok
+}
+
+// ResetLeftNeighborID resets all changes to the "left_neighbor_id" field.
+func (m *RegistrationMutation) ResetLeftNeighborID() {
+	m.left_neighbor_id = nil
+	m.addleft_neighbor_id = nil
+	delete(m.clearedFields, registration.FieldLeftNeighborID)
+}
+
+// SetRightNeighborID sets the "right_neighbor_id" field.
+func (m *RegistrationMutation) SetRightNeighborID(i int) {
+	m.right_neighbor_id = &i
+	m.addright_neighbor_id = nil
+}
+
+// RightNeighborID returns the value of the "right_neighbor_id" field in the mutation.
+func (m *RegistrationMutation) RightNeighborID() (r int, exists bool) {
+	v := m.right_neighbor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRightNeighborID returns the old "right_neighbor_id" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldRightNeighborID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRightNeighborID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRightNeighborID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRightNeighborID: %w", err)
+	}
+	return oldValue.RightNeighborID, nil
+}
+
+// AddRightNeighborID adds i to the "right_neighbor_id" field.
+func (m *RegistrationMutation) AddRightNeighborID(i int) {
+	if m.addright_neighbor_id != nil {
+		*m.addright_neighbor_id += i
+	} else {
+		m.addright_neighbor_id = &i
+	}
+}
+
+// AddedRightNeighborID returns the value that was added to the "right_neighbor_id" field in this mutation.
+func (m *RegistrationMutation) AddedRightNeighborID() (r int, exists bool) {
+	v := m.addright_neighbor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRightNeighborID clears the value of the "right_neighbor_id" field.
+func (m *RegistrationMutation) ClearRightNeighborID() {
+	m.right_neighbor_id = nil
+	m.addright_neighbor_id = nil
+	m.clearedFields[registration.FieldRightNeighborID] = struct{}{}
+}
+
+// RightNeighborIDCleared returns if the "right_neighbor_id" field was cleared in this mutation.
+func (m *RegistrationMutation) RightNeighborIDCleared() bool {
+	_, ok := m.clearedFields[registration.FieldRightNeighborID]
+	return ok
+}
+
+// ResetRightNeighborID resets all changes to the "right_neighbor_id" field.
+func (m *RegistrationMutation) ResetRightNeighborID() {
+	m.right_neighbor_id = nil
+	m.addright_neighbor_id = nil
+	delete(m.clearedFields, registration.FieldRightNeighborID)
+}
+
+// SetAssignedRoleID sets the "assigned_role_id" field.
+func (m *RegistrationMutation) SetAssignedRoleID(s string) {
+	m.assigned_role_id = &s
+}
+
+// AssignedRoleID returns the value of the "assigned_role_id" field in the mutation.
+func (m *RegistrationMutation) AssignedRoleID() (r string, exists bool) {
+	v := m.assigned_role_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssignedRoleID returns the old "assigned_role_id" field's value of the Registration entity.
+// If the Registration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RegistrationMutation) OldAssignedRoleID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssignedRoleID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssignedRoleID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssignedRoleID: %w", err)
+	}
+	return oldValue.AssignedRoleID, nil
+}
+
+// ClearAssignedRoleID clears the value of the "assigned_role_id" field.
+func (m *RegistrationMutation) ClearAssignedRoleID() {
+	m.assigned_role_id = nil
+	m.clearedFields[registration.FieldAssignedRoleID] = struct{}{}
+}
+
+// AssignedRoleIDCleared returns if the "assigned_role_id" field was cleared in this mutation.
+func (m *RegistrationMutation) AssignedRoleIDCleared() bool {
+	_, ok := m.clearedFields[registration.FieldAssignedRoleID]
+	return ok
+}
+
+// ResetAssignedRoleID resets all changes to the "assigned_role_id" field.
+func (m *RegistrationMutation) ResetAssignedRoleID() {
+	m.assigned_role_id = nil
+	delete(m.clearedFields, registration.FieldAssignedRoleID)
+}
+
+// ClearGame clears the "game" edge to the Game entity.
+func (m *RegistrationMutation) ClearGame() {
+	m.clearedgame = true
+	m.clearedFields[registration.FieldGameID] = struct{}{}
+}
+
+// GameCleared reports if the "game" edge to the Game entity was cleared.
+func (m *RegistrationMutation) GameCleared() bool {
+	return m.clearedgame
+}
+
+// GameIDs returns the "game" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GameID instead. It exists only for internal usage by the builders.
+func (m *RegistrationMutation) GameIDs() (ids []int) {
+	if id := m.game; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGame resets all changes to the "game" edge.
+func (m *RegistrationMutation) ResetGame() {
+	m.game = nil
+	m.clearedgame = false
+}
+
+// Where appends a list predicates to the RegistrationMutation builder.
+func (m *RegistrationMutation) Where(ps ...predicate.Registration) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the RegistrationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *RegistrationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Registration, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *RegistrationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *RegistrationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Registration).
+func (m *RegistrationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *RegistrationMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.created_at != nil {
+		fields = append(fields, registration.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, registration.FieldUpdatedAt)
+	}
+	if m.game != nil {
+		fields = append(fields, registration.FieldGameID)
+	}
+	if m.name != nil {
+		fields = append(fields, registration.FieldName)
+	}
+	if m.name_normalized != nil {
+		fields = append(fields, registration.FieldNameNormalized)
+	}
+	if m.secret_hash != nil {
+		fields = append(fields, registration.FieldSecretHash)
+	}
+	if m.via_shared_device != nil {
+		fields = append(fields, registration.FieldViaSharedDevice)
+	}
+	if m.left_neighbor_id != nil {
+		fields = append(fields, registration.FieldLeftNeighborID)
+	}
+	if m.right_neighbor_id != nil {
+		fields = append(fields, registration.FieldRightNeighborID)
+	}
+	if m.assigned_role_id != nil {
+		fields = append(fields, registration.FieldAssignedRoleID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *RegistrationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case registration.FieldCreatedAt:
+		return m.CreatedAt()
+	case registration.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case registration.FieldGameID:
+		return m.GameID()
+	case registration.FieldName:
+		return m.Name()
+	case registration.FieldNameNormalized:
+		return m.NameNormalized()
+	case registration.FieldSecretHash:
+		return m.SecretHash()
+	case registration.FieldViaSharedDevice:
+		return m.ViaSharedDevice()
+	case registration.FieldLeftNeighborID:
+		return m.LeftNeighborID()
+	case registration.FieldRightNeighborID:
+		return m.RightNeighborID()
+	case registration.FieldAssignedRoleID:
+		return m.AssignedRoleID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *RegistrationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case registration.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case registration.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case registration.FieldGameID:
+		return m.OldGameID(ctx)
+	case registration.FieldName:
+		return m.OldName(ctx)
+	case registration.FieldNameNormalized:
+		return m.OldNameNormalized(ctx)
+	case registration.FieldSecretHash:
+		return m.OldSecretHash(ctx)
+	case registration.FieldViaSharedDevice:
+		return m.OldViaSharedDevice(ctx)
+	case registration.FieldLeftNeighborID:
+		return m.OldLeftNeighborID(ctx)
+	case registration.FieldRightNeighborID:
+		return m.OldRightNeighborID(ctx)
+	case registration.FieldAssignedRoleID:
+		return m.OldAssignedRoleID(ctx)
+	}
+	return nil, fmt.Errorf("unknown Registration field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RegistrationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case registration.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case registration.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case registration.FieldGameID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGameID(v)
+		return nil
+	case registration.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case registration.FieldNameNormalized:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNameNormalized(v)
+		return nil
+	case registration.FieldSecretHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecretHash(v)
+		return nil
+	case registration.FieldViaSharedDevice:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetViaSharedDevice(v)
+		return nil
+	case registration.FieldLeftNeighborID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeftNeighborID(v)
+		return nil
+	case registration.FieldRightNeighborID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRightNeighborID(v)
+		return nil
+	case registration.FieldAssignedRoleID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssignedRoleID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Registration field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *RegistrationMutation) AddedFields() []string {
+	var fields []string
+	if m.addleft_neighbor_id != nil {
+		fields = append(fields, registration.FieldLeftNeighborID)
+	}
+	if m.addright_neighbor_id != nil {
+		fields = append(fields, registration.FieldRightNeighborID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *RegistrationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case registration.FieldLeftNeighborID:
+		return m.AddedLeftNeighborID()
+	case registration.FieldRightNeighborID:
+		return m.AddedRightNeighborID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RegistrationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case registration.FieldLeftNeighborID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLeftNeighborID(v)
+		return nil
+	case registration.FieldRightNeighborID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRightNeighborID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Registration numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *RegistrationMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(registration.FieldLeftNeighborID) {
+		fields = append(fields, registration.FieldLeftNeighborID)
+	}
+	if m.FieldCleared(registration.FieldRightNeighborID) {
+		fields = append(fields, registration.FieldRightNeighborID)
+	}
+	if m.FieldCleared(registration.FieldAssignedRoleID) {
+		fields = append(fields, registration.FieldAssignedRoleID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *RegistrationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *RegistrationMutation) ClearField(name string) error {
+	switch name {
+	case registration.FieldLeftNeighborID:
+		m.ClearLeftNeighborID()
+		return nil
+	case registration.FieldRightNeighborID:
+		m.ClearRightNeighborID()
+		return nil
+	case registration.FieldAssignedRoleID:
+		m.ClearAssignedRoleID()
+		return nil
+	}
+	return fmt.Errorf("unknown Registration nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *RegistrationMutation) ResetField(name string) error {
+	switch name {
+	case registration.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case registration.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case registration.FieldGameID:
+		m.ResetGameID()
+		return nil
+	case registration.FieldName:
+		m.ResetName()
+		return nil
+	case registration.FieldNameNormalized:
+		m.ResetNameNormalized()
+		return nil
+	case registration.FieldSecretHash:
+		m.ResetSecretHash()
+		return nil
+	case registration.FieldViaSharedDevice:
+		m.ResetViaSharedDevice()
+		return nil
+	case registration.FieldLeftNeighborID:
+		m.ResetLeftNeighborID()
+		return nil
+	case registration.FieldRightNeighborID:
+		m.ResetRightNeighborID()
+		return nil
+	case registration.FieldAssignedRoleID:
+		m.ResetAssignedRoleID()
+		return nil
+	}
+	return fmt.Errorf("unknown Registration field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *RegistrationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.game != nil {
+		edges = append(edges, registration.EdgeGame)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *RegistrationMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case registration.EdgeGame:
+		if id := m.game; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *RegistrationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *RegistrationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *RegistrationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedgame {
+		edges = append(edges, registration.EdgeGame)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *RegistrationMutation) EdgeCleared(name string) bool {
+	switch name {
+	case registration.EdgeGame:
+		return m.clearedgame
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *RegistrationMutation) ClearEdge(name string) error {
+	switch name {
+	case registration.EdgeGame:
+		m.ClearGame()
+		return nil
+	}
+	return fmt.Errorf("unknown Registration unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *RegistrationMutation) ResetEdge(name string) error {
+	switch name {
+	case registration.EdgeGame:
+		m.ResetGame()
+		return nil
+	}
+	return fmt.Errorf("unknown Registration edge %s", name)
 }
 
 // ScriptMutation represents an operation that mutates the Script nodes in the graph.

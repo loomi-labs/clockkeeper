@@ -15,6 +15,7 @@ import (
 	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/phase"
 	"github.com/loomi-labs/clockkeeper/ent/predicate"
+	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/script"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 )
@@ -22,13 +23,14 @@ import (
 // GameQuery is the builder for querying Game entities.
 type GameQuery struct {
 	config
-	ctx        *QueryContext
-	order      []game.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Game
-	withOwner  *UserQuery
-	withScript *ScriptQuery
-	withPhases *PhaseQuery
+	ctx               *QueryContext
+	order             []game.OrderOption
+	inters            []Interceptor
+	predicates        []predicate.Game
+	withOwner         *UserQuery
+	withScript        *ScriptQuery
+	withPhases        *PhaseQuery
+	withRegistrations *RegistrationQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -124,6 +126,28 @@ func (_q *GameQuery) QueryPhases() *PhaseQuery {
 			sqlgraph.From(game.Table, game.FieldID, selector),
 			sqlgraph.To(phase.Table, phase.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, game.PhasesTable, game.PhasesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryRegistrations chains the current query on the "registrations" edge.
+func (_q *GameQuery) QueryRegistrations() *RegistrationQuery {
+	query := (&RegistrationClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(game.Table, game.FieldID, selector),
+			sqlgraph.To(registration.Table, registration.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, game.RegistrationsTable, game.RegistrationsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -318,14 +342,15 @@ func (_q *GameQuery) Clone() *GameQuery {
 		return nil
 	}
 	return &GameQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]game.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.Game{}, _q.predicates...),
-		withOwner:  _q.withOwner.Clone(),
-		withScript: _q.withScript.Clone(),
-		withPhases: _q.withPhases.Clone(),
+		config:            _q.config,
+		ctx:               _q.ctx.Clone(),
+		order:             append([]game.OrderOption{}, _q.order...),
+		inters:            append([]Interceptor{}, _q.inters...),
+		predicates:        append([]predicate.Game{}, _q.predicates...),
+		withOwner:         _q.withOwner.Clone(),
+		withScript:        _q.withScript.Clone(),
+		withPhases:        _q.withPhases.Clone(),
+		withRegistrations: _q.withRegistrations.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -362,6 +387,17 @@ func (_q *GameQuery) WithPhases(opts ...func(*PhaseQuery)) *GameQuery {
 		opt(query)
 	}
 	_q.withPhases = query
+	return _q
+}
+
+// WithRegistrations tells the query-builder to eager-load the nodes that are connected to
+// the "registrations" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *GameQuery) WithRegistrations(opts ...func(*RegistrationQuery)) *GameQuery {
+	query := (&RegistrationClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withRegistrations = query
 	return _q
 }
 
@@ -443,10 +479,11 @@ func (_q *GameQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Game, e
 	var (
 		nodes       = []*Game{}
 		_spec       = _q.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [4]bool{
 			_q.withOwner != nil,
 			_q.withScript != nil,
 			_q.withPhases != nil,
+			_q.withRegistrations != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -483,6 +520,13 @@ func (_q *GameQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Game, e
 		if err := _q.loadPhases(ctx, query, nodes,
 			func(n *Game) { n.Edges.Phases = []*Phase{} },
 			func(n *Game, e *Phase) { n.Edges.Phases = append(n.Edges.Phases, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withRegistrations; query != nil {
+		if err := _q.loadRegistrations(ctx, query, nodes,
+			func(n *Game) { n.Edges.Registrations = []*Registration{} },
+			func(n *Game, e *Registration) { n.Edges.Registrations = append(n.Edges.Registrations, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -562,6 +606,36 @@ func (_q *GameQuery) loadPhases(ctx context.Context, query *PhaseQuery, nodes []
 	}
 	query.Where(predicate.Phase(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(game.PhasesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GameID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "game_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *GameQuery) loadRegistrations(ctx context.Context, query *RegistrationQuery, nodes []*Game, init func(*Game), assign func(*Game, *Registration)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Game)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(registration.FieldGameID)
+	}
+	query.Where(predicate.Registration(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(game.RegistrationsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

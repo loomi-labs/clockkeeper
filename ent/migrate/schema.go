@@ -60,6 +60,9 @@ var (
 		{Name: "grimoire_reminder_attachments", Type: field.TypeJSON, Nullable: true},
 		{Name: "role_promotions", Type: field.TypeJSON, Nullable: true},
 		{Name: "state", Type: field.TypeEnum, Enums: []string{"setup", "in_progress", "completed"}, Default: "setup"},
+		{Name: "token_bag_phase", Type: field.TypeEnum, Enums: []string{"inactive", "open", "closed", "revealed"}, Default: "inactive"},
+		{Name: "token_bag_join_code", Type: field.TypeString, Unique: true, Nullable: true},
+		{Name: "token_bag_shared_code", Type: field.TypeString, Unique: true, Nullable: true},
 		{Name: "script_id", Type: field.TypeInt},
 		{Name: "user_id", Type: field.TypeInt},
 	}
@@ -71,13 +74,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "games_scripts_games",
-				Columns:    []*schema.Column{GamesColumns[19]},
+				Columns:    []*schema.Column{GamesColumns[22]},
 				RefColumns: []*schema.Column{ScriptsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "games_users_games",
-				Columns:    []*schema.Column{GamesColumns[20]},
+				Columns:    []*schema.Column{GamesColumns[23]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -131,6 +134,46 @@ var (
 				Columns:    []*schema.Column{PhasesColumns[8]},
 				RefColumns: []*schema.Column{GamesColumns[0]},
 				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// RegistrationsColumns holds the columns for the "registrations" table.
+	RegistrationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString, Size: 50},
+		{Name: "name_normalized", Type: field.TypeString},
+		{Name: "secret_hash", Type: field.TypeString},
+		{Name: "via_shared_device", Type: field.TypeBool, Default: false},
+		{Name: "left_neighbor_id", Type: field.TypeInt, Nullable: true},
+		{Name: "right_neighbor_id", Type: field.TypeInt, Nullable: true},
+		{Name: "assigned_role_id", Type: field.TypeString, Nullable: true},
+		{Name: "game_id", Type: field.TypeInt},
+	}
+	// RegistrationsTable holds the schema information for the "registrations" table.
+	RegistrationsTable = &schema.Table{
+		Name:       "registrations",
+		Columns:    RegistrationsColumns,
+		PrimaryKey: []*schema.Column{RegistrationsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "registrations_games_registrations",
+				Columns:    []*schema.Column{RegistrationsColumns[10]},
+				RefColumns: []*schema.Column{GamesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "registration_name_normalized_game_id",
+				Unique:  true,
+				Columns: []*schema.Column{RegistrationsColumns[4], RegistrationsColumns[10]},
+			},
+			{
+				Name:    "registration_secret_hash",
+				Unique:  true,
+				Columns: []*schema.Column{RegistrationsColumns[5]},
 			},
 		},
 	}
@@ -215,6 +258,7 @@ var (
 		GamesTable,
 		InfoCardsTable,
 		PhasesTable,
+		RegistrationsTable,
 		ScriptsTable,
 		SpotifyConnectionsTable,
 		UsersTable,
@@ -227,6 +271,7 @@ func init() {
 	GamesTable.ForeignKeys[1].RefTable = UsersTable
 	InfoCardsTable.ForeignKeys[0].RefTable = UsersTable
 	PhasesTable.ForeignKeys[0].RefTable = GamesTable
+	RegistrationsTable.ForeignKeys[0].RefTable = GamesTable
 	ScriptsTable.ForeignKeys[0].RefTable = UsersTable
 	SpotifyConnectionsTable.ForeignKeys[0].RefTable = UsersTable
 }
