@@ -29,6 +29,7 @@
   import {
     circleLayout,
     orbitPosition,
+    rotatePositions,
   } from "~/lib/components/grimoire/layout";
   import type {
     GrimoirePlayer,
@@ -2368,6 +2369,61 @@
     return null;
   }
 
+  /**
+   * Turns the whole seating circle by exactly one seat (setup only).
+   *
+   * The grimoire's seat order is right but its rotation is not: the Storyteller
+   * arranged the ring (or the players' picks did) and now needs seat 1 to line up
+   * with the person actually sitting there. Rotating beats re-dragging every
+   * token.
+   *
+   * Only the IN-PLAY seats move. Reading them from `inPlaySeatIds` rather than
+   * filtering `grimoirePositions` by key does two things the key filter cannot:
+   * it excludes the `reminder-*` / `bagsub-reminder-*` entries that share the map,
+   * AND it excludes stale positions left behind by roles that were deselected —
+   * those would drag the centroid off the visible circle and make the step angle
+   * too small.
+   */
+  function rotateGrimoire(direction: 1 | -1) {
+    if (!isSetup) return;
+    const seats = new Map<string, { x: number; y: number }>();
+    for (const id of inPlaySeatIds) {
+      const pos = grimoirePositions.get(id);
+      if (pos) seats.set(id, pos);
+    }
+    // One seat of a one-seat circle is already where it belongs.
+    if (seats.size < 2) return;
+
+    const step = (direction * 2 * Math.PI) / seats.size;
+    const rotated = rotatePositions(seats, step);
+    const next = new Map(grimoirePositions);
+    for (const [id, pos] of rotated) next.set(id, pos);
+    grimoirePositions = next;
+
+    // Attached reminders orbit their player at an angle measured in CANVAS space,
+    // not relative to the circle, so they follow the player but keep pointing the
+    // same way. Turning the angles by the same step keeps the rotation rigid: a
+    // reminder tucked between its player and the middle of the table stays there.
+    if (reminderAttachments.size > 0) {
+      const nextAttachments = new Map(reminderAttachments);
+      for (const [rid, att] of reminderAttachments) {
+        if (!rotated.has(att.playerId)) continue;
+        nextAttachments.set(rid, {
+          playerId: att.playerId,
+          // Normalized to (-pi, pi] the way angleFromPosition reports angles, so
+          // repeated clicks cannot grow the persisted number without bound.
+          angle: Math.atan2(
+            Math.sin(att.angle + step),
+            Math.cos(att.angle + step),
+          ),
+        });
+      }
+      reminderAttachments = nextAttachments;
+    }
+
+    saveGrimoireState();
+  }
+
   function handleChipTap(name: string) {
     if (selectedChipName === name) {
       selectedChipName = null;
@@ -2568,6 +2624,53 @@
             <WakeLockToggle />
             {#if spotify.available}
               <SpotifyPanel {activeIsDay} />
+            {/if}
+            <!--
+              Seat rotation: setup only. Once the game is running the seats are
+              the shared reference for who sits where, and turning them would
+              desync the table.
+            -->
+            {#if isSetup && activeTab === "grimoire"}
+              <div class="flex items-center gap-1">
+                <button
+                  onclick={() => rotateGrimoire(-1)}
+                  class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+                  aria-label="Rotate seating counter-clockwise"
+                  title="Rotate seating counter-clockwise"
+                >
+                  <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M1 4v6h6" />
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                  </svg>
+                </button>
+                <button
+                  onclick={() => rotateGrimoire(1)}
+                  class="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+                  aria-label="Rotate seating clockwise"
+                  title="Rotate seating clockwise"
+                >
+                  <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M23 4v6h-6" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                </button>
+              </div>
             {/if}
             <button
               onclick={() => {

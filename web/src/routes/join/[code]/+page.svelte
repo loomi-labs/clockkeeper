@@ -70,6 +70,16 @@
   const options = $derived(
     neighborOptions(bag.state.players, bag.state.selfId),
   );
+  /**
+   * Registrations nobody has claimed from their own phone yet: added by the
+   * Storyteller, typed on the shared device, or backfilled from the grimoire's
+   * seat names. Tapping one joins under that exact name, which the server turns
+   * into a claim of that registration — same response, same credential, same
+   * waiting screen as a fresh join.
+   */
+  const unclaimed = $derived(
+    bag.state.players.filter((player) => player.viaSharedDevice),
+  );
   function nameOf(id: string): string {
     if (id === NO_ID) return "";
     return bag.state.players.find((player) => player.id === id)?.name ?? "";
@@ -107,14 +117,24 @@
     void bag.fetchMyToken();
   });
 
-  async function join(event: SubmitEvent) {
-    event.preventDefault();
-    const name = nameInput.trim();
+  /**
+   * The one way into the bag, shared by the free-text form and the claim chips.
+   * A chip is not a special case: the name it sends is an existing unclaimed
+   * registration, and `JoinTokenBag` answers a claim exactly as it answers a new
+   * registration — so a failed claim (someone else got there first) surfaces
+   * through the same inline error as a taken name.
+   */
+  async function submitName(name: string) {
     if (name === "" || joining) return;
     joining = true;
     const ok = await bag.register(name);
     joining = false;
     if (ok) nameInput = "";
+  }
+
+  async function join(event: SubmitEvent) {
+    event.preventDefault();
+    await submitName(nameInput.trim());
   }
 
   /**
@@ -222,6 +242,30 @@
         </div>
       {:else if view.kind === "enter_name"}
         <form class="space-y-4" onsubmit={join}>
+          {#if unclaimed.length > 0}
+            <div class="space-y-1.5">
+              <p class="text-xs text-muted">
+                Already on the list? Tap your name
+              </p>
+              <div class="flex flex-wrap gap-2">
+                {#each unclaimed as player (player.id)}
+                  <button
+                    type="button"
+                    onclick={() => submitName(player.name)}
+                    disabled={joining}
+                    class="rounded-full border border-border bg-element px-4 py-2 text-sm font-medium text-primary transition-colors hover:border-indigo-400 hover:text-indigo-500 disabled:opacity-50"
+                  >
+                    {player.name}
+                  </button>
+                {/each}
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="h-px flex-1 bg-border"></span>
+              <span class="text-xs text-muted">or</span>
+              <span class="h-px flex-1 bg-border"></span>
+            </div>
+          {/if}
           <div class="space-y-1">
             <label for="player-name" class="text-sm font-medium text-secondary">
               Your name

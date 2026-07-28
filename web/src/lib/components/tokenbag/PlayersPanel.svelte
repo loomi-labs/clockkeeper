@@ -120,7 +120,11 @@
   let arranging = $state(false);
   let arrangeConflicts = $state<string[]>([]);
   let arrangeError = $state<string | null>(null);
-  let arranged = $state(false);
+  /**
+   * The outcome of the last arrange: `"exact"` when the picks formed the whole
+   * ring, `"partial"` when the server filled the gaps for us.
+   */
+  let arranged = $state<"exact" | "partial" | null>(null);
   /** Why the reveal did not happen. Set when the pre-reveal flush failed. */
   let revealError = $state<string | null>(null);
 
@@ -269,7 +273,7 @@
   function clearArrangeFeedback() {
     arrangeConflicts = [];
     arrangeError = null;
-    arranged = false;
+    arranged = null;
     revealError = null;
   }
 
@@ -329,6 +333,17 @@
     if (target) void run(() => bag.remove(target.id));
   }
 
+  /**
+   * Seats the grimoire from the neighbor picks.
+   *
+   * `conflicts` are CONTRADICTIONS only (a closed loop shorter than the table, a
+   * pick on someone who is not registered, a pick on oneself) — those block,
+   * because the server cannot know which of the contradicting answers is the true
+   * one. Missing picks are not a contradiction: the server hands back a
+   * best-effort ring with `complete = false`, and arranging on it is strictly
+   * better than leaving the seats where they were, as long as the Storyteller is
+   * told it is a guess.
+   */
   async function doArrange() {
     if (arranging) return;
     arranging = true;
@@ -337,14 +352,21 @@
       const seating = await bag.seating();
       // A null response means the RPC failed; bag.state.error explains it.
       if (!seating) return;
-      if (!seating.complete) {
+      if (seating.conflicts.length > 0) {
         arrangeConflicts = [...seating.conflicts];
         return;
       }
       const ordered = seatingNames(seating.orderedRegistrationIds, registrants);
+      // Unreachable while the button needs a pick to be enabled, but never fail
+      // silently: an empty ring with nothing to complain about would otherwise
+      // look like a click that did nothing at all.
+      if (ordered.length === 0) {
+        arrangeError = "Nothing to arrange yet.";
+        return;
+      }
       const failure = await onarrange(ordered);
       if (failure) arrangeError = failure;
-      else arranged = true;
+      else arranged = seating.complete ? "exact" : "partial";
     } finally {
       arranging = false;
     }
@@ -553,7 +575,7 @@
       class="mt-3 max-h-40 overflow-y-auto rounded-lg border border-border bg-element px-3 py-2"
     >
       <p class="text-xs font-medium text-secondary">
-        The neighbor picks don't form one ring yet:
+        The neighbor picks can't be seated as one ring:
       </p>
       <ul class="mt-1 space-y-0.5">
         <!-- Unkeyed: the server's conflict strings are free text and may repeat. -->
@@ -577,7 +599,9 @@
   {/if}
   {#if arranged}
     <p class="mt-3 text-xs text-green-600 dark:text-green-400">
-      Grimoire arranged ✓
+      {arranged === "partial"
+        ? "Grimoire arranged (best effort — players without picks were placed in join order)"
+        : "Grimoire arranged ✓"}
     </p>
   {/if}
 
