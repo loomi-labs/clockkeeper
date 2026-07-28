@@ -569,8 +569,11 @@ export type PlaylistTracks = {
   complete: boolean;
 };
 
+// Spotify's February 2026 Web API migration renamed the playlist contents
+// endpoint from /playlists/{id}/tracks to /playlists/{id}/items and the
+// per-entry field from `track` to `item`; the old endpoint returns 403.
 type RawTrackPage = {
-  items?: ({ track?: { uri?: string } | null } | null)[];
+  items?: ({ item?: { uri?: string } | null } | null)[];
   total?: number;
 };
 
@@ -602,17 +605,17 @@ export async function getPlaylistTrackURIs(
   try {
     for (let page = 0; page < MAX_TRACK_PAGES; page++) {
       const params = new URLSearchParams({
-        fields: "items(track(uri)),total",
+        fields: "items(item(uri)),total",
         limit: String(TRACK_PAGE_LIMIT),
         offset: String(page * TRACK_PAGE_LIMIT),
       });
       const resp = await spotifyFetch<RawTrackPage>(
-        `/playlists/${encodeURIComponent(id)}/tracks?${params}`,
+        `/playlists/${encodeURIComponent(id)}/items?${params}`,
       );
       if (typeof resp?.total === "number") total = resp.total;
       const items = resp?.items ?? [];
       for (const item of items) {
-        const uri = item?.track?.uri;
+        const uri = item?.item?.uri;
         if (uri) uris.push(uri);
       }
       if (items.length < TRACK_PAGE_LIMIT) {

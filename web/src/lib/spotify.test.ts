@@ -105,7 +105,7 @@ function routeFetch(routes: Route[]) {
 
 function tracksResponse(uris: string[], total = uris.length): Response {
   return makeResponse(200, {
-    items: uris.map((uri) => ({ track: { uri } })),
+    items: uris.map((uri) => ({ item: { uri } })),
     total,
   });
 }
@@ -634,13 +634,13 @@ describe("played-aware track selection", () => {
 
   it("starts on a playlist track and caches the track list", async () => {
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
     ]);
 
     await switchToSlot("day");
     await switchToSlot("day");
 
-    const trackFetches = callsMatching("/playlists/day/tracks");
+    const trackFetches = callsMatching("/playlists/day/items");
     expect(trackFetches).toHaveLength(1);
     expect(trackFetches[0][0]).toContain("limit=100");
     expect(trackFetches[0][0]).toContain("offset=0");
@@ -658,7 +658,7 @@ describe("played-aware track selection", () => {
   it("never restarts on a track the poll saw playing in that slot", async () => {
     spotify.currentSlot = "day";
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
       { match: "/me/player/play", resp: makeResponse(204) },
       { match: "/me/player/shuffle", resp: makeResponse(204) },
       {
@@ -686,8 +686,8 @@ describe("played-aware track selection", () => {
     spotify.currentSlot = "day";
     spotify.sessionActive = true;
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
-      { match: "/playlists/night/tracks", resp: tracksResponse(["n1"]) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/night/items", resp: tracksResponse(["n1"]) },
       { match: "/me/player/play", resp: makeResponse(204) },
       { match: "/me/player/shuffle", resp: makeResponse(204) },
       {
@@ -713,7 +713,7 @@ describe("played-aware track selection", () => {
   it("keeps the switch alive when the snapshot fails", async () => {
     spotify.currentSlot = "night";
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
       { match: "/me/player/play", resp: makeResponse(204) },
       { match: "/me/player/shuffle", resp: makeResponse(204) },
       { match: "/me/player", resp: makeResponse(404) },
@@ -729,7 +729,7 @@ describe("played-aware track selection", () => {
   it("does not open the device picker for a failed snapshot", async () => {
     spotify.currentSlot = "night";
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
       // The play fails for an unrelated reason, so nothing after the snapshot
       // can clear a device-picker flag the snapshot should never have set.
       {
@@ -750,8 +750,8 @@ describe("played-aware track selection", () => {
     spotify.sessionActive = true;
     let releaseSnapshot: (resp: Response) => void = () => {};
     routeFetch([
-      { match: "/playlists/night/tracks", resp: tracksResponse(["n1"]) },
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/night/items", resp: tracksResponse(["n1"]) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
       { match: "/me/player/play", resp: makeResponse(404) },
       { match: "/me/player/shuffle", resp: makeResponse(204) },
       {
@@ -780,8 +780,8 @@ describe("played-aware track selection", () => {
     spotify.currentSlot = "day";
     spotify.sessionActive = true;
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
-      { match: "/playlists/night/tracks", resp: tracksResponse(["n1"]) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/night/items", resp: tracksResponse(["n1"]) },
       { match: "/me/player/play", resp: makeResponse(204) },
       { match: "/me/player/shuffle", resp: makeResponse(204) },
       {
@@ -812,7 +812,7 @@ describe("played-aware track selection", () => {
       .mockReturnValueOnce(0)
       .mockReturnValue(0.9);
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
     ]);
 
     await switchToSlot("day");
@@ -832,7 +832,7 @@ describe("played-aware track selection", () => {
   it("retries once without the offset when the offset is rejected", async () => {
     let plays = 0;
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
       {
         match: "/me/player/play",
         resp: () =>
@@ -854,7 +854,7 @@ describe("played-aware track selection", () => {
 
   it("does not retry a no_device failure", async () => {
     routeFetch([
-      { match: "/playlists/day/tracks", resp: tracksResponse(TRACKS) },
+      { match: "/playlists/day/items", resp: tracksResponse(TRACKS) },
       { match: "/me/player/play", resp: makeResponse(404) },
     ]);
 
@@ -871,11 +871,11 @@ describe("played-aware track selection", () => {
       Array.from({ length: 100 }, (_, i) => `spotify:track:${i}`),
       900,
     );
-    routeFetch([{ match: "/playlists/day/tracks", resp: () => fullPage }]);
+    routeFetch([{ match: "/playlists/day/items", resp: () => fullPage }]);
 
     await switchToSlot("day");
 
-    expect(callsMatching("/playlists/day/tracks")).toHaveLength(5);
+    expect(callsMatching("/playlists/day/items")).toHaveLength(5);
     expect(bodyOf(playCalls()[0]).offset).toEqual({ position: 450 });
   });
 
@@ -888,7 +888,7 @@ describe("played-aware track selection", () => {
     let pages = 0;
     routeFetch([
       {
-        match: "/playlists/day/tracks",
+        match: "/playlists/day/items",
         resp: () =>
           ++pages === 1
             ? page1
@@ -909,7 +909,7 @@ describe("played-aware track selection", () => {
   it("falls back to plain context playback when the list cannot be read", async () => {
     routeFetch([
       {
-        match: "/playlists/day/tracks",
+        match: "/playlists/day/items",
         resp: makeResponse(500, { error: { message: "boom" } }),
       },
     ]);
