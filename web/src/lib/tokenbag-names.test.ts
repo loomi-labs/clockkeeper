@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   assignedSeatNames,
   deriveNameSource,
+  matchRegistrantsToSeats,
   type NameSourceInput,
 } from "./tokenbag-names";
+import { NO_ID, type BagPlayer } from "./tokenbag";
 
 const PRESETS = ["Pia", "Quin"];
 
@@ -97,6 +99,93 @@ describe("deriveNameSource", () => {
     const source = deriveNameSource(input({ isSetup: false, presetNames }));
     source.names.push("Rex");
     expect(presetNames).toEqual(["Pia"]);
+  });
+});
+
+describe("matchRegistrantsToSeats", () => {
+  function registrant(overrides: Partial<BagPlayer> = {}): BagPlayer {
+    return {
+      id: "1",
+      name: "Ana",
+      viaSharedDevice: false,
+      leftId: NO_ID,
+      rightId: NO_ID,
+      ...overrides,
+    };
+  }
+
+  const ana = registrant({ id: "1", name: "Ana", leftId: "3", rightId: "2" });
+  const bob = registrant({ id: "2", name: "Bob", viaSharedDevice: true });
+  const cleo = registrant({ id: "3", name: "Cleo" });
+  const registrants = [ana, bob, cleo];
+
+  it("ties a seat to the registrant whose name it holds", () => {
+    const meta = matchRegistrantsToSeats(registrants, [
+      { id: "washerwoman", name: "Ana" },
+      { id: "chef", name: "Bob" },
+    ]);
+    expect(meta.get("washerwoman")).toEqual({
+      viaShared: false,
+      leftName: "Cleo",
+      rightName: "Bob",
+    });
+    // Added on the tablet, and no neighbors picked yet.
+    expect(meta.get("chef")).toEqual({
+      viaShared: true,
+      leftName: undefined,
+      rightName: undefined,
+    });
+  });
+
+  it("leaves out seats with no name and names nobody registered", () => {
+    const meta = matchRegistrantsToSeats(registrants, [
+      { id: "imp", name: "Zed" },
+      { id: "chef", name: "" },
+      { id: "monk", name: undefined },
+    ]);
+    expect(meta.size).toBe(0);
+  });
+
+  it("matches across case and spacing", () => {
+    const meta = matchRegistrantsToSeats(registrants, [
+      { id: "imp", name: "  aNa   " },
+    ]);
+    expect(meta.get("imp")?.leftName).toBe("Cleo");
+  });
+
+  it("matches every seat carrying the same name", () => {
+    const meta = matchRegistrantsToSeats(registrants, [
+      { id: "imp", name: "Cleo" },
+      { id: "chef", name: "cleo" },
+    ]);
+    expect(meta.size).toBe(2);
+    expect(meta.get("imp")).toEqual(meta.get("chef"));
+  });
+
+  it("keeps the first of two registrants with the same normalized name", () => {
+    const meta = matchRegistrantsToSeats(
+      [cleo, registrant({ id: "4", name: "CLEO", viaSharedDevice: true })],
+      [{ id: "imp", name: "Cleo" }],
+    );
+    expect(meta.get("imp")?.viaShared).toBe(false);
+  });
+
+  it("ignores a neighbor pick that points at nobody", () => {
+    const meta = matchRegistrantsToSeats(
+      [registrant({ leftId: "99", rightId: NO_ID })],
+      [{ id: "imp", name: "Ana" }],
+    );
+    expect(meta.get("imp")).toEqual({
+      viaShared: false,
+      leftName: undefined,
+      rightName: undefined,
+    });
+  });
+
+  it("has nothing to say without registrants", () => {
+    expect(matchRegistrantsToSeats([], [{ id: "imp", name: "Ana" }]).size).toBe(
+      0,
+    );
   });
 });
 

@@ -45,9 +45,8 @@
   import WakeLockToggle from "~/lib/components/WakeLockToggle.svelte";
   import SpotifyPanel from "~/lib/components/SpotifyPanel.svelte";
   import { spotify, syncPhase, switchToSlot } from "~/lib/spotify.svelte";
-  import PlayerAssignmentPanel from "~/lib/components/PlayerAssignmentPanel.svelte";
   import NameChipsBar from "~/lib/components/NameChipsBar.svelte";
-  import TokenBagPanel from "~/lib/components/tokenbag/TokenBagPanel.svelte";
+  import PlayersPanel from "~/lib/components/tokenbag/PlayersPanel.svelte";
   import {
     mapSeatingToRoles,
     seatOrderForLayout,
@@ -2298,7 +2297,7 @@
   );
 
   // --- Digital Token Bag ---
-  // The panel's latest report, mirrored out of TokenBagPanel. While the bag owns
+  // The panel's latest report, mirrored out of PlayersPanel. While the bag owns
   // the name list, the assignment UI offers registrants instead of the
   // Storyteller's saved presets, so the names it writes into the grimoire match
   // what the server looks up at reveal time.
@@ -2895,18 +2894,14 @@
             />
           </div>
 
-          <!-- Digital Token Bag — players register their own names here -->
-          <TokenBagPanel
+          <!-- Players — the Digital Token Bag plus the seats (roles) in play -->
+          <PlayersPanel
             gameId={game.id}
             playerCount={game.playerCount}
             assignedNames={assignedNameValues}
             onregistrants={handleBagRegistrants}
             onarrange={handleBagArrange}
             onbeforereveal={flushGrimoireSave}
-          />
-
-          <!-- Players — assign names to the seats (roles) in play -->
-          <PlayerAssignmentPanel
             players={assignmentPanelPlayers}
             presetNames={effectiveNames}
             lockedIds={lockedNameIds}

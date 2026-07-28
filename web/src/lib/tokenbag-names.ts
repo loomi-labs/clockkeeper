@@ -8,7 +8,7 @@
 // why the decision is a function of the report plus the state of the page that is
 // on screen right now.
 
-import { normalizeName } from "./tokenbag";
+import { NO_ID, normalizeName, type BagPlayer } from "./tokenbag";
 
 /** What the Token Bag panel reports up to the page. */
 export type BagRegistrants = {
@@ -47,6 +47,64 @@ export function assignedSeatNames(
     if (name !== undefined && name !== "") names.add(name);
   }
   return names;
+}
+
+/** What a grimoire seat inherits from the registrant sitting in it. */
+export type SeatRegistration = {
+  /** They were added on the shared tablet rather than joining from a phone. */
+  viaShared: boolean;
+  /** Their left neighbor pick, resolved to a name. Absent while unclaimed. */
+  leftName?: string;
+  /** Their right neighbor pick, resolved to a name. Absent while unclaimed. */
+  rightName?: string;
+};
+
+/** A grimoire seat, as the assignment UI holds it: a role id and its name. */
+export type NamedSeat = {
+  id: string;
+  name?: string | undefined;
+};
+
+/**
+ * Ties each seat to the registrant whose name it holds, so a seat row can show
+ * where that player joined from and who they said they are sitting between.
+ *
+ * Matching is by normalized name — the same by-name link the reveal depends on
+ * (see `deriveNameSource`), so what a row shows and what the server will match
+ * cannot disagree. Seats with no name, or a name nobody registered, are absent
+ * from the result.
+ *
+ * Duplicates are safe both ways: two seats carrying the same name both resolve
+ * to that registrant, and if two registrants normalize to the same name (the
+ * server forbids it, but nothing here depends on that) the first one wins.
+ */
+export function matchRegistrantsToSeats(
+  registrants: readonly BagPlayer[],
+  seats: readonly NamedSeat[],
+): Map<string, SeatRegistration> {
+  const byName = new Map<string, BagPlayer>();
+  const nameById = new Map<string, string>();
+  for (const registrant of registrants) {
+    const key = normalizeName(registrant.name);
+    if (key !== "" && !byName.has(key)) byName.set(key, registrant);
+    nameById.set(registrant.id, registrant.name);
+  }
+
+  const neighbor = (id: string): string | undefined =>
+    id === NO_ID ? undefined : nameById.get(id);
+
+  const seatMeta = new Map<string, SeatRegistration>();
+  for (const seat of seats) {
+    if (seat.name === undefined || seat.name === "") continue;
+    const registrant = byName.get(normalizeName(seat.name));
+    if (!registrant) continue;
+    seatMeta.set(seat.id, {
+      viaShared: registrant.viaSharedDevice,
+      leftName: neighbor(registrant.leftId),
+      rightName: neighbor(registrant.rightId),
+    });
+  }
+  return seatMeta;
 }
 
 export type NameSourceInput = {
