@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -33,6 +34,9 @@ import (
 // OpenTokenBagRegistration opens (or re-opens) registration. Re-opening a closed
 // bag keeps the players who already joined, and keeps the existing codes so QR
 // codes handed out earlier keep working.
+//
+// Opening also backfills the bag from the grimoire's player names — see
+// backfillBagFromGrimoire.
 func (h *ClockKeeperServiceHandler) OpenTokenBagRegistration(ctx context.Context, req *connect.Request[clockkeeperv1.OpenTokenBagRegistrationRequest]) (*connect.Response[clockkeeperv1.OpenTokenBagRegistrationResponse], error) {
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
@@ -49,10 +53,17 @@ func (h *ClockKeeperServiceHandler) OpenTokenBagRegistration(ctx context.Context
 	case game.TokenBagPhaseOpen:
 		// Already open: idempotent success, no code rotation.
 	default:
-		upd := g.Update().SetTokenBagPhase(game.TokenBagPhaseOpen)
+		tx, err := h.db.Tx(ctx)
+		if err != nil {
+			slog.Error("start transaction failed", "err", err)
+			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		}
+
+		upd := tx.Game.UpdateOneID(g.ID).SetTokenBagPhase(game.TokenBagPhaseOpen)
 		if g.TokenBagJoinCode == nil {
 			code, err := newBagCode()
 			if err != nil {
+				_ = tx.Rollback()
 				slog.Error("generate token bag join code failed", "err", err)
 				return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 			}
@@ -61,13 +72,28 @@ func (h *ClockKeeperServiceHandler) OpenTokenBagRegistration(ctx context.Context
 		if g.TokenBagSharedCode == nil {
 			code, err := newBagCode()
 			if err != nil {
+				_ = tx.Rollback()
 				slog.Error("generate token bag shared code failed", "err", err)
 				return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 			}
 			upd = upd.SetTokenBagSharedCode(code)
 		}
 		if _, err := upd.Save(ctx); err != nil {
+			_ = tx.Rollback()
 			slog.Error("open token bag registration failed", "err", err)
+			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		}
+
+		// Same transaction as the phase change: an open bag that silently lost
+		// half the table would be worse than not opening at all.
+		if err := backfillBagFromGrimoire(ctx, tx.Registration, g); err != nil {
+			_ = tx.Rollback()
+			slog.Error("backfill token bag from grimoire names failed", "err", err)
+			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+		}
+
+		if err := tx.Commit(); err != nil {
+			slog.Error("commit failed", "err", err)
 			return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 		}
 	}
@@ -226,14 +252,22 @@ func (h *ClockKeeperServiceHandler) RemoveTokenBagRegistration(ctx context.Conte
 // dealt out. grimoire_player_names is never pruned when the storyteller swaps a
 // character out of the script, so it keeps stale role_id keys around; handing a
 // player a token off one of those would reveal a character nobody holds.
+//
+// Dealing tokens is part of setting a game up, so a running game refuses it: the
+// grimoire has moved on (deaths, star passes), and the token every player was
+// handed at the start of the evening must not be re-dealt off it.
 func (h *ClockKeeperServiceHandler) RevealTokenBag(ctx context.Context, req *connect.Request[clockkeeperv1.RevealTokenBagRequest]) (*connect.Response[clockkeeperv1.RevealTokenBagResponse], error) {
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
 		return nil, err
 	}
 
+	// Completed is a state too, checked first for the message it deserves.
 	if g.State == game.StateCompleted {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
+	}
+	if g.State != game.StateSetup {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("tokens can only be revealed during setup"))
 	}
 
 	if g.TokenBagPhase != game.TokenBagPhaseClosed {
@@ -432,7 +466,8 @@ func (h *ClockKeeperServiceHandler) GetTokenBagSeating(ctx context.Context, req 
 // --- Player RPCs (public — the registration secret in the payload is the credential) ---
 
 // JoinTokenBag registers a player from their own device and returns the secret
-// their device stores to identify itself later.
+// their device stores to identify itself later. A name that is already in the bag
+// but unclaimed is taken over instead of refused — see claimRegistration.
 func (h *ClockKeeperServiceHandler) JoinTokenBag(ctx context.Context, req *connect.Request[clockkeeperv1.JoinTokenBagRequest]) (*connect.Response[clockkeeperv1.JoinTokenBagResponse], error) {
 	g, isShared, err := h.gameByBagCode(ctx, req.Msg.JoinCode)
 	if err != nil {
@@ -443,9 +478,16 @@ func (h *ClockKeeperServiceHandler) JoinTokenBag(ctx context.Context, req *conne
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("token bag not found"))
 	}
 
-	reg, err := h.createRegistration(ctx, g, req.Msg.Name, false, game.TokenBagPhaseOpen)
+	reg, err := h.claimRegistration(ctx, g, req.Msg.Name)
 	if err != nil {
 		return nil, err
+	}
+	if reg == nil {
+		// Nobody holds that name yet: an ordinary new player.
+		reg, err = h.createRegistration(ctx, g, req.Msg.Name, false, game.TokenBagPhaseOpen)
+		if err != nil {
+			return nil, err
+		}
 	}
 	h.publishTokenBag(g.ID)
 
@@ -634,20 +676,10 @@ type newRegistration struct {
 
 // createRegistration validates the name and adds the player to the bag. A
 // secret is always generated (the schema requires its hash); shared-device joins
-// discard the raw value.
-//
-// allowedPhases are the token bag phases the caller accepts — the public join
-// paths only ever allow OPEN, while the storyteller may also add players to a
-// CLOSED bag.
+// discard the raw value. allowedPhases is passed on to bagJoinable.
 func (h *ClockKeeperServiceHandler) createRegistration(ctx context.Context, g *ent.Game, rawName string, viaSharedDevice bool, allowedPhases ...game.TokenBagPhase) (*newRegistration, error) {
-	if g.State == game.StateCompleted {
-		// A finished game's QR codes are still floating around on paper; joining
-		// one must not silently work. Covers every way into the bag.
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
-	}
-
-	if !slices.Contains(allowedPhases, g.TokenBagPhase) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("token bag registration is not open"))
+	if err := bagJoinable(g, allowedPhases...); err != nil {
+		return nil, err
 	}
 
 	display, normalized, err := normalizeName(rawName)
@@ -692,6 +724,150 @@ func (h *ClockKeeperServiceHandler) createRegistration(ctx context.Context, g *e
 	}
 
 	return &newRegistration{entity: r, secret: secret}, nil
+}
+
+// bagJoinable reports whether the bag accepts a name at all right now.
+// allowedPhases are the token bag phases the caller accepts — the public join
+// paths only ever allow OPEN, while the storyteller may also add players to a
+// CLOSED bag.
+func bagJoinable(g *ent.Game, allowedPhases ...game.TokenBagPhase) error {
+	if g.State == game.StateCompleted {
+		// A finished game's QR codes are still floating around on paper; joining
+		// one must not silently work. Covers every way into the bag.
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
+	}
+
+	if !slices.Contains(allowedPhases, g.TokenBagPhase) {
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("token bag registration is not open"))
+	}
+	return nil
+}
+
+// claimRegistration hands a registration that carries no reachable secret — one
+// the storyteller typed in, one backfilled from the grimoire, one made on the
+// shared device — to the player who joins under its name from their own phone.
+// Everything else on the row survives, neighbor picks included; only the secret
+// is replaced, so the player's device can identify itself from now on.
+//
+// Returns (nil, nil) when the name is free: the caller registers a new player
+// instead. A name already claimed by a device stays taken.
+func (h *ClockKeeperServiceHandler) claimRegistration(ctx context.Context, g *ent.Game, rawName string) (*newRegistration, error) {
+	if err := bagJoinable(g, game.TokenBagPhaseOpen); err != nil {
+		return nil, err
+	}
+
+	_, normalized, err := normalizeName(rawName)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Scoped to this game: a claim never reaches another bag's rows.
+	r, err := h.db.Registration.Query().
+		Where(registration.GameID(g.ID), registration.NameNormalized(normalized)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		slog.Error("look up registration by name failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	taken := connect.NewError(connect.CodeAlreadyExists, errors.New("name already taken"))
+	if !r.ViaSharedDevice {
+		return nil, taken
+	}
+
+	secret, err := newRegistrationSecret()
+	if err != nil {
+		slog.Error("generate registration secret failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	// Conditional on the row still being unclaimed: two phones racing for the
+	// same name must not both walk away with a working secret.
+	claimed, err := h.db.Registration.UpdateOneID(r.ID).
+		Where(registration.ViaSharedDevice(true)).
+		SetSecretHash(hashSecret(secret)).
+		SetViaSharedDevice(false).
+		Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, taken // another device claimed it a moment ago
+		}
+		slog.Error("claim registration failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	return &newRegistration{entity: claimed, secret: secret}, nil
+}
+
+// backfillBagFromGrimoire adds a registration for every in-play grimoire seat
+// name that has none yet. A storyteller who typed the table's names into the
+// grimoire before opening the bag — or duplicated last week's game, which copies
+// the names but not the bag — would otherwise have to type them all again.
+//
+// The backfilled registrations are shared-device ones, exactly like the ones the
+// storyteller adds by hand: a secret is generated because the schema requires its
+// hash, and discarded, because no device is holding it. The player it belongs to
+// either taps their name on the shared device or claims it from their own phone
+// (see claimRegistration).
+//
+// Silent about everything it skips — unusable names, names already in the bag,
+// everything past the cap. Opening the bag must not fail over a stale grimoire
+// entry.
+func backfillBagFromGrimoire(ctx context.Context, regs *ent.RegistrationClient, g *ent.Game) error {
+	if len(g.GrimoirePlayerNames) == 0 {
+		return nil
+	}
+
+	// Same filter as the reveal: only the seats actually in play are players.
+	inPlay := make(map[string]bool, len(g.SelectedRoles)+len(g.SelectedTravellers))
+	for _, roleID := range slices.Concat(g.SelectedRoles, g.SelectedTravellers) {
+		inPlay[roleID] = true
+	}
+
+	existing, err := regs.Query().Where(registration.GameID(g.ID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	taken := make(map[string]bool, len(existing))
+	for _, r := range existing {
+		taken[r.NameNormalized] = true
+	}
+	count := len(existing)
+
+	// Sorted by role id: which names still fit under the cap must not depend on
+	// Go's map iteration order.
+	for _, roleID := range slices.Sorted(maps.Keys(g.GrimoirePlayerNames)) {
+		if count >= maxTokenBagRegistrations {
+			return nil
+		}
+		if !inPlay[roleID] {
+			continue // stale key from a character that left the script
+		}
+		display, normalized, err := normalizeName(g.GrimoirePlayerNames[roleID])
+		if err != nil || taken[normalized] {
+			continue
+		}
+
+		secret, err := newRegistrationSecret()
+		if err != nil {
+			return err
+		}
+		if _, err := regs.Create().
+			SetGameID(g.ID).
+			SetName(display).
+			SetNameNormalized(normalized).
+			SetSecretHash(hashSecret(secret)).
+			SetViaSharedDevice(true).
+			Save(ctx); err != nil {
+			return err
+		}
+		taken[normalized] = true
+		count++
+	}
+	return nil
 }
 
 // validateNeighbor checks that a picked neighbor is another player in the same

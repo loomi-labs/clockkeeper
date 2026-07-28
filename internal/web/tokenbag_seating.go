@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,14 +37,27 @@ var seatingIDRef = regexp.MustCompile(`#(\d+)`)
 // sitting clockwise": r.LeftID = a yields r->a, r.RightID = b yields b->r. Two
 // players agreeing on the same edge contribute it once.
 //
-// order is returned only when the edges form a single Hamiltonian cycle over
-// ALL claims — a partial order is never guessed. In that case order starts at
-// the lowest registration id and follows successor (clockwise) edges.
+// order covers ALL claims whenever the picks hold no contradiction, and complete
+// says how much it is worth:
 //
-// conflicts describes everything that blocks a complete circle: contradictory
-// picks, picks referencing unknown players, loops that close before covering
-// everyone, and (when the circle is incomplete) the players who have not picked
-// yet. Registration ids appear as "#<id>" — see seatingIDRef.
+//   - complete: the edges form a single Hamiltonian cycle, so the order IS the
+//     table. It starts at the lowest registration id and follows successor
+//     (clockwise) edges.
+//   - not complete: the picks only describe disjoint chains of neighbors (plus
+//     players who picked nobody), and the order is a BEST EFFORT — every chain is
+//     a correct run of seats, but where one chain ends and the next begins is a
+//     guess for the storyteller to fix by dragging. Deterministic, so an arranged
+//     grimoire does not reshuffle itself between polls: chains ordered by their
+//     smallest registration id, then the players with no picks by id. See
+//     chainOrder.
+//
+// conflicts lists contradictions only — picks that cannot all be true at one
+// table: two players clockwise (or counter-clockwise) of the same seat, a pick on
+// someone unregistered, a player picking themselves, a circle that closes before
+// covering everyone. Players who have not picked yet are not a conflict. When
+// there is a contradiction NO order is returned at all: an order built from picks
+// that disagree would place players wrongly without saying so. Registration ids
+// appear as "#<id>" — see seatingIDRef.
 func computeSeating(claims []seatingClaim) (order []int, complete bool, conflicts []string) {
 	if len(claims) == 0 {
 		return nil, false, nil
@@ -146,28 +160,67 @@ func computeSeating(claims []seatingClaim) (order []int, complete bool, conflict
 		}
 	}
 
-	if len(conflicts) == 0 && len(cycles) == 1 && len(cycles[0]) == len(sorted) {
-		return rotateToLowest(cycles[0]), true, nil
-	}
-
-	// Incomplete: report loops that close before covering everyone, then the
-	// players who have not picked a neighbor at all.
+	// A circle that closes before covering everyone cannot be a piece of one
+	// table: some pick in it is wrong.
 	for _, c := range cycles {
 		if len(c) < len(sorted) {
 			conflicts = append(conflicts, fmt.Sprintf("these players form a closed circle that leaves the others out: %s", joinSeatingIDs(rotateToLowest(c))))
 		}
 	}
-	var gaps []int
-	for _, c := range sorted {
-		if c.LeftID == 0 && c.RightID == 0 {
-			gaps = append(gaps, c.ID)
-		}
-	}
-	if len(gaps) > 0 {
-		conflicts = append(conflicts, fmt.Sprintf("no neighbor picks yet: %s", joinSeatingIDs(gaps)))
+	if len(conflicts) > 0 {
+		return nil, false, conflicts
 	}
 
-	return nil, false, conflicts
+	if len(cycles) == 1 {
+		// The short circles were just refused, so this one covers everyone — and
+		// a cycle over all players leaves room for no other.
+		return rotateToLowest(cycles[0]), true, nil
+	}
+
+	return chainOrder(ids, succ, pred), false, nil
+}
+
+// chainOrder builds the best-effort seating out of picks that agree but leave the
+// circle open: each maximal chain of consecutive seats in clockwise order, chains
+// ordered by their smallest registration id, then the players nobody's picks
+// placed, by id.
+//
+// ids must be ascending, and succ must hold no cycle — computeSeating refuses
+// cycles that leave players out before it gets here, so a chain can never run
+// into one.
+func chainOrder(ids []int, succ, pred map[int]int) []int {
+	var chains [][]int
+	var unplaced []int
+	for _, id := range ids {
+		if _, hasPred := pred[id]; hasPred {
+			continue // sits inside a chain, reached by walking it from the start
+		}
+		if _, hasSucc := succ[id]; !hasSucc {
+			unplaced = append(unplaced, id)
+			continue
+		}
+
+		chain := []int{id}
+		for n := id; ; {
+			next, ok := succ[n]
+			if !ok {
+				break
+			}
+			chain = append(chain, next)
+			n = next
+		}
+		chains = append(chains, chain)
+	}
+
+	// By smallest member, not by the first seat: which end of a chain comes first
+	// is just where its picks happened to start.
+	sort.Slice(chains, func(i, j int) bool { return slices.Min(chains[i]) < slices.Min(chains[j]) })
+
+	order := make([]int, 0, len(ids))
+	for _, c := range chains {
+		order = append(order, c...)
+	}
+	return append(order, unplaced...)
 }
 
 // rotateToLowest rotates a cycle so it starts at its lowest id, keeping the

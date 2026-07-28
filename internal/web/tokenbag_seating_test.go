@@ -76,6 +76,9 @@ func TestComputeSeating(t *testing.T) {
 			wantComplete: true,
 		},
 		{
+			// #2 on #1's right puts #1 clockwise of #2, #3 on #2's right puts #2
+			// clockwise of #3: one chain 3 -> 2 -> 1, with #4 unplaced. Best effort,
+			// so not complete — but no pick contradicts another.
 			name: "consistent chain with a player who has not picked yet",
 			claims: []seatingClaim{
 				{ID: 1, RightID: 2},
@@ -83,16 +86,34 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 3},
 				{ID: 4},
 			},
-			wantConflicts: []string{"no neighbor picks yet: #3, #4"},
+			wantOrder: []int{3, 2, 1, 4},
 		},
 		{
-			name: "nobody picked anything",
+			name: "nobody picked anything falls back to the join order",
 			claims: []seatingClaim{
 				{ID: 1},
 				{ID: 2},
 				{ID: 3},
 			},
-			wantConflicts: []string{"no neighbor picks yet: #1, #2, #3"},
+			wantOrder: []int{1, 2, 3},
+		},
+		{
+			// #5 is on #2's left, so #5 sits clockwise of #2 => 2 -> 5.
+			// #1 is on #3's left, so #1 sits clockwise of #3 => 3 -> 1.
+			// #4 and #6 picked nobody.
+			//
+			// Two chains, ordered by their smallest member: (#3, #1) has #1, (#2, #5)
+			// has #2. The unplaced players follow, by id.
+			name: "two chains and two unplaced players concatenate deterministically",
+			claims: []seatingClaim{
+				{ID: 1},
+				{ID: 2, LeftID: 5},
+				{ID: 3, LeftID: 1},
+				{ID: 4},
+				{ID: 5},
+				{ID: 6},
+			},
+			wantOrder: []int{3, 1, 2, 5, 4, 6},
 		},
 		{
 			// Both #1 and #2 say #3 sits on their right, which puts each of them
@@ -103,10 +124,7 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 2, RightID: 3},
 				{ID: 3},
 			},
-			wantConflicts: []string{
-				"#3 has two different players sitting clockwise: #1 and #2",
-				"no neighbor picks yet: #3",
-			},
+			wantConflicts: []string{"#3 has two different players sitting clockwise: #1 and #2"},
 		},
 		{
 			// #2 on #1's right puts #2 counter-clockwise of #1; #1 on #3's left
@@ -117,10 +135,7 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 2},
 				{ID: 3, LeftID: 1},
 			},
-			wantConflicts: []string{
-				"#1 has two different players sitting counter-clockwise: #2 and #3",
-				"no neighbor picks yet: #2",
-			},
+			wantConflicts: []string{"#1 has two different players sitting counter-clockwise: #2 and #3"},
 		},
 		{
 			name: "left and right picks disagree about who sits between them",
@@ -129,10 +144,7 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 2, LeftID: 3},
 				{ID: 3},
 			},
-			wantConflicts: []string{
-				"#2 has two different players sitting clockwise: #1 and #3",
-				"no neighbor picks yet: #3",
-			},
+			wantConflicts: []string{"#2 has two different players sitting clockwise: #1 and #3"},
 		},
 		{
 			name: "a sub-circle closes early and leaves the others out",
@@ -154,10 +166,7 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 1, RightID: 99},
 				{ID: 2},
 			},
-			wantConflicts: []string{
-				"#1 picked someone who is not registered",
-				"no neighbor picks yet: #2",
-			},
+			wantConflicts: []string{"#1 picked someone who is not registered"},
 		},
 		{
 			name: "a player picking themselves is reported",
@@ -165,10 +174,7 @@ func TestComputeSeating(t *testing.T) {
 				{ID: 1, RightID: 1},
 				{ID: 2},
 			},
-			wantConflicts: []string{
-				"#1 picked themselves as a neighbor",
-				"no neighbor picks yet: #2",
-			},
+			wantConflicts: []string{"#1 picked themselves as a neighbor"},
 		},
 	}
 
@@ -183,20 +189,39 @@ func TestComputeSeating(t *testing.T) {
 }
 
 func TestComputeSeating_IgnoresClaimOrdering(t *testing.T) {
-	forward := []seatingClaim{
-		{ID: 1, RightID: 2},
-		{ID: 2, RightID: 3},
-		{ID: 3, RightID: 1},
+	cases := map[string][]seatingClaim{
+		"full circle": {
+			{ID: 1, RightID: 2},
+			{ID: 2, RightID: 3},
+			{ID: 3, RightID: 1},
+		},
+		// The best-effort order is the one the storyteller sees polled over and
+		// over while players are still picking; it must not move on its own.
+		"chains and unplaced players": {
+			{ID: 1, LeftID: 4},
+			{ID: 2, RightID: 5},
+			{ID: 3},
+			{ID: 4},
+			{ID: 5},
+		},
 	}
-	shuffled := []seatingClaim{forward[2], forward[0], forward[1]}
 
-	orderA, completeA, conflictsA := computeSeating(forward)
-	orderB, completeB, conflictsB := computeSeating(shuffled)
+	for label, forward := range cases {
+		t.Run(label, func(t *testing.T) {
+			shuffled := make([]seatingClaim, len(forward))
+			for i, c := range forward {
+				shuffled[len(forward)-1-i] = c
+			}
 
-	require.True(t, completeA)
-	assert.Equal(t, completeA, completeB)
-	assert.Equal(t, orderA, orderB)
-	assert.Equal(t, conflictsA, conflictsB)
+			orderA, completeA, conflictsA := computeSeating(forward)
+			orderB, completeB, conflictsB := computeSeating(shuffled)
+
+			require.NotEmpty(t, orderA)
+			assert.Equal(t, completeA, completeB)
+			assert.Equal(t, orderA, orderB)
+			assert.Equal(t, conflictsA, conflictsB)
+		})
+	}
 }
 
 func TestNameSeatingConflicts(t *testing.T) {
@@ -204,12 +229,12 @@ func TestNameSeatingConflicts(t *testing.T) {
 
 	got := nameSeatingConflicts([]string{
 		"#1 has two different players sitting clockwise: #2 and #7",
-		"no neighbor picks yet: #2",
+		"#2 picked themselves as a neighbor",
 	}, names)
 
 	assert.Equal(t, []string{
 		"Alice has two different players sitting clockwise: Bob and an unknown player",
-		"no neighbor picks yet: Bob",
+		"Bob picked themselves as a neighbor",
 	}, got)
 	assert.Nil(t, nameSeatingConflicts(nil, names))
 }
