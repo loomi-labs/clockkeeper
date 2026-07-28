@@ -139,6 +139,10 @@ func revealedPhase(s *clockkeeperv1.WatchTokenBagResponse) bool {
 	return s.Phase == clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_REVEALED
 }
 
+func closedPhase(s *clockkeeperv1.WatchTokenBagResponse) bool {
+	return s.Phase == clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_CLOSED
+}
+
 func inactivePhase(s *clockkeeperv1.WatchTokenBagResponse) bool {
 	return s.Phase == clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_INACTIVE
 }
@@ -197,8 +201,8 @@ func TestWatchTokenBag_StreamsLifecycleAndScopesTokens(t *testing.T) {
 	assert.Nil(t, strangerRevealed.SelfToken, "a wrong secret must never yield a token")
 	assert.Zero(t, strangerRevealed.SelfRegistrationId)
 
-	// A reset rotates both codes, so every stream is watching a bag that no
-	// longer exists: one final snapshot, then the stream ends.
+	// A reset undeals the tokens and keeps the codes, so every stream stays up and
+	// simply goes back to the closed phase — nobody re-scans anything.
 	_, err = h.ResetTokenBag(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.ResetTokenBagRequest{
 		GameId: bag.gameID,
 	}))
@@ -210,10 +214,36 @@ func TestWatchTokenBag_StreamsLifecycleAndScopesTokens(t *testing.T) {
 		"shared device":     shared,
 		"stranger":          stranger,
 	} {
-		final := reader.nextMatching("the final snapshot of the "+name, inactivePhase)
-		assert.Empty(t, final.Players, "%s must not keep seeing players", name)
-		assert.Nil(t, final.SelfToken, "%s must not keep seeing a token", name)
-		reader.requireEnded()
+		afterReset := reader.nextMatching("the reset snapshot of the "+name, closedPhase)
+		assert.Len(t, afterReset.Players, 1, "%s keeps seeing the registrants", name)
+		assert.Nil(t, afterReset.SelfToken, "%s must not keep seeing a token", name)
+		assert.False(t, afterReset.GameStarted, "%s: the game has not started", name)
+	}
+
+	// Revealed again, then the game starts: the token goes off the phones for
+	// good, without the phase moving at all.
+	revealBag(t, h, bag)
+	require.NotNil(t, alice.nextMatching("Alice's second token", func(s *clockkeeperv1.WatchTokenBagResponse) bool {
+		return s.SelfToken != nil
+	}).SelfToken)
+
+	_, err = h.StartGame(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.StartGameRequest{
+		GameId: bag.gameID,
+	}))
+	require.NoError(t, err)
+
+	for name, reader := range map[string]*watchReader{
+		"anonymous watcher": watcher,
+		"player":            alice,
+		"shared device":     shared,
+		"stranger":          stranger,
+	} {
+		started := reader.nextMatching("the started-game snapshot of the "+name, func(s *clockkeeperv1.WatchTokenBagResponse) bool {
+			return s.GameStarted
+		})
+		assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_REVEALED, started.Phase,
+			"%s: starting the game does not move the bag phase", name)
+		assert.Nil(t, started.SelfToken, "%s must not be shown a token once the game runs", name)
 	}
 }
 

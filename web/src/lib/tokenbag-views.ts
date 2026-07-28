@@ -57,16 +57,21 @@ export type DeviceView =
   | "add_names"
   | "closed"
   | "reveal_list"
+  | "game_started"
   | "gone";
 
 export function deriveDeviceView(
   phase: TokenBagPhase,
   streamStatus: WatchStatus,
+  gameStarted: boolean,
 ): DeviceView {
   // A stopped stream is terminal (the loop only ends on a fatal error or on
   // teardown), so any phase it left behind is stale. Showing a tappable name
   // grid for a game that no longer exists is worse than saying so.
   if (streamStatus === "stopped") return "gone";
+  // The game is running: the phase is still REVEALED, but the server refuses
+  // every reveal from here on, so the name grid must go.
+  if (gameStarted) return "game_started";
   // No snapshot yet.
   if (phase === TokenBagPhase.UNSPECIFIED) return "loading";
   switch (phase) {
@@ -77,7 +82,7 @@ export function deriveDeviceView(
     case TokenBagPhase.REVEALED:
       return "reveal_list";
     default:
-      // INACTIVE: the bag was reset, so this device has nothing to show.
+      // INACTIVE: no bag behind this code, so this device has nothing to show.
       return "gone";
   }
 }

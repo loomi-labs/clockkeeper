@@ -47,6 +47,7 @@ describe("refinePlayerView", () => {
       { kind: "revealed_shown" },
       { kind: "revealed_hidden" },
       { kind: "removed" },
+      { kind: "game_started" },
       { kind: "gone" },
     ] satisfies PlayerView[]) {
       expect(
@@ -83,16 +84,18 @@ describe("refinePlayerView", () => {
 
 describe("deriveDeviceView", () => {
   it("loads until the first snapshot arrives", () => {
-    expect(deriveDeviceView(TokenBagPhase.UNSPECIFIED, "connecting")).toBe(
-      "loading",
-    );
-    expect(deriveDeviceView(TokenBagPhase.UNSPECIFIED, "reconnecting")).toBe(
-      "loading",
-    );
+    expect(
+      deriveDeviceView(TokenBagPhase.UNSPECIFIED, "connecting", false),
+    ).toBe("loading");
+    expect(
+      deriveDeviceView(TokenBagPhase.UNSPECIFIED, "reconnecting", false),
+    ).toBe("loading");
   });
 
   it("is gone when the stream gave up before any snapshot", () => {
-    expect(deriveDeviceView(TokenBagPhase.UNSPECIFIED, "stopped")).toBe("gone");
+    expect(deriveDeviceView(TokenBagPhase.UNSPECIFIED, "stopped", false)).toBe(
+      "gone",
+    );
   });
 
   it("is gone when the stream dies after a snapshot", () => {
@@ -104,16 +107,40 @@ describe("deriveDeviceView", () => {
       TokenBagPhase.REVEALED,
       TokenBagPhase.INACTIVE,
     ]) {
-      expect(deriveDeviceView(phase, "stopped")).toBe("gone");
+      expect(deriveDeviceView(phase, "stopped", false)).toBe("gone");
     }
   });
 
   it("maps each phase to its screen", () => {
-    expect(deriveDeviceView(TokenBagPhase.OPEN, "live")).toBe("add_names");
-    expect(deriveDeviceView(TokenBagPhase.CLOSED, "live")).toBe("closed");
-    expect(deriveDeviceView(TokenBagPhase.REVEALED, "live")).toBe(
+    expect(deriveDeviceView(TokenBagPhase.OPEN, "live", false)).toBe(
+      "add_names",
+    );
+    expect(deriveDeviceView(TokenBagPhase.CLOSED, "live", false)).toBe(
+      "closed",
+    );
+    expect(deriveDeviceView(TokenBagPhase.REVEALED, "live", false)).toBe(
       "reveal_list",
     );
-    expect(deriveDeviceView(TokenBagPhase.INACTIVE, "live")).toBe("gone");
+    expect(deriveDeviceView(TokenBagPhase.INACTIVE, "live", false)).toBe(
+      "gone",
+    );
+  });
+
+  // The phase stays REVEALED when the game starts, so only the flag can take the
+  // tappable name grid away — and the server refuses every reveal from then on.
+  it("says the game has started, whatever the phase says", () => {
+    for (const phase of [
+      TokenBagPhase.OPEN,
+      TokenBagPhase.CLOSED,
+      TokenBagPhase.REVEALED,
+    ]) {
+      expect(deriveDeviceView(phase, "live", true)).toBe("game_started");
+    }
+  });
+
+  it("lets a dead stream win over a started game", () => {
+    expect(deriveDeviceView(TokenBagPhase.REVEALED, "stopped", true)).toBe(
+      "gone",
+    );
   });
 });

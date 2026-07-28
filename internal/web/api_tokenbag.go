@@ -24,6 +24,11 @@ import (
 //	inactive -> open (players register) -> closed (players pick neighbors)
 //	         -> revealed (players see their token)
 //
+// Both later phases can go back: closed re-opens registration, and revealed
+// resets to closed (see ResetTokenBag) so the roles can be re-assigned. Nothing
+// returns to inactive — once a bag has been opened, its codes are its codes for
+// the rest of the game.
+//
 // Names are matched to roles through the grimoire's role_id -> player name map,
 // which the storyteller fills in with the existing grimoire UI. Reveal snapshots
 // that mapping onto the registrations, so later grimoire edits cannot change what
@@ -33,7 +38,8 @@ import (
 
 // OpenTokenBagRegistration opens (or re-opens) registration. Re-opening a closed
 // bag keeps the players who already joined, and keeps the existing codes so QR
-// codes handed out earlier keep working.
+// codes handed out earlier keep working. Codes are minted once, on the first
+// open of a game's bag, and never rotated afterwards.
 //
 // Opening also backfills the bag from the grimoire's player names — see
 // backfillBagFromGrimoire.
@@ -49,9 +55,9 @@ func (h *ClockKeeperServiceHandler) OpenTokenBagRegistration(ctx context.Context
 
 	switch g.TokenBagPhase {
 	case game.TokenBagPhaseRevealed:
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("tokens are already revealed — reset the token bag first"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("tokens are already revealed — reset the reveal first"))
 	case game.TokenBagPhaseOpen:
-		// Already open: idempotent success, no code rotation.
+		// Already open: idempotent success.
 	default:
 		tx, err := h.db.Tx(ctx)
 		if err != nil {
@@ -377,13 +383,27 @@ func (h *ClockKeeperServiceHandler) RevealTokenBag(ctx context.Context, req *con
 	return connect.NewResponse(&clockkeeperv1.RevealTokenBagResponse{TokenBag: bag}), nil
 }
 
-// ResetTokenBag wipes the bag back to its untouched state: all registrations are
-// dropped and both codes are cleared, so the next open hands out fresh ones and
-// old QR codes stop working.
+// ResetTokenBag undeals the tokens: every registration loses its assigned role
+// and the bag drops back to closed, from where the storyteller can re-assign the
+// roles and reveal again (or re-open registration).
+//
+// Deliberately a SOFT reset. The use case is a setup that went wrong, and making
+// fifteen people re-scan a QR code to fix it is worse than the mistake: the
+// registrations survive with their neighbor picks and claimed secrets, both codes
+// survive, and every phone stays connected and simply goes back to waiting.
+//
+// Nothing takes a bag back to inactive or rotates its codes any more, which is
+// why Open only ever mints a code that is missing.
 func (h *ClockKeeperServiceHandler) ResetTokenBag(ctx context.Context, req *connect.Request[clockkeeperv1.ResetTokenBagRequest]) (*connect.Response[clockkeeperv1.ResetTokenBagResponse], error) {
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
 		return nil, err
+	}
+
+	// A bag that was never opened has nothing to reset, and resetting it would
+	// invent a closed phase for a game with no codes and no players.
+	if g.TokenBagPhase == game.TokenBagPhaseInactive {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("the token bag has not been opened yet"))
 	}
 
 	tx, err := h.db.Tx(ctx)
@@ -392,16 +412,17 @@ func (h *ClockKeeperServiceHandler) ResetTokenBag(ctx context.Context, req *conn
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	if _, err := tx.Registration.Delete().Where(registration.GameID(g.ID)).Exec(ctx); err != nil {
+	if _, err := tx.Registration.Update().
+		Where(registration.GameID(g.ID)).
+		ClearAssignedRoleID().
+		Save(ctx); err != nil {
 		_ = tx.Rollback()
-		slog.Error("delete registrations failed", "err", err)
+		slog.Error("clear assigned roles failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
 	if _, err := tx.Game.UpdateOneID(g.ID).
-		SetTokenBagPhase(game.TokenBagPhaseInactive).
-		ClearTokenBagJoinCode().
-		ClearTokenBagSharedCode().
+		SetTokenBagPhase(game.TokenBagPhaseClosed).
 		Save(ctx); err != nil {
 		_ = tx.Rollback()
 		slog.Error("reset token bag failed", "err", err)
@@ -561,11 +582,17 @@ func (h *ClockKeeperServiceHandler) SetTokenBagNeighbors(ctx context.Context, re
 }
 
 // GetMyToken returns the character a player was dealt, once the storyteller has
-// revealed the bag.
+// revealed the bag — and only while the game is still being set up. The re-show
+// window closes when the game starts: from then on the token is a physical one
+// on the table, and the bag must not hand out a second copy of it.
 func (h *ClockKeeperServiceHandler) GetMyToken(ctx context.Context, req *connect.Request[clockkeeperv1.GetMyTokenRequest]) (*connect.Response[clockkeeperv1.GetMyTokenResponse], error) {
 	r, g, err := h.registrationBySecret(ctx, req.Msg.RegistrationSecret)
 	if err != nil {
 		return nil, err
+	}
+
+	if g.State != game.StateSetup {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("the game has started"))
 	}
 
 	if g.TokenBagPhase != game.TokenBagPhaseRevealed || r.AssignedRoleID == "" {
@@ -603,10 +630,16 @@ func (h *ClockKeeperServiceHandler) JoinTokenBagShared(ctx context.Context, req 
 }
 
 // RevealTokenShared reveals exactly one player's token on the shared device.
+// Setup only, for the same reason as GetMyToken: once the game is running, the
+// tablet passed around the table must not show anybody's character again.
 func (h *ClockKeeperServiceHandler) RevealTokenShared(ctx context.Context, req *connect.Request[clockkeeperv1.RevealTokenSharedRequest]) (*connect.Response[clockkeeperv1.RevealTokenSharedResponse], error) {
 	g, err := h.sharedCodeGame(ctx, req.Msg.SharedCode)
 	if err != nil {
 		return nil, err
+	}
+
+	if g.State != game.StateSetup {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("the game has started"))
 	}
 
 	if g.TokenBagPhase != game.TokenBagPhaseRevealed {

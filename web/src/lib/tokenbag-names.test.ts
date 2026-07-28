@@ -13,17 +13,12 @@ function input(overrides: Partial<NameSourceInput> = {}): NameSourceInput {
   return {
     registrants: {
       names: ["Alice", "Bob"],
-      prereveal: true,
+      editable: true,
       gameId: "7",
     },
     gameId: "7",
     isSetup: true,
     presetNames: PRESETS,
-    grimoireNames: new Map([
-      ["washerwoman", "Alice"],
-      ["chef", "Bob"],
-      ["imp", "Zed"],
-    ]),
     ...overrides,
   };
 }
@@ -33,17 +28,6 @@ describe("deriveNameSource", () => {
     const source = deriveNameSource(input());
     expect(source.bagActive).toBe(true);
     expect(source.names).toEqual(["Alice", "Bob"]);
-    // Only seats holding a registrant's name; "Zed" is the Storyteller's own.
-    expect([...source.renameLockedIds].sort()).toEqual(["chef", "washerwoman"]);
-  });
-
-  it("locks a seat whose name differs only by case and spacing", () => {
-    const source = deriveNameSource(
-      input({
-        grimoireNames: new Map([["imp", "  ALICE "]]),
-      }),
-    );
-    expect([...source.renameLockedIds]).toEqual(["imp"]);
   });
 
   // (a) Starting the game unmounts the panel, freezing its last report.
@@ -51,7 +35,6 @@ describe("deriveNameSource", () => {
     const source = deriveNameSource(input({ isSetup: false }));
     expect(source.bagActive).toBe(false);
     expect(source.names).toEqual(PRESETS);
-    expect(source.renameLockedIds.size).toBe(0);
   });
 
   // (b) Navigating to another game must not inherit the first game's names.
@@ -59,7 +42,6 @@ describe("deriveNameSource", () => {
     const source = deriveNameSource(input({ gameId: "8" }));
     expect(source.bagActive).toBe(false);
     expect(source.names).toEqual(PRESETS);
-    expect(source.renameLockedIds.size).toBe(0);
   });
 
   it("falls back to presets while no game is loaded", () => {
@@ -76,22 +58,22 @@ describe("deriveNameSource", () => {
 
   it("falls back to presets for an empty bag", () => {
     const source = deriveNameSource(
-      input({ registrants: { names: [], prereveal: true, gameId: "7" } }),
+      input({ registrants: { names: [], editable: true, gameId: "7" } }),
     );
     expect(source.bagActive).toBe(false);
     expect(source.names).toEqual(PRESETS);
   });
 
-  it("keeps owning the names after the reveal but stops locking renames", () => {
+  // `editable` is for the page's auto-registration, not for the name list: a
+  // revealed bag (which takes no more registrations) still owns the names.
+  it("keeps owning the names once the bag stops taking registrations", () => {
     const source = deriveNameSource(
       input({
-        registrants: { names: ["Alice", "Bob"], prereveal: false, gameId: "7" },
+        registrants: { names: ["Alice", "Bob"], editable: false, gameId: "7" },
       }),
     );
     expect(source.bagActive).toBe(true);
     expect(source.names).toEqual(["Alice", "Bob"]);
-    // Post-reveal the server holds assigned_role_id, so a rename cannot desync.
-    expect(source.renameLockedIds.size).toBe(0);
   });
 
   it("never hands back the caller's arrays or maps to mutate", () => {

@@ -200,12 +200,18 @@ func abandonedRequestError(ctx context.Context) error {
 
 // buildWatchSnapshot builds the player-facing view of a token bag. selfReg is
 // the requesting player's registration, when known. The self token is included
-// only once the bag is revealed and a role was assigned to that player.
+// only once the bag is revealed and a role was assigned to that player — and
+// only while the game is still in setup.
+//
+// game_started is what takes the role display off the players' phones the moment
+// the storyteller starts the game: the tokens are in their hands at the table
+// from then on, and the bag has no business showing them again.
 func (h *ClockKeeperServiceHandler) buildWatchSnapshot(g *ent.Game, regs []*ent.Registration, selfReg *ent.Registration) (*clockkeeperv1.WatchTokenBagResponse, error) {
 	snapshot := &clockkeeperv1.WatchTokenBagResponse{
-		Phase:    tokenBagPhaseToProto(g.TokenBagPhase),
-		GameName: g.Name,
-		Players:  make([]*clockkeeperv1.TokenBagPlayer, len(regs)),
+		Phase:       tokenBagPhaseToProto(g.TokenBagPhase),
+		GameName:    g.Name,
+		GameStarted: g.State != game.StateSetup,
+		Players:     make([]*clockkeeperv1.TokenBagPlayer, len(regs)),
 	}
 	for i, r := range regs {
 		snapshot.Players[i] = registrationToProto(r)
@@ -213,7 +219,7 @@ func (h *ClockKeeperServiceHandler) buildWatchSnapshot(g *ent.Game, regs []*ent.
 
 	if selfReg != nil {
 		snapshot.SelfRegistrationId = int64(selfReg.ID)
-		if g.TokenBagPhase == game.TokenBagPhaseRevealed && selfReg.AssignedRoleID != "" {
+		if !snapshot.GameStarted && g.TokenBagPhase == game.TokenBagPhaseRevealed && selfReg.AssignedRoleID != "" {
 			// Degraded, never fatal: an assigned role the registry cannot resolve
 			// any more (a character removed from the data set, a substitution
 			// pointing at nothing) leaves self_token unset. Failing instead would

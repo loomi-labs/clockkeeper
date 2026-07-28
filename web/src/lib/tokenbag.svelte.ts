@@ -93,6 +93,8 @@ export type PlayerBagState = {
   /** `"0"` while this device is unregistered (or was removed). */
   selfId: string;
   selfToken: Character | null;
+  /** The game has left setup: the bag is over and the token display is gone. */
+  gameStarted: boolean;
   /** Mirrors localStorage so the view state reacts to registering. */
   hasCredential: boolean;
   /** Mirrors localStorage: the player hid their revealed token. */
@@ -128,12 +130,19 @@ export function createPlayerBag(
     state.gameName = snapshot.gameName;
     state.players = snapshot.players;
     state.selfId = snapshot.selfId;
-    if (snapshot.selfToken) {
-      state.selfToken = snapshot.selfToken;
-    } else if (snapshot.phase !== TokenBagPhase.REVEALED) {
-      // Outside the revealed phase there is no token to hold on to — a reset
-      // bag must not keep showing the character from the previous game.
-      state.selfToken = null;
+    state.gameStarted = snapshot.gameStarted;
+    // Every snapshot is complete, so the token follows it without exception: a
+    // snapshot that carries none means this device has no token to show any more
+    // — the reveal was reset, this player was removed from the bag, or the game
+    // has started. Holding on to the last one would leave a character on a
+    // screen the server has already stopped vouching for.
+    state.selfToken = snapshot.selfToken;
+    // The hidden flag belongs to the token that was hidden. Once the reveal is
+    // withdrawn that token is history, so the NEXT one shows itself without
+    // asking, exactly as the first reveal did.
+    if (state.dismissed && snapshot.phase !== TokenBagPhase.REVEALED) {
+      persistDismissed(code, false);
+      state.dismissed = false;
     }
   }
 
@@ -176,8 +185,8 @@ export function createPlayerBag(
       isFatal: (err) => {
         if (!isFatalStreamError(err)) return false;
         state.error = getErrorMessage(err, "This game is no longer available");
-        // NotFound is about the code itself: the game was deleted or the bag
-        // reset behind a new code, so this device can never reconnect.
+        // NotFound is about the code itself: the game behind it was deleted, so
+        // this device can never reconnect.
         if (ConnectError.from(err).code === Code.NotFound) state.gone = true;
         return true;
       },
@@ -293,6 +302,8 @@ export type DeviceBagState = {
   phase: TokenBagPhase;
   gameName: string;
   players: BagPlayer[];
+  /** The game has left setup: the server refuses every further reveal. */
+  gameStarted: boolean;
   error: string | null;
 };
 
@@ -310,6 +321,7 @@ export function createDeviceBag(
     phase: TokenBagPhase.UNSPECIFIED,
     gameName: "",
     players: [],
+    gameStarted: false,
     error: null,
   });
 
@@ -328,6 +340,7 @@ export function createDeviceBag(
         state.phase = snapshot.phase;
         state.gameName = snapshot.gameName;
         state.players = snapshot.players;
+        state.gameStarted = snapshot.gameStarted;
       },
       onStatus: (status) => {
         state.status = status;
@@ -431,10 +444,6 @@ export function createStorytellerBag(
     state.joinCode = next.joinCode;
     state.sharedCode = next.sharedCode;
     state.players = next.players;
-    // A bag without a join code has been reset: the server dropped the code we
-    // are watching, so the stream would reconnect into a NotFound and report a
-    // failure for an action that actually succeeded.
-    if (next.joinCode === "") stop();
   }
 
   async function guard<T>(
@@ -463,8 +472,7 @@ export function createStorytellerBag(
   function start(joinCode: string) {
     if (loop || !joinCode) return;
     // See createPlayerBag.start(): the handle must be released when the loop
-    // ends by itself, so re-opening registration after a reset can re-arm the
-    // stream with the freshly minted join code.
+    // ends by itself, or the "Reconnect" affordance would be a silent no-op.
     let terminated = false;
     const handle = watchLoop<WatchTokenBagResponse>({
       open: (signal) => api.watchTokenBag({ code: joinCode }, { signal }),
@@ -484,11 +492,7 @@ export function createStorytellerBag(
       },
       isFatal: (err) => {
         if (!isFatalStreamError(err)) return false;
-        // With no join code left there is nothing to lose track of — the bag
-        // was reset on purpose, and that is not an error to show.
-        if (state.joinCode !== "") {
-          state.error = getErrorMessage(err, "Lost track of the token bag");
-        }
+        state.error = getErrorMessage(err, "Lost track of the token bag");
         return true;
       },
     });
@@ -523,7 +527,7 @@ export function createStorytellerBag(
   const reveal = action("Could not reveal the characters", () =>
     owner.revealTokenBag({ gameId: id }),
   );
-  const reset = action("Could not reset the token bag", () =>
+  const reset = action("Could not reset the reveal", () =>
     owner.resetTokenBag({ gameId: id }),
   );
 

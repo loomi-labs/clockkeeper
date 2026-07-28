@@ -59,8 +59,6 @@
     onrandomize,
     onclearall,
     onmanagepresets,
-    renameLockedIds,
-    renameLockedHint,
   }: {
     gameId: bigint;
     /** What the game is set up for — shown next to the registrant count. */
@@ -94,10 +92,6 @@
     // Omitted when the name list is not the Storyteller's to edit (e.g. it comes
     // from Token Bag registration) — the "Manage names" button then disappears.
     onmanagepresets?: () => void;
-    // Seats whose name is owned elsewhere: the rename pencil is shown disabled
-    // with `renameLockedHint` as its tooltip.
-    renameLockedIds?: ReadonlySet<string>;
-    renameLockedHint?: string;
   } = $props();
 
   // One bag per mounted panel, tied to the game the panel was mounted for. The
@@ -153,8 +147,8 @@
 
   $effect(() => {
     if (!shouldWatch) return;
-    // Read inside the effect: a reset rotates the join code, and the next stream
-    // has to carry the new one.
+    // Read inside the effect: the code is only known after the first load, and
+    // the stream must be (re-)dialled as soon as it is.
     const code = bag.state.joinCode;
     bag.start(code);
     watching = true;
@@ -162,17 +156,6 @@
       bag.stop();
       watching = false;
     };
-  });
-
-  // The page mirrors the registrant names into its assignment UI. The phase rides
-  // along because it decides whether seat renames are still dangerous, and the
-  // game id because this panel is not mounted for the whole session.
-  $effect(() => {
-    onregistrants({
-      names: registrantNames,
-      prereveal: phase !== TokenBagPhase.REVEALED,
-      gameId: String(bagGameId),
-    });
   });
 
   // A stream that stopped while it was supposed to be up hit a fatal error; the
@@ -217,11 +200,25 @@
   /**
    * The phases in which the server still lets the Storyteller change who is in
    * the bag. After the reveal both adding and removing are refused — a player has
-   * already seen their character, and the only way back is a full reset.
+   * already seen their character, and the way back is "Reset reveal".
    */
   const bagEditable = $derived(
     phase === TokenBagPhase.OPEN || phase === TokenBagPhase.CLOSED,
   );
+
+  // The page mirrors the registrant names into its assignment UI. Whether the bag
+  // still takes registrations rides along, because the page has one name-writing
+  // path of its own (the grimoire's rename) that has to register too — see
+  // `registerBagName` there. The game id comes along because this panel is not
+  // mounted for the whole session.
+  $effect(() => {
+    onregistrants({
+      names: registrantNames,
+      editable: bagEditable,
+      gameId: String(bagGameId),
+    });
+  });
+
   const anyAssigned = $derived(players.some((p) => p.name));
 
   /** The enlarged QR, clamped so it fits a phone and never dwarfs a desktop. */
@@ -245,6 +242,11 @@
    * must not wait on — or be lost to — the RPC, whose failure shows up in the
    * card's error strip. Preset and registrant picks match an existing name and
    * fall through untouched.
+   *
+   * Covers every name-writing affordance of this card, the inline rename pencil
+   * included. MIRRORED by `registerBagName` in `routes/games/[id]/+page.svelte`,
+   * which covers the one path that does not come through here: renaming a token
+   * on the grimoire itself.
    */
   function assignName(playerId: string, name: string) {
     const trimmed = name.trim();
@@ -564,8 +566,6 @@
     onassign={assignName}
     {onunassign}
     {ontogglelock}
-    {renameLockedIds}
-    {renameLockedHint}
     {seatMeta}
     showNeighborCaptions={phase === TokenBagPhase.CLOSED}
   />
@@ -668,7 +668,7 @@
           disabled={busy}
           class="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-500 hover:text-white disabled:opacity-40 dark:border-red-700"
         >
-          Reset token bag
+          Reset reveal
         </button>
       {/if}
 
@@ -738,7 +738,7 @@
 {#if confirming === "reveal"}
   <ConfirmDialog
     title="Reveal tokens?"
-    message="Every player will see their role. This cannot be undone without a reset."
+    message="Every player will see their role. Resetting the reveal is the only way back."
     confirmLabel="Reveal tokens"
     oncancel={() => (confirming = null)}
     onconfirm={doReveal}
@@ -747,9 +747,9 @@
 
 {#if confirming === "reset"}
   <ConfirmDialog
-    title="Reset token bag?"
-    message="This removes all registrations and invalidates the QR codes. Players have to scan a new code and register again."
-    confirmLabel="Reset token bag"
+    title="Reset the reveal?"
+    message="Players go back to waiting and can be re-assigned. The QR codes stay the same."
+    confirmLabel="Reset reveal"
     oncancel={() => (confirming = null)}
     onconfirm={doReset}
   />

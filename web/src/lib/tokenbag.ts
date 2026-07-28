@@ -40,6 +40,11 @@ export type BagSnapshot = {
   /** `"0"` when this device has no (or a rejected/removed) registration. */
   selfId: string;
   selfToken: Character | null;
+  /**
+   * The game has left setup. The bag is over — the server never sends a token
+   * again, and every device drops what it was showing.
+   */
+  gameStarted: boolean;
 };
 
 /** The Storyteller's own view — adds the codes, has no self/game name. */
@@ -73,6 +78,7 @@ export function emptySnapshot(): BagSnapshot {
     players: [],
     selfId: NO_ID,
     selfToken: null,
+    gameStarted: false,
   };
 }
 
@@ -90,6 +96,7 @@ export function applySnapshot(
     players: toBagPlayers(resp.players),
     selfId: String(resp.selfRegistrationId),
     selfToken: resp.selfToken ?? null,
+    gameStarted: resp.gameStarted,
   };
 }
 
@@ -139,6 +146,7 @@ export type PlayerView =
   | { kind: "revealed_shown" }
   | { kind: "revealed_hidden" }
   | { kind: "removed" }
+  | { kind: "game_started" }
   | { kind: "gone" };
 
 export type PlayerViewInput = {
@@ -148,6 +156,8 @@ export type PlayerViewInput = {
   selfId: string;
   hasCredential: boolean;
   dismissed: boolean;
+  /** The game has left setup — see {@link BagSnapshot.gameStarted}. */
+  gameStarted: boolean;
   streamStatus: WatchStatus;
 };
 
@@ -172,8 +182,14 @@ export function derivePlayerView(input: PlayerViewInput): PlayerView {
       : { kind: "loading" };
   }
 
-  // The Storyteller reset the bag (or never opened it): nobody's registration
-  // survives, so a stored credential means nothing here.
+  // The Storyteller started the game. Terminal, and it outranks every bag screen
+  // below: the phase is frozen wherever it was, the token is already in this
+  // player's hand at the table, and nothing here is live any more.
+  if (input.gameStarted) return { kind: "game_started" };
+
+  // No bag behind this code: it was never opened, or the game was deleted and
+  // the stream sent its final inactive snapshot. Either way a stored credential
+  // means nothing here.
   if (phase === TokenBagPhase.INACTIVE) return { kind: "gone" };
 
   if (!hasCredential) {

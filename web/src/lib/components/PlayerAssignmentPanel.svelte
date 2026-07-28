@@ -27,8 +27,6 @@
     onassign,
     onunassign,
     ontogglelock,
-    renameLockedIds,
-    renameLockedHint = "This name cannot be edited here",
     seatMeta,
     showNeighborCaptions = false,
   }: {
@@ -39,10 +37,6 @@
     onassign: (playerId: string, name: string) => void;
     onunassign: (playerId: string) => void;
     ontogglelock: (playerId: string) => void;
-    // Seats whose name is owned elsewhere: the rename pencil is shown disabled
-    // with `renameLockedHint` as its tooltip.
-    renameLockedIds?: ReadonlySet<string>;
-    renameLockedHint?: string;
     // What the Token Bag knows about the registrant sitting in each seat: where
     // they joined from, and who they picked as neighbors.
     seatMeta?: ReadonlyMap<string, SeatRegistration>;
@@ -70,10 +64,6 @@
   const unusedPresets = $derived(
     presetNames.filter((n) => !assignedNames.has(n)),
   );
-
-  function isRenameLocked(id: string): boolean {
-    return renameLockedIds?.has(id) === true;
-  }
 
   function toggleDropdown(id: string) {
     openPlayerId = openPlayerId === id ? null : id;
@@ -227,14 +217,9 @@
                   {/if}
                   <button
                     onclick={() => startEdit(p.id, p.name ?? "")}
-                    disabled={isRenameLocked(p.id)}
-                    class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-indigo-500 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted"
-                    aria-label={isRenameLocked(p.id)
-                      ? renameLockedHint
-                      : `Rename ${p.name}`}
-                    title={isRenameLocked(p.id)
-                      ? renameLockedHint
-                      : `Rename ${p.name}`}
+                    class="rounded-full p-0.5 text-muted transition-colors hover:bg-hover hover:text-indigo-500"
+                    aria-label="Rename {p.name}"
+                    title="Rename {p.name}"
                   >
                     <svg
                       class="h-3 w-3"

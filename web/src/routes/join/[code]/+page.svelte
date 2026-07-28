@@ -48,6 +48,7 @@
       selfId: bag.state.selfId,
       hasCredential: bag.state.hasCredential,
       dismissed: bag.state.dismissed,
+      gameStarted: bag.state.gameStarted,
       streamStatus: bag.state.status,
     }),
   );
@@ -401,6 +402,13 @@
           >
             {showingToken ? "Loading…" : "Show my role"}
           </button>
+        </div>
+      {:else if view.kind === "game_started"}
+        <div class="flex flex-1 flex-col items-center justify-center gap-3">
+          <p class="text-lg font-semibold text-primary">The game has started</p>
+          <p class="text-center text-sm text-secondary">
+            Your role stays with you — good luck!
+          </p>
         </div>
       {:else if view.kind === "removed"}
         <div class="flex flex-1 flex-col items-center justify-center gap-4">

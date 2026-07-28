@@ -15,11 +15,12 @@ export type BagRegistrants = {
   /** Registered names, in join order. */
   names: readonly string[];
   /**
-   * Before the reveal, the server matches registrations to roles BY NAME, so a
-   * seat rename would silently break the match. Once revealed it has persisted
-   * `assigned_role_id` per registration, and renaming is harmless again.
+   * The bag still accepts registrations (phase OPEN or CLOSED). A name the page
+   * writes onto a seat while it does has to be registered as well, or the
+   * reveal's by-name match cannot find it — see `registerBagName` in
+   * `routes/games/[id]/+page.svelte`.
    */
-  prereveal: boolean;
+  editable: boolean;
   /** The game this report is about, so a stale one cannot leak into another. */
   gameId: string;
 };
@@ -69,10 +70,10 @@ export type NamedSeat = {
  * Ties each seat to the registrant whose name it holds, so a seat row can show
  * where that player joined from and who they said they are sitting between.
  *
- * Matching is by normalized name — the same by-name link the reveal depends on
- * (see `deriveNameSource`), so what a row shows and what the server will match
- * cannot disagree. Seats with no name, or a name nobody registered, are absent
- * from the result.
+ * Matching is by normalized name — the same by-name link `RevealTokenBag`
+ * depends on, so what a row shows and what the server will match cannot
+ * disagree. Seats with no name, or a name nobody registered, are absent from the
+ * result.
  *
  * Duplicates are safe both ways: two seats carrying the same name both resolve
  * to that registrant, and if two registrants normalize to the same name (the
@@ -115,8 +116,6 @@ export type NameSourceInput = {
   /** Only a game still in setup has a Token Bag panel to drive its names. */
   isSetup: boolean;
   presetNames: readonly string[];
-  /** Grimoire seats: role id -> player name. */
-  grimoireNames: ReadonlyMap<string, string>;
 };
 
 export type NameSource = {
@@ -124,37 +123,26 @@ export type NameSource = {
   bagActive: boolean;
   /** The names the assignment UI should offer. */
   names: string[];
-  /** Seats whose name must not be edited here. Empty unless the bag owns them. */
-  renameLockedIds: Set<string>;
 };
 
 /**
- * Resolves the name list and the rename lock for the page as it stands.
+ * Resolves the name list for the page as it stands.
  *
  * Falls back to the presets — i.e. exactly the behavior from before the Token Bag
  * existed — whenever the report cannot apply: no report, a report for a different
  * game, a game that has left setup, or an empty bag.
  */
 export function deriveNameSource(input: NameSourceInput): NameSource {
-  const { registrants, gameId, isSetup, presetNames, grimoireNames } = input;
+  const { registrants, gameId, isSetup, presetNames } = input;
 
   const presets = (): NameSource => ({
     bagActive: false,
     names: [...presetNames],
-    renameLockedIds: new Set<string>(),
   });
 
   if (!isSetup || gameId === "") return presets();
   if (registrants === null || registrants.gameId !== gameId) return presets();
   if (registrants.names.length === 0) return presets();
 
-  const names = [...registrants.names];
-  const renameLockedIds = new Set<string>();
-  if (registrants.prereveal) {
-    const registered = new Set(names.map(normalizeName));
-    for (const [roleId, name] of grimoireNames) {
-      if (registered.has(normalizeName(name))) renameLockedIds.add(roleId);
-    }
-  }
-  return { bagActive: true, names, renameLockedIds };
+  return { bagActive: true, names: [...registrants.names] };
 }

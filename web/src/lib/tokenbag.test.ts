@@ -87,10 +87,24 @@ describe("applySnapshot", () => {
     }
   });
 
+  it("carries the game_started flag through", () => {
+    // The reveal phase survives the game starting; the flag is what tells the
+    // devices to stop showing anything.
+    const started = applySnapshot(
+      create(WatchTokenBagResponseSchema, {
+        phase: TokenBagPhase.REVEALED,
+        gameStarted: true,
+      }),
+    );
+    expect(started.gameStarted).toBe(true);
+    expect(started.selfToken).toBeNull();
+  });
+
   it("falls back to an empty snapshot", () => {
     expect(applySnapshot(undefined)).toEqual(emptySnapshot());
     expect(emptySnapshot().phase).toBe(TokenBagPhase.UNSPECIFIED);
     expect(emptySnapshot().selfId).toBe("0");
+    expect(emptySnapshot().gameStarted).toBe(false);
   });
 });
 
@@ -161,6 +175,7 @@ describe("derivePlayerView", () => {
       selfId: "0",
       hasCredential: false,
       dismissed: false,
+      gameStarted: false,
       streamStatus: "live",
       ...over,
     };
@@ -239,7 +254,40 @@ describe("derivePlayerView", () => {
     ).toBe("revealed_hidden");
   });
 
-  it("phase inactive with a credential -> gone (the bag was reset)", () => {
+  // Terminal, and it wins over every phase — including the one the reveal left
+  // behind, which is exactly the case that matters.
+  it("a started game -> game_started, whatever else is true", () => {
+    for (const phase of [
+      TokenBagPhase.OPEN,
+      TokenBagPhase.CLOSED,
+      TokenBagPhase.REVEALED,
+    ]) {
+      expect(view({ ...registered, phase, gameStarted: true }).kind).toBe(
+        "game_started",
+      );
+      // Neither a hidden token nor a missing/unknown credential changes it.
+      expect(
+        view({ ...registered, phase, gameStarted: true, dismissed: true }).kind,
+      ).toBe("game_started");
+      expect(
+        view({ phase, gameStarted: true, hasCredential: false }).kind,
+      ).toBe("game_started");
+      expect(
+        view({ phase, gameStarted: true, hasCredential: true, selfId: "0" })
+          .kind,
+      ).toBe("game_started");
+    }
+  });
+
+  it("is still loading before the first snapshot of a started game", () => {
+    // gameStarted only ever arrives WITH a snapshot, so an unspecified phase
+    // outranks it.
+    expect(
+      view({ phase: TokenBagPhase.UNSPECIFIED, gameStarted: true }).kind,
+    ).toBe("loading");
+  });
+
+  it("phase inactive with a credential -> gone (no bag behind the code)", () => {
     expect(view({ ...registered, phase: TokenBagPhase.INACTIVE }).kind).toBe(
       "gone",
     );

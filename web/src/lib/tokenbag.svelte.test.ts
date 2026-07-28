@@ -296,7 +296,24 @@ describe("createPlayerBag", () => {
     expect(getMyToken).not.toHaveBeenCalled();
   });
 
-  it("keeps the revealed token across snapshots but drops it on reset", async () => {
+  // Every snapshot is complete, so the token follows it without exception. The
+  // cases that matter: the reveal is reset, this player is removed while their
+  // token is on screen, and the game starts.
+  it.each([
+    ["the reveal is reset", { phase: TokenBagPhase.CLOSED }],
+    [
+      "the player is removed mid-reveal",
+      { phase: TokenBagPhase.REVEALED, selfRegistrationId: 0n },
+    ],
+    [
+      "the game starts",
+      {
+        phase: TokenBagPhase.REVEALED,
+        selfRegistrationId: 1n,
+        gameStarted: true,
+      },
+    ],
+  ])("drops the revealed token when %s", async (_name, after) => {
     const stream = channel();
     const bag = createPlayerBag(CODE, {
       watchTokenBag: vi.fn((_req: unknown, opts: StreamOptions) =>
@@ -317,17 +334,50 @@ describe("createPlayerBag", () => {
     await flush();
     expect(bag.state.selfToken?.id).toBe("washerwoman");
 
-    // A later revealed snapshot without the token (a plain re-send) keeps it.
+    stream.push(snapshot(after));
+    await flush();
+    expect(bag.state.selfToken).toBeNull();
+
+    bag.stop();
+  });
+
+  it("clears the persisted dismissed flag when the reveal is withdrawn", async () => {
+    const stream = channel();
+    const bag = createPlayerBag(CODE, {
+      watchTokenBag: vi.fn((_req: unknown, opts: StreamOptions) =>
+        stream.open(opts.signal),
+      ),
+    } as unknown as PublicBagClient);
+
+    bag.start();
+    await flush();
+    stream.push(
+      snapshot({
+        phase: TokenBagPhase.REVEALED,
+        selfRegistrationId: 1n,
+        selfToken: { id: "washerwoman", name: "Washerwoman" },
+      }),
+    );
+    await flush();
+    bag.dismissToken(true);
+    expect(isDismissed(CODE)).toBe(true);
+
+    // A revealed re-send leaves the flag alone: this player still hid THIS token.
     stream.push(
       snapshot({ phase: TokenBagPhase.REVEALED, selfRegistrationId: 1n }),
     );
     await flush();
-    expect(bag.state.selfToken?.id).toBe("washerwoman");
+    expect(bag.state.dismissed).toBe(true);
+    expect(isDismissed(CODE)).toBe(true);
 
-    // A reset wipes it.
-    stream.push(snapshot({ phase: TokenBagPhase.INACTIVE }));
+    // A soft reset takes the phase back to closed: the hidden token is history,
+    // so the NEXT reveal shows itself without asking.
+    stream.push(
+      snapshot({ phase: TokenBagPhase.CLOSED, selfRegistrationId: 1n }),
+    );
     await flush();
-    expect(bag.state.selfToken).toBeNull();
+    expect(bag.state.dismissed).toBe(false);
+    expect(isDismissed(CODE)).toBe(false);
 
     bag.stop();
   });
@@ -454,6 +504,28 @@ describe("createDeviceBag", () => {
     bag.stop();
   });
 
+  it("mirrors the game_started flag out of the snapshot", async () => {
+    const stream = channel();
+    const bag = createDeviceBag(CODE, {
+      watchTokenBag: vi.fn((_req: unknown, opts: StreamOptions) =>
+        stream.open(opts.signal),
+      ),
+    } as unknown as PublicBagClient);
+
+    bag.start();
+    await flush();
+    stream.push(snapshot({ phase: TokenBagPhase.REVEALED }));
+    await flush();
+    expect(bag.state.gameStarted).toBe(false);
+
+    // The phase stays REVEALED, so only the flag can tell the tablet to stop.
+    stream.push(snapshot({ phase: TokenBagPhase.REVEALED, gameStarted: true }));
+    await flush();
+    expect(bag.state.gameStarted).toBe(true);
+
+    bag.stop();
+  });
+
   it("addName returns the new registration id as a string", async () => {
     const joinTokenBagShared = vi.fn(async () => ({ registrationId: 12n }));
     const bag = createDeviceBag(CODE, {
@@ -553,13 +625,10 @@ describe("createStorytellerBag", () => {
       revealTokenBag: vi.fn(async () => ({
         tokenBag: ownerBag({ phase: TokenBagPhase.REVEALED }),
       })),
+      // A soft reset: the codes and the registrations survive, only the phase
+      // drops back to closed.
       resetTokenBag: vi.fn(async () => ({
-        tokenBag: ownerBag({
-          phase: TokenBagPhase.INACTIVE,
-          joinCode: "",
-          sharedCode: "",
-          players: [],
-        }),
+        tokenBag: ownerBag({ phase: TokenBagPhase.CLOSED }),
       })),
       getTokenBagSeating: vi.fn(async () => ({
         orderedRegistrationIds: [1n, 2n],
@@ -624,8 +693,8 @@ describe("createStorytellerBag", () => {
     expect(bag.state.players).toEqual([]);
 
     expect(await bag.reset()).toBe(true);
-    expect(bag.state.phase).toBe(TokenBagPhase.INACTIVE);
-    expect(bag.state.joinCode).toBe("");
+    expect(bag.state.phase).toBe(TokenBagPhase.CLOSED);
+    expect(bag.state.joinCode).toBe("join-1");
   });
 
   it("an action failure lands in error and leaves state alone", async () => {
@@ -703,7 +772,7 @@ describe("createStorytellerBag", () => {
     expect(bag.state.status).toBe("stopped");
   });
 
-  it("reset stops the stream and reports no error", async () => {
+  it("reset keeps the stream on the same code", async () => {
     const stream = channel();
     const watchTokenBag = vi.fn((_req: unknown, opts: StreamOptions) =>
       stream.open(opts.signal),
@@ -717,20 +786,25 @@ describe("createStorytellerBag", () => {
     await bag.load();
     bag.start("join-1");
     await flush();
+    stream.push(snapshot({ phase: TokenBagPhase.REVEALED }));
+    await flush();
     expect(watchTokenBag).toHaveBeenCalledTimes(1);
+    expect(bag.state.status).toBe("live");
 
     expect(await bag.reset()).toBe(true);
     await vi.advanceTimersByTimeAsync(60_000);
 
-    // The code the loop was watching is gone, so the loop is too — no retry
-    // into a NotFound, and no error banner for an action that succeeded.
-    expect(bag.state.status).toBe("stopped");
+    // A soft reset changes nothing about the code, so the registrant list stays
+    // live and the panel keeps watching without a redial.
+    expect(bag.state.status).toBe("live");
     expect(bag.state.error).toBeNull();
-    expect(bag.state.joinCode).toBe("");
+    expect(bag.state.joinCode).toBe("join-1");
     expect(watchTokenBag).toHaveBeenCalledTimes(1);
+
+    bag.stop();
   });
 
-  it("can re-arm the stream with a new join code after a fatal stop", async () => {
+  it("can re-arm the stream with a different join code after a fatal stop", async () => {
     const stream = channel();
     let attempt = 0;
     const watchTokenBag = vi.fn((_req: unknown, opts: StreamOptions) => {
@@ -761,7 +835,7 @@ describe("createStorytellerBag", () => {
     bag.stop();
   });
 
-  it("keeps quiet about a fatal stream error once the code is gone", async () => {
+  it("reports a fatal stream error", async () => {
     const bag = createStorytellerBag("42", {
       owner: ownerClient() as unknown as OwnerBagClient,
       publicApi: {
@@ -771,11 +845,12 @@ describe("createStorytellerBag", () => {
       } as unknown as PublicBagClient,
     });
 
-    // No load(), so state holds no join code — nothing to lose track of.
+    // Nothing rotates a code any more, so a code the server does not know is a
+    // real fault worth telling the Storyteller about.
     bag.start("stale-code");
     await flush();
     expect(bag.state.status).toBe("stopped");
-    expect(bag.state.error).toBeNull();
+    expect(bag.state.error).toContain("token bag not found");
   });
 
   it("does not start a stream without a join code", () => {

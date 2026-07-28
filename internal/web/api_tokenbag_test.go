@@ -183,7 +183,7 @@ func TestOpenTokenBag_RejectedAfterReveal(t *testing.T) {
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
-	assert.Contains(t, err.Error(), "reset the token bag")
+	assert.Contains(t, err.Error(), "reset the reveal")
 }
 
 func TestOpenTokenBag_RejectedOnCompletedGame(t *testing.T) {
@@ -323,50 +323,162 @@ func TestCloseTokenBag_OnlyFromOpen(t *testing.T) {
 	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
 }
 
-func TestResetTokenBag_WipesPlayersAndCodes(t *testing.T) {
-	h := testHandler(t)
-	ctx := context.Background()
-	bag := createBagGame(t, h)
-	joinBag(t, h, bag.joinCode, "Alice")
-	joinBag(t, h, bag.joinCode, "Bob")
+// resetBag is the soft reset: it undeals the tokens and nothing else.
+func resetBag(t *testing.T, h *ClockKeeperServiceHandler, bag bagGame) *clockkeeperv1.TokenBag {
+	t.Helper()
 
 	resp, err := h.ResetTokenBag(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.ResetTokenBagRequest{
 		GameId: bag.gameID,
 	}))
 	require.NoError(t, err)
-	assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_INACTIVE, resp.Msg.TokenBag.Phase)
-	assert.Empty(t, resp.Msg.TokenBag.JoinCode)
-	assert.Empty(t, resp.Msg.TokenBag.SharedCode)
-	assert.Empty(t, resp.Msg.TokenBag.Players)
-
-	count, err := h.db.Registration.Query().Where(registration.GameID(int(bag.gameID))).Count(ctx)
-	require.NoError(t, err)
-	assert.Zero(t, count, "reset must delete every registration")
-
-	// The old codes stop working.
-	_, err = h.JoinTokenBag(ctx, connect.NewRequest(&clockkeeperv1.JoinTokenBagRequest{
-		JoinCode: bag.joinCode,
-		Name:     "Carol",
-	}))
-	require.Error(t, err)
-	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+	return resp.Msg.TokenBag
 }
 
-func TestResetThenOpenTokenBag_RotatesCodes(t *testing.T) {
+// The whole point of the soft reset: a setup that went wrong is redone without
+// fifteen people re-scanning a QR code.
+func TestResetTokenBag_UndealsTokensAndKeepsEverythingElse(t *testing.T) {
 	h := testHandler(t)
+	ctx := context.Background()
 	bag := createBagGame(t, h)
+	aliceID, aliceSecret := joinBag(t, h, bag.joinCode, "Alice")
+	bobID, bobSecret := joinBag(t, h, bag.joinCode, "Bob")
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{
+		"chef": "Alice",
+		"imp":  "Bob",
+	})
+	closeBag(t, h, bag)
 
-	_, err := h.ResetTokenBag(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.ResetTokenBagRequest{
-		GameId: bag.gameID,
+	// Alice says she sits between Bob and Bob (a two-player circle).
+	_, err := h.SetTokenBagNeighbors(ctx, connect.NewRequest(&clockkeeperv1.SetTokenBagNeighborsRequest{
+		RegistrationSecret:  aliceSecret,
+		LeftRegistrationId:  bobID,
+		RightRegistrationId: bobID,
 	}))
 	require.NoError(t, err)
+	revealBag(t, h, bag)
 
+	tb := resetBag(t, h, bag)
+	assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_CLOSED, tb.Phase,
+		"a reset drops back to closed, not to inactive")
+	assert.Equal(t, bag.joinCode, tb.JoinCode, "the QR codes stay valid")
+	assert.Equal(t, bag.sharedCode, tb.SharedCode)
+	require.Len(t, tb.Players, 2, "every registration survives")
+
+	var names []string
+	for _, p := range tb.Players {
+		names = append(names, p.Name)
+	}
+	assert.Equal(t, []string{"Alice", "Bob"}, names)
+
+	// The neighbor picks are the players' own answers, not something the reveal
+	// owned — they survive too.
+	require.Equal(t, aliceID, tb.Players[0].RegistrationId)
+	assert.Equal(t, bobID, tb.Players[0].LeftNeighborId)
+	assert.Equal(t, bobID, tb.Players[0].RightNeighborId)
+
+	regs, err := h.db.Registration.Query().
+		Where(registration.GameID(int(bag.gameID))).
+		Order(ent.Asc(registration.FieldID)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, regs, 2)
+	for _, r := range regs {
+		assert.Empty(t, r.AssignedRoleID, "%s must hold no token any more", r.Name)
+	}
+
+	// Both devices keep their credential; there is simply nothing to fetch yet.
+	for name, secret := range map[string]string{"Alice": aliceSecret, "Bob": bobSecret} {
+		_, err := h.GetMyToken(ctx, connect.NewRequest(&clockkeeperv1.GetMyTokenRequest{
+			RegistrationSecret: secret,
+		}))
+		require.Error(t, err, name)
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err), name)
+		assert.Contains(t, err.Error(), "not been revealed", name)
+	}
+}
+
+func TestResetTokenBag_RejectedOnAnUnopenedBag(t *testing.T) {
+	h := testHandler(t)
+	ownerID, gameID := createTestGame(t, h)
+
+	_, err := h.ResetTokenBag(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.ResetTokenBagRequest{
+		GameId: gameID,
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	assert.Contains(t, err.Error(), "has not been opened")
+}
+
+// Redoing the setup is the reason the reset exists: the second reveal has to
+// deal the roles the grimoire names NOW, not the ones from the first attempt.
+func TestResetTokenBag_ThenRevealAgainDealsTheNewAssignments(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	bag := createBagGame(t, h)
+	_, aliceSecret := joinBag(t, h, bag.joinCode, "Alice")
+	_, bobSecret := joinBag(t, h, bag.joinCode, "Bob")
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{
+		"chef": "Alice",
+		"imp":  "Bob",
+	})
+	closeBag(t, h, bag)
+	revealBag(t, h, bag)
+
+	first, err := h.GetMyToken(ctx, connect.NewRequest(&clockkeeperv1.GetMyTokenRequest{
+		RegistrationSecret: aliceSecret,
+	}))
+	require.NoError(t, err)
+	require.Equal(t, "chef", first.Msg.Character.Id)
+
+	resetBag(t, h, bag)
+
+	// The storyteller swaps the two seats around and reveals again — straight from
+	// the closed phase the reset left behind, no re-registration in between.
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{
+		"chef": "Bob",
+		"imp":  "Alice",
+	})
+	revealBag(t, h, bag)
+	assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_REVEALED, getBag(t, h, bag).Phase)
+
+	second, err := h.GetMyToken(ctx, connect.NewRequest(&clockkeeperv1.GetMyTokenRequest{
+		RegistrationSecret: aliceSecret,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, "imp", second.Msg.Character.Id, "the fresh snapshot wins")
+
+	bobToken, err := h.GetMyToken(ctx, connect.NewRequest(&clockkeeperv1.GetMyTokenRequest{
+		RegistrationSecret: bobSecret,
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, "chef", bobToken.Msg.Character.Id)
+}
+
+func TestResetThenOpenTokenBag_KeepsCodesAndPlayers(t *testing.T) {
+	h := testHandler(t)
+	bag := createBagGame(t, h)
+	joinBag(t, h, bag.joinCode, "Alice")
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"chef": "Alice"})
+	closeBag(t, h, bag)
+	revealBag(t, h, bag)
+	resetBag(t, h, bag)
+
+	// A reset bag is re-openable, which is how a player who never joined gets in.
 	resp, err := h.OpenTokenBagRegistration(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.OpenTokenBagRegistrationRequest{
 		GameId: bag.gameID,
 	}))
 	require.NoError(t, err)
-	assert.NotEqual(t, bag.joinCode, resp.Msg.TokenBag.JoinCode, "reset must rotate the join code")
-	assert.NotEqual(t, bag.sharedCode, resp.Msg.TokenBag.SharedCode, "reset must rotate the shared code")
+	assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_OPEN, resp.Msg.TokenBag.Phase)
+	assert.Equal(t, bag.joinCode, resp.Msg.TokenBag.JoinCode, "a reset never rotates a code")
+	assert.Equal(t, bag.sharedCode, resp.Msg.TokenBag.SharedCode)
+	require.Len(t, resp.Msg.TokenBag.Players, 1)
+
+	// And the old QR code still works.
+	_, err = h.JoinTokenBag(context.Background(), connect.NewRequest(&clockkeeperv1.JoinTokenBagRequest{
+		JoinCode: bag.joinCode,
+		Name:     "Carol",
+	}))
+	require.NoError(t, err)
 }
 
 // --- Authorization: every storyteller RPC must be owner-only ---
@@ -1503,6 +1615,59 @@ func TestGetMyToken_BeforeRevealAndWithBadSecret(t *testing.T) {
 		_, err := h.GetMyToken(ctx, connect.NewRequest(&clockkeeperv1.GetMyTokenRequest{RegistrationSecret: secret}))
 		require.Error(t, err, "secret %q must not resolve", secret)
 		assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+	}
+}
+
+// The reveal / re-show window is setup only: once the game runs, the tokens are
+// physical ones on the table and the bag must not hand out another copy — not to
+// a player's own phone, and not to the tablet passed around.
+func TestTokenRPCs_BlockedOnceTheGameHasStarted(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	bag := createBagGame(t, h)
+	aliceID, aliceSecret := joinBag(t, h, bag.joinCode, "Alice")
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"chef": "Alice"})
+	closeBag(t, h, bag)
+	revealBag(t, h, bag)
+
+	// Both work while the game is still being set up.
+	_, err := h.GetMyToken(ctx, connect.NewRequest(&clockkeeperv1.GetMyTokenRequest{
+		RegistrationSecret: aliceSecret,
+	}))
+	require.NoError(t, err)
+	_, err = h.RevealTokenShared(ctx, connect.NewRequest(&clockkeeperv1.RevealTokenSharedRequest{
+		SharedCode:     bag.sharedCode,
+		RegistrationId: aliceID,
+	}))
+	require.NoError(t, err)
+
+	_, err = h.StartGame(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.StartGameRequest{
+		GameId: bag.gameID,
+	}))
+	require.NoError(t, err)
+
+	calls := map[string]func() error{
+		"GetMyToken": func() error {
+			_, err := h.GetMyToken(ctx, connect.NewRequest(&clockkeeperv1.GetMyTokenRequest{
+				RegistrationSecret: aliceSecret,
+			}))
+			return err
+		},
+		"RevealTokenShared": func() error {
+			_, err := h.RevealTokenShared(ctx, connect.NewRequest(&clockkeeperv1.RevealTokenSharedRequest{
+				SharedCode:     bag.sharedCode,
+				RegistrationId: aliceID,
+			}))
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			err := call()
+			require.Error(t, err)
+			assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+			assert.Contains(t, err.Error(), "the game has started")
+		})
 	}
 }
 

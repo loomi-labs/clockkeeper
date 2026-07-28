@@ -57,6 +57,7 @@
     deriveNameSource,
     type BagRegistrants,
   } from "~/lib/tokenbag-names";
+  import { normalizeName } from "~/lib/tokenbag";
   import InfoCardPicker from "~/lib/components/InfoCardPicker.svelte";
   import InfoCardDisplay from "~/lib/components/InfoCardDisplay.svelte";
   import StarPassPrompt from "~/lib/components/StarPassPrompt.svelte";
@@ -1756,17 +1757,12 @@
   }
 
   function handleGrimoirePlayerRename(id: string, name: string) {
-    // A registrant's name is theirs, not the Storyteller's: editing it here would
-    // desync the reveal lookup. The token has no way to render a disabled input,
-    // so the edit is refused with the same wording as the panel's tooltip.
-    if (bagRenameLockedIds.has(id)) {
-      showGrimoireHint(BAG_RENAME_HINT);
-      return;
-    }
     // Empty/whitespace name unassigns the seat (deletes the key) instead of
     // storing an empty string; preset-name duplicates steal from other seats.
     grimoireNames = assignNameInMap(grimoireNames, id, name, effectiveNames);
     saveGrimoireState();
+    // A name the Token Bag has never heard of has to be registered too.
+    registerBagName(name);
   }
   function handleGrimoirePlayerToggleDeath(id: string) {
     // Route to the ACTIVE phase: a day-phase kill is a non-execution day death
@@ -2319,20 +2315,51 @@
       gameId: game ? String(game.id) : "",
       isSetup,
       presetNames,
-      grimoireNames,
     }),
   );
   const bagActive = $derived(nameSource.bagActive);
   const effectiveNames = $derived(nameSource.names);
+
+  /** The bag of the game ON SCREEN still takes registrations (OPEN / CLOSED). */
+  const bagAcceptsNames = $derived(
+    isSetup &&
+      game !== undefined &&
+      bagRegistrants !== null &&
+      bagRegistrants.gameId === String(game.id) &&
+      bagRegistrants.editable,
+  );
+  /** Registrant names, normalized the way the server matches them. */
+  const bagRegisteredNames = $derived(
+    new Set((bagRegistrants?.names ?? []).map(normalizeName)),
+  );
+
   /**
-   * Seats holding a registrant's name, before the reveal. Renaming one of these
-   * would break the by-name match the reveal depends on (and the Storyteller
-   * cannot fix it from here — the name belongs to the player who typed it), so
-   * the rename affordances are disabled for exactly these seats. Assigning and
-   * unassigning stay available, and after the reveal renaming is free again.
+   * Registers a name the Storyteller just wrote onto a seat, so the reveal's
+   * by-name match can find it. Without this, renaming a seat while the bag is
+   * open would leave a seat no registrant holds and the reveal would refuse.
+   *
+   * MIRRORS `assignName` in `lib/components/tokenbag/PlayersPanel.svelte`, which
+   * covers every name-writing affordance of the Players card; this one covers the
+   * grimoire's own rename, which writes the seat name directly. The two must not
+   * both fire for one name — they don't, because a grimoire rename never goes
+   * through the card.
+   *
+   * Fired and not awaited: the rename is the Storyteller's intent and must not
+   * wait on the RPC. The registrant whose name was replaced stays in the bag and
+   * reappears under "Waiting to be seated", where they can be removed.
    */
-  const bagRenameLockedIds = $derived(nameSource.renameLockedIds);
-  const BAG_RENAME_HINT = "Names are managed by Token Bag registration";
+  function registerBagName(name: string) {
+    const trimmed = name.trim();
+    if (!game || trimmed === "" || !bagAcceptsNames) return;
+    if (bagRegisteredNames.has(normalizeName(trimmed))) return;
+    void client
+      .addTokenBagRegistration({ gameId: game.id, name: trimmed })
+      .catch((err) => {
+        showGrimoireHint(
+          getErrorMessage(err, "Could not add that name to the Token Bag"),
+        );
+      });
+  }
 
   /**
    * Seats the grimoire in the clockwise order the players picked. All-or-nothing:
@@ -3017,8 +3044,6 @@
             onmanagepresets={bagActive
               ? undefined
               : () => (showPlayerPresets = true)}
-            renameLockedIds={bagRenameLockedIds}
-            renameLockedHint={BAG_RENAME_HINT}
           />
 
           <!-- Characters — click to toggle selection (script + extra merged) -->

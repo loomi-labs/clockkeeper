@@ -64,8 +64,8 @@ func (h *ClockKeeperServiceHandler) WatchTokenBag(ctx context.Context, req *conn
 
 // watchSnapshot re-reads a game and renders one subscriber's view of its token
 // bag. ended reports that the bag this subscriber watches is gone — the game was
-// deleted, or a reset took it back to inactive and rotated its codes — in which
-// case the returned snapshot is the final one and the stream must end.
+// deleted, or the code is not one of its codes — in which case the returned
+// snapshot is the final one and the stream must end.
 func (h *ClockKeeperServiceHandler) watchSnapshot(ctx context.Context, gameID int, code, secret string) (snapshot *clockkeeperv1.WatchTokenBagResponse, ended bool, err error) {
 	g, err := h.db.Game.Get(ctx, gameID)
 	if err != nil {
@@ -79,8 +79,10 @@ func (h *ClockKeeperServiceHandler) watchSnapshot(ctx context.Context, gameID in
 		return nil, false, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
-	// A reset clears both codes, so a rotated code can never match again — the
-	// old QR code is dead and its watchers must be told, not left hanging.
+	// Defensive: no path takes an opened bag back to inactive or changes its
+	// codes any more (a reset keeps both — see ResetTokenBag), so this only fires
+	// for a bag that never existed. A watcher whose code has stopped matching
+	// must still be told, not left hanging on a stale snapshot.
 	if g.TokenBagPhase == game.TokenBagPhaseInactive || !bagCodeMatches(g, code) {
 		return endedWatchSnapshot(g.Name), true, nil
 	}

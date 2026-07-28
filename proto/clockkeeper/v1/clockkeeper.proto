@@ -943,7 +943,10 @@ message WatchTokenBagResponse {
   string game_name = 2;
   repeated TokenBagPlayer players = 3;
   int64 self_registration_id = 4; // 0 = no/invalid secret or removed
-  Character self_token = 5; // set only: valid secret AND phase == REVEALED
+  Character self_token = 5; // set only: valid secret AND phase == REVEALED AND !game_started
+  // The game has left setup. The bag is over: no token is ever sent again, and
+  // the player devices drop whatever they were showing.
+  bool game_started = 6;
 }
 
 message JoinTokenBagSharedRequest {

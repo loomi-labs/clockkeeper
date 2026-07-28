@@ -57,11 +57,19 @@
     };
   });
 
-  const view = $derived(deriveDeviceView(bag.state.phase, bag.state.status));
+  const view = $derived(
+    deriveDeviceView(bag.state.phase, bag.state.status, bag.state.gameStarted),
+  );
 
-  // A reset or reopened bag must not leave a character on screen.
+  // A reset or reopened bag must not leave a character on screen — and neither
+  // may a game that has just started, which leaves the phase on REVEALED.
   $effect(() => {
-    if (bag.state.phase !== TokenBagPhase.REVEALED) hideRole();
+    if (bag.state.gameStarted || bag.state.phase !== TokenBagPhase.REVEALED) {
+      hideRole();
+      // The confirm dialog goes with it: the server would refuse the reveal
+      // behind it anyway.
+      pending = null;
+    }
   });
 
   async function addName(event: SubmitEvent) {
@@ -234,6 +242,13 @@
               {/each}
             </div>
           {/if}
+        </div>
+      {:else if view === "game_started"}
+        <div class="flex flex-1 flex-col items-center justify-center gap-3">
+          <p class="text-lg font-semibold text-primary">The game has started</p>
+          <p class="text-center text-sm text-secondary">
+            Everyone's role stays with them — good luck!
+          </p>
         </div>
       {:else}
         <div class="flex flex-1 flex-col items-center justify-center gap-2">
