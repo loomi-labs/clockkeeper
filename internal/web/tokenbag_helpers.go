@@ -138,6 +138,9 @@ func (h *ClockKeeperServiceHandler) registrationBySecret(ctx context.Context, se
 		if ent.IsNotFound(err) {
 			return nil, nil, notFound
 		}
+		if ctx.Err() != nil {
+			return nil, nil, abandonedRequestError(ctx)
+		}
 		slog.Error("get registration by secret failed", "err", err)
 		return nil, nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
@@ -146,6 +149,9 @@ func (h *ClockKeeperServiceHandler) registrationBySecret(ctx context.Context, se
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, nil, notFound
+		}
+		if ctx.Err() != nil {
+			return nil, nil, abandonedRequestError(ctx)
 		}
 		slog.Error("get game for registration failed", "err", err)
 		return nil, nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
@@ -162,10 +168,26 @@ func (h *ClockKeeperServiceHandler) bagRegistrations(ctx context.Context, gameID
 		Order(ent.Asc(registration.FieldID)).
 		All(ctx)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, abandonedRequestError(ctx)
+		}
 		slog.Error("list token bag registrations failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 	return regs, nil
+}
+
+// abandonedRequestError classifies a query that failed because its own request
+// context ended. Callers must only reach it with ctx.Err() != nil.
+//
+// It is not logged: a caller that hung up is not a server fault, and the watch
+// stream re-queries on every tick, so an ordinary player closing their phone
+// would otherwise log an error every time.
+func abandonedRequestError(ctx context.Context) error {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return connect.NewError(connect.CodeDeadlineExceeded, ctx.Err())
+	}
+	return connect.NewError(connect.CodeCanceled, ctx.Err())
 }
 
 // buildWatchSnapshot builds the player-facing view of a token bag. selfReg is

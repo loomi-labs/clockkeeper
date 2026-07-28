@@ -35,11 +35,15 @@ func testHandler(t *testing.T) *ClockKeeperServiceHandler {
 		t.Fatalf("failed to create registry: %v", err)
 	}
 
+	hub := NewTokenBagHub()
+	t.Cleanup(hub.Close)
+
 	return &ClockKeeperServiceHandler{
 		config:   &Config{JWTSecretKey: "test-jwt-secret"},
 		db:       client,
 		auth:     auth,
 		registry: registry,
+		hub:      hub,
 	}
 }
 

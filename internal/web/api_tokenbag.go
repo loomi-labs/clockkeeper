@@ -70,6 +70,8 @@ func (h *ClockKeeperServiceHandler) OpenTokenBagRegistration(ctx context.Context
 		}
 	}
 
+	h.publishTokenBag(g.ID)
+
 	bag, err := h.ownerTokenBag(ctx, g.ID)
 	if err != nil {
 		return nil, err
@@ -93,6 +95,8 @@ func (h *ClockKeeperServiceHandler) CloseTokenBagRegistration(ctx context.Contex
 		slog.Error("close token bag registration failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+
+	h.publishTokenBag(g.ID)
 
 	bag, err := h.ownerTokenBag(ctx, g.ID)
 	if err != nil {
@@ -161,6 +165,8 @@ func (h *ClockKeeperServiceHandler) RemoveTokenBagRegistration(ctx context.Conte
 		slog.Error("commit failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+
+	h.publishTokenBag(g.ID)
 
 	bag, err := h.ownerTokenBag(ctx, g.ID)
 	if err != nil {
@@ -255,6 +261,8 @@ func (h *ClockKeeperServiceHandler) RevealTokenBag(ctx context.Context, req *con
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	h.publishTokenBag(g.ID)
+
 	bag, err := h.ownerTokenBag(ctx, g.ID)
 	if err != nil {
 		return nil, err
@@ -297,6 +305,8 @@ func (h *ClockKeeperServiceHandler) ResetTokenBag(ctx context.Context, req *conn
 		slog.Error("commit failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+
+	h.publishTokenBag(g.ID)
 
 	bag, err := h.ownerTokenBag(ctx, g.ID)
 	if err != nil {
@@ -364,6 +374,7 @@ func (h *ClockKeeperServiceHandler) JoinTokenBag(ctx context.Context, req *conne
 	if err != nil {
 		return nil, err
 	}
+	h.publishTokenBag(g.ID)
 
 	regs, err := h.bagRegistrations(ctx, g.ID)
 	if err != nil {
@@ -420,6 +431,7 @@ func (h *ClockKeeperServiceHandler) SetTokenBagNeighbors(ctx context.Context, re
 		slog.Error("save neighbor picks failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
+	h.publishTokenBag(g.ID)
 
 	regs, err := h.bagRegistrations(ctx, g.ID)
 	if err != nil {
@@ -468,6 +480,7 @@ func (h *ClockKeeperServiceHandler) JoinTokenBagShared(ctx context.Context, req 
 	if err != nil {
 		return nil, err
 	}
+	h.publishTokenBag(g.ID)
 
 	return connect.NewResponse(&clockkeeperv1.JoinTokenBagSharedResponse{
 		RegistrationId: int64(reg.entity.ID),
@@ -507,15 +520,6 @@ func (h *ClockKeeperServiceHandler) RevealTokenShared(ctx context.Context, req *
 		Name:      r.Name,
 		Character: characterToProto(c),
 	}), nil
-}
-
-// errTokenBagUnimplemented is returned by every token bag endpoint until the
-// handlers land.
-var errTokenBagUnimplemented = connect.NewError(connect.CodeUnimplemented, errors.New("not implemented"))
-
-// TODO(token-bag): implemented in a later task
-func (h *ClockKeeperServiceHandler) WatchTokenBag(_ context.Context, _ *connect.Request[clockkeeperv1.WatchTokenBagRequest], _ *connect.ServerStream[clockkeeperv1.WatchTokenBagResponse]) error {
-	return errTokenBagUnimplemented
 }
 
 // --- Shared internals ---

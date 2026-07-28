@@ -787,6 +787,9 @@ func (h *ClockKeeperServiceHandler) DeleteGame(ctx context.Context, req *connect
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// Token bag watchers are still connected to a game that no longer exists.
+	h.publishTokenBag(g.ID)
+
 	return connect.NewResponse(&clockkeeperv1.DeleteGameResponse{}), nil
 }
 
