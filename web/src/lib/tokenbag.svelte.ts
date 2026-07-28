@@ -277,6 +277,9 @@ export function createPlayerBag(
     state.dismissed = false;
     state.selfId = NO_ID;
     state.selfToken = null;
+    // The open stream was dialed with the old secret; without a redial the
+    // next snapshot would repopulate selfId and undo the forget.
+    if (loop) restart();
   }
 
   return {

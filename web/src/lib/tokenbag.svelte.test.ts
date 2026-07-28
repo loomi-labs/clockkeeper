@@ -401,6 +401,36 @@ describe("createPlayerBag", () => {
     expect(watchTokenBag).toHaveBeenCalledTimes(1);
   });
 
+  it("forget() redials the stream without the old secret", async () => {
+    saveCredential(CODE, { registrationId: "9", secret: "s", name: "Alice" });
+    const streams = [channel(), channel()];
+    let attempt = 0;
+    const watchTokenBag = vi.fn((_req: unknown, opts: StreamOptions) =>
+      streams[attempt++].open(opts.signal),
+    );
+    const bag = createPlayerBag(CODE, {
+      watchTokenBag,
+    } as unknown as PublicBagClient);
+
+    bag.start();
+    streams[0].push(snapshot({ selfRegistrationId: 9n }));
+    await flush();
+    expect(bag.state.selfId).toBe("9");
+
+    bag.forget();
+    await flush();
+    // The redial must not carry the forgotten secret — otherwise the next
+    // snapshot on the old connection would repopulate selfId.
+    expect(watchTokenBag).toHaveBeenCalledTimes(2);
+    expect(watchTokenBag).toHaveBeenLastCalledWith(
+      { code: CODE, registrationSecret: "" },
+      expect.anything(),
+    );
+    expect(bag.state.selfId).toBe("0");
+    expect(bag.state.hasCredential).toBe(false);
+    bag.stop();
+  });
+
   it("can start a fresh stream after a fatal stop", async () => {
     const stream = channel();
     let attempt = 0;
