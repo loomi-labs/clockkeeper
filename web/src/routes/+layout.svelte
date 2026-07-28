@@ -12,6 +12,7 @@
     logout,
   } from "~/lib/auth.svelte";
   import { rawClient } from "~/lib/api";
+  import { isPublicPath } from "~/lib/public-paths";
   import { initTheme } from "~/lib/theme";
   import { sidebar, initSidebar } from "~/lib/sidebar.svelte";
   import { spotify } from "~/lib/spotify.svelte";
@@ -39,11 +40,9 @@
       // Server may be unavailable — continue with defaults.
     }
 
-    const isAuthPath =
-      page.url.pathname.startsWith("/login") ||
-      page.url.pathname.startsWith("/auth/");
-
-    if (!getToken() && !isAuthPath) {
+    // Public routes never mint a session — a player scanning a token bag QR
+    // code must not be handed a Storyteller identity.
+    if (!getToken() && !isPublicPath(page.url.pathname)) {
       // Auto-create anonymous session.
       try {
         const resp = await rawClient.createAnonymousSession({});
@@ -59,7 +58,7 @@
   });
 </script>
 
-{#if page.url.pathname.startsWith("/login") || page.url.pathname.startsWith("/auth/")}
+{#if isPublicPath(page.url.pathname)}
   {@render children()}
 {:else if initialized && auth.isAuthenticated}
   <div class="min-h-dvh text-primary">
