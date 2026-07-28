@@ -280,6 +280,10 @@ func TestTokenBagStorytellerRPCs_BlockNonOwner(t *testing.T) {
 			_, err := h.CloseTokenBagRegistration(attackerCtx, connect.NewRequest(&clockkeeperv1.CloseTokenBagRegistrationRequest{GameId: bag.gameID}))
 			return err
 		},
+		"AddTokenBagRegistration": func() error {
+			_, err := h.AddTokenBagRegistration(attackerCtx, connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{GameId: bag.gameID, Name: "Mallory"}))
+			return err
+		},
 		"RemoveTokenBagRegistration": func() error {
 			_, err := h.RemoveTokenBagRegistration(attackerCtx, connect.NewRequest(&clockkeeperv1.RemoveTokenBagRegistrationRequest{GameId: bag.gameID, RegistrationId: regID}))
 			return err
@@ -465,6 +469,16 @@ func TestTokenBagRPCs_RejectedOnCompletedGame(t *testing.T) {
 		assert.Contains(t, err.Error(), "completed")
 	})
 
+	t.Run("add player as the storyteller", func(t *testing.T) {
+		_, err := h.AddTokenBagRegistration(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{
+			GameId: g.Id,
+			Name:   "Carol",
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+		assert.Contains(t, err.Error(), "completed")
+	})
+
 	t.Run("close registration", func(t *testing.T) {
 		_, err := h.CloseTokenBagRegistration(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.CloseTokenBagRegistrationRequest{
 			GameId: g.Id,
@@ -553,6 +567,130 @@ func TestJoinTokenBag_EnforcesCap(t *testing.T) {
 	_, err := h.JoinTokenBag(ctx, connect.NewRequest(&clockkeeperv1.JoinTokenBagRequest{
 		JoinCode: bag.joinCode,
 		Name:     "One Too Many",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeResourceExhausted, connect.CodeOf(err))
+}
+
+// --- Add (storyteller) ---
+
+func TestAddTokenBagRegistration_RegistersLikeASharedDevice(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	bag := createBagGame(t, h)
+
+	resp, err := h.AddTokenBagRegistration(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{
+		GameId: bag.gameID,
+		Name:   "  Alice   Smith ",
+	}))
+	require.NoError(t, err)
+	require.Len(t, resp.Msg.TokenBag.Players, 1)
+
+	added := resp.Msg.TokenBag.Players[0]
+	assert.Equal(t, "Alice Smith", added.Name, "whitespace must be collapsed and trimmed")
+	assert.True(t, added.ViaSharedDevice, "a storyteller-added player holds no device of their own")
+
+	r, err := h.db.Registration.Get(ctx, int(added.RegistrationId))
+	require.NoError(t, err)
+	assert.Equal(t, "alice smith", r.NameNormalized)
+	assert.True(t, r.ViaSharedDevice)
+}
+
+// Adding a player after registration closed is the whole point: the storyteller
+// types the seats nobody registered for right before revealing.
+func TestAddTokenBagRegistration_WorksWhileClosed(t *testing.T) {
+	h := testHandler(t)
+	bag := createBagGame(t, h)
+	joinBag(t, h, bag.joinCode, "Alice")
+	closeBag(t, h, bag)
+
+	resp, err := h.AddTokenBagRegistration(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{
+		GameId: bag.gameID,
+		Name:   "Bob",
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, clockkeeperv1.TokenBagPhase_TOKEN_BAG_PHASE_CLOSED, resp.Msg.TokenBag.Phase, "adding a player must not re-open registration")
+
+	var names []string
+	for _, p := range resp.Msg.TokenBag.Players {
+		names = append(names, p.Name)
+	}
+	assert.ElementsMatch(t, []string{"Alice", "Bob"}, names)
+}
+
+func TestAddTokenBagRegistration_RejectedOutsideOpenAndClosed(t *testing.T) {
+	h := testHandler(t)
+
+	t.Run("inactive", func(t *testing.T) {
+		ownerID, gameID := createTestGame(t, h)
+
+		_, err := h.AddTokenBagRegistration(authedCtx(ownerID), connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{
+			GameId: gameID,
+			Name:   "Alice",
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	})
+
+	t.Run("revealed", func(t *testing.T) {
+		bag := createBagGame(t, h)
+		joinBag(t, h, bag.joinCode, "Alice")
+		setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"chef": "Alice"})
+		closeBag(t, h, bag)
+		revealBag(t, h, bag)
+
+		_, err := h.AddTokenBagRegistration(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{
+			GameId: bag.gameID,
+			Name:   "Bob",
+		}))
+		require.Error(t, err)
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+		assert.Len(t, getBag(t, h, bag).Players, 1, "a player added after the reveal would never get a token")
+	})
+}
+
+// The storyteller typing a name someone already registered from their phone must
+// not create a second seat for the same person.
+func TestAddTokenBagRegistration_RejectsDuplicateName(t *testing.T) {
+	h := testHandler(t)
+	bag := createBagGame(t, h)
+	joinBag(t, h, bag.joinCode, "Alice Smith")
+
+	for _, name := range []string{"alice smith", "  ALICE    SMITH  ", "Alice Smith"} {
+		_, err := h.AddTokenBagRegistration(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{
+			GameId: bag.gameID,
+			Name:   name,
+		}))
+		require.Error(t, err, "name %q should collide", name)
+		assert.Equal(t, connect.CodeAlreadyExists, connect.CodeOf(err))
+	}
+}
+
+func TestAddTokenBagRegistration_RejectsInvalidName(t *testing.T) {
+	h := testHandler(t)
+	bag := createBagGame(t, h)
+
+	for _, name := range []string{"", "   \t  ", strings.Repeat("a", 51)} {
+		_, err := h.AddTokenBagRegistration(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{
+			GameId: bag.gameID,
+			Name:   name,
+		}))
+		require.Error(t, err, "name %q must be rejected", name)
+		assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	}
+}
+
+func TestAddTokenBagRegistration_EnforcesCap(t *testing.T) {
+	h := testHandler(t)
+	bag := createBagGame(t, h)
+
+	for i := range maxTokenBagRegistrations {
+		joinBag(t, h, bag.joinCode, fmt.Sprintf("Player %d", i))
+	}
+
+	_, err := h.AddTokenBagRegistration(authedCtx(bag.ownerID), connect.NewRequest(&clockkeeperv1.AddTokenBagRegistrationRequest{
+		GameId: bag.gameID,
+		Name:   "One Too Many",
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeResourceExhausted, connect.CodeOf(err))

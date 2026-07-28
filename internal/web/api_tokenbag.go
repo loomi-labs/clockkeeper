@@ -111,6 +111,41 @@ func (h *ClockKeeperServiceHandler) CloseTokenBagRegistration(ctx context.Contex
 	return connect.NewResponse(&clockkeeperv1.CloseTokenBagRegistrationResponse{TokenBag: bag}), nil
 }
 
+// AddTokenBagRegistration puts a player in the bag on the storyteller's behalf,
+// for the players at the table who never touched a phone or a shared device.
+// Such a registration is indistinguishable from a shared-device one: it carries
+// no reachable secret, so its token is revealed by tapping the name on the
+// shared device.
+func (h *ClockKeeperServiceHandler) AddTokenBagRegistration(ctx context.Context, req *connect.Request[clockkeeperv1.AddTokenBagRegistrationRequest]) (*connect.Response[clockkeeperv1.AddTokenBagRegistrationResponse], error) {
+	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
+	if err != nil {
+		return nil, err
+	}
+
+	if g.State == game.StateCompleted {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
+	}
+
+	// Unlike the players themselves, the storyteller may still add someone after
+	// closing registration — that is the point of this RPC.
+	if g.TokenBagPhase != game.TokenBagPhaseOpen && g.TokenBagPhase != game.TokenBagPhaseClosed {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("players can only be added while the token bag is open or closed"))
+	}
+
+	// The secret is of no use to anyone: nobody is holding a device to store it.
+	if _, err := h.createRegistration(ctx, g, req.Msg.Name, true, game.TokenBagPhaseOpen, game.TokenBagPhaseClosed); err != nil {
+		return nil, err
+	}
+
+	h.publishTokenBag(g.ID)
+
+	bag, err := h.ownerTokenBag(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&clockkeeperv1.AddTokenBagRegistrationResponse{TokenBag: bag}), nil
+}
+
 // RemoveTokenBagRegistration drops a player from the bag (duplicate join, someone
 // who left) and clears the neighbor picks that pointed at them.
 func (h *ClockKeeperServiceHandler) RemoveTokenBagRegistration(ctx context.Context, req *connect.Request[clockkeeperv1.RemoveTokenBagRegistrationRequest]) (*connect.Response[clockkeeperv1.RemoveTokenBagRegistrationResponse], error) {
@@ -408,7 +443,7 @@ func (h *ClockKeeperServiceHandler) JoinTokenBag(ctx context.Context, req *conne
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("token bag not found"))
 	}
 
-	reg, err := h.createRegistration(ctx, g, req.Msg.Name, false)
+	reg, err := h.createRegistration(ctx, g, req.Msg.Name, false, game.TokenBagPhaseOpen)
 	if err != nil {
 		return nil, err
 	}
@@ -514,7 +549,7 @@ func (h *ClockKeeperServiceHandler) JoinTokenBagShared(ctx context.Context, req 
 		return nil, err
 	}
 
-	reg, err := h.createRegistration(ctx, g, req.Msg.Name, true)
+	reg, err := h.createRegistration(ctx, g, req.Msg.Name, true, game.TokenBagPhaseOpen)
 	if err != nil {
 		return nil, err
 	}
@@ -597,18 +632,21 @@ type newRegistration struct {
 	secret string
 }
 
-// createRegistration validates the name and adds the player to an open bag. A
+// createRegistration validates the name and adds the player to the bag. A
 // secret is always generated (the schema requires its hash); shared-device joins
 // discard the raw value.
-func (h *ClockKeeperServiceHandler) createRegistration(ctx context.Context, g *ent.Game, rawName string, viaSharedDevice bool) (*newRegistration, error) {
+//
+// allowedPhases are the token bag phases the caller accepts — the public join
+// paths only ever allow OPEN, while the storyteller may also add players to a
+// CLOSED bag.
+func (h *ClockKeeperServiceHandler) createRegistration(ctx context.Context, g *ent.Game, rawName string, viaSharedDevice bool, allowedPhases ...game.TokenBagPhase) (*newRegistration, error) {
 	if g.State == game.StateCompleted {
 		// A finished game's QR codes are still floating around on paper; joining
-		// one must not silently work. Covers both JoinTokenBag and
-		// JoinTokenBagShared, which are the only ways in.
+		// one must not silently work. Covers every way into the bag.
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("game is completed"))
 	}
 
-	if g.TokenBagPhase != game.TokenBagPhaseOpen {
+	if !slices.Contains(allowedPhases, g.TokenBagPhase) {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("token bag registration is not open"))
 	}
 

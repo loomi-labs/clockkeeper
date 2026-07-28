@@ -85,6 +85,7 @@ service ClockKeeperService {
   // Storyteller (authenticated, owner-gated):
   rpc OpenTokenBagRegistration(OpenTokenBagRegistrationRequest) returns (OpenTokenBagRegistrationResponse) {}
   rpc CloseTokenBagRegistration(CloseTokenBagRegistrationRequest) returns (CloseTokenBagRegistrationResponse) {}
+  rpc AddTokenBagRegistration(AddTokenBagRegistrationRequest) returns (AddTokenBagRegistrationResponse) {}
   rpc RemoveTokenBagRegistration(RemoveTokenBagRegistrationRequest) returns (RemoveTokenBagRegistrationResponse) {}
   rpc RevealTokenBag(RevealTokenBagRequest) returns (RevealTokenBagResponse) {}
   rpc ResetTokenBag(ResetTokenBagRequest) returns (ResetTokenBagResponse) {}
@@ -845,6 +846,15 @@ message CloseTokenBagRegistrationRequest {
 }
 
 message CloseTokenBagRegistrationResponse {
+  TokenBag token_bag = 1;
+}
+
+message AddTokenBagRegistrationRequest {
+  int64 game_id = 1;
+  string name = 2;
+}
+
+message AddTokenBagRegistrationResponse {
   TokenBag token_bag = 1;
 }
 

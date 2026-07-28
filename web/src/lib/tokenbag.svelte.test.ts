@@ -539,6 +539,14 @@ describe("createStorytellerBag", () => {
       closeTokenBagRegistration: vi.fn(async () => ({
         tokenBag: ownerBag({ phase: TokenBagPhase.CLOSED }),
       })),
+      addTokenBagRegistration: vi.fn(async () => ({
+        tokenBag: ownerBag({
+          players: [
+            { registrationId: 1n, name: "Alice" },
+            { registrationId: 2n, name: "Bob", viaSharedDevice: true },
+          ],
+        }),
+      })),
       removeTokenBagRegistration: vi.fn(async () => ({
         tokenBag: ownerBag({ players: [] }),
       })),
@@ -601,6 +609,13 @@ describe("createStorytellerBag", () => {
     expect(await bag.reveal()).toBe(true);
     expect(bag.state.phase).toBe(TokenBagPhase.REVEALED);
 
+    expect(await bag.addPlayer("Bob")).toBe(true);
+    expect(owner.addTokenBagRegistration).toHaveBeenCalledWith({
+      gameId: 42n,
+      name: "Bob",
+    });
+    expect(bag.state.players.map((p) => p.name)).toEqual(["Alice", "Bob"]);
+
     expect(await bag.remove("1")).toBe(true);
     expect(owner.removeTokenBagRegistration).toHaveBeenCalledWith({
       gameId: 42n,
@@ -626,6 +641,22 @@ describe("createStorytellerBag", () => {
     expect(await bag.open()).toBe(false);
     expect(bag.state.error).toContain("nope");
     expect(bag.state.phase).toBe(TokenBagPhase.UNSPECIFIED);
+  });
+
+  it("addPlayer reports a refused name without touching the players", async () => {
+    const bag = createStorytellerBag("42", {
+      owner: {
+        ...ownerClient(),
+        addTokenBagRegistration: vi.fn(async () => {
+          throw new ConnectError("name already taken", Code.AlreadyExists);
+        }),
+      } as unknown as OwnerBagClient,
+    });
+
+    await bag.load();
+    expect(await bag.addPlayer("Alice")).toBe(false);
+    expect(bag.state.error).toContain("name already taken");
+    expect(bag.state.players).toEqual([]);
   });
 
   it("seating hands the raw response to the panel", async () => {

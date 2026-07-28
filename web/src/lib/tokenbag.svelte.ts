@@ -63,6 +63,7 @@ export type OwnerBagClient = Pick<
   | "getTokenBag"
   | "openTokenBagRegistration"
   | "closeTokenBagRegistration"
+  | "addTokenBagRegistration"
   | "removeTokenBagRegistration"
   | "revealTokenBag"
   | "resetTokenBag"
@@ -526,6 +527,16 @@ export function createStorytellerBag(
     owner.resetTokenBag({ gameId: id }),
   );
 
+  /** Puts a player in the bag for someone who has no device of their own. */
+  async function addPlayer(name: string): Promise<boolean> {
+    const ok = await guard("Could not add that player", async () => {
+      const resp = await owner.addTokenBagRegistration({ gameId: id, name });
+      applyBag(resp.tokenBag);
+      return true;
+    });
+    return ok === true;
+  }
+
   async function remove(registrationId: string | bigint): Promise<boolean> {
     const ok = await guard("Could not remove that player", async () => {
       const resp = await owner.removeTokenBagRegistration({
@@ -552,6 +563,7 @@ export function createStorytellerBag(
     stop,
     open: openRegistration,
     close: closeRegistration,
+    addPlayer,
     remove,
     reveal,
     reset,
