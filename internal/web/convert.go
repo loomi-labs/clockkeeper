@@ -170,6 +170,24 @@ func charactersToProto(chars []*botc.Character) []*clockkeeperv1.Character {
 	return result
 }
 
+// charactersToProtoForEdition converts characters in the context of a script
+// with the given edition: base-edition scripts get the printed night sheet's
+// wake order instead of the global (custom script) one. Characters without an
+// override — custom scripts, travellers, fabled — keep their global positions.
+func charactersToProtoForEdition(chars []*botc.Character, edition string, registry *botc.Registry) []*clockkeeperv1.Character {
+	result := charactersToProto(chars)
+	if registry == nil || edition == "" {
+		return result
+	}
+	for i, c := range chars {
+		if first, other, ok := registry.EditionNightPos(edition, c.ID); ok {
+			result[i].FirstNight = int32(first)
+			result[i].OtherNight = int32(other)
+		}
+	}
+	return result
+}
+
 func entInfoCardToProto(c *ent.InfoCard, registry *botc.Registry) *clockkeeperv1.InfoCard {
 	proto := &clockkeeperv1.InfoCard{
 		Id:           int64(c.ID),
@@ -250,7 +268,7 @@ func entScriptToProto(s *ent.Script, registry *botc.Registry) *clockkeeperv1.Scr
 		IsSystem:     s.IsSystem,
 	}
 	if registry != nil {
-		proto.Characters = charactersToProto(registry.Characters(s.CharacterIds))
+		proto.Characters = charactersToProtoForEdition(registry.Characters(s.CharacterIds), s.Edition, registry)
 	}
 	return proto
 }
@@ -326,6 +344,13 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 	extraChars := registry.Characters(g.ExtraCharacters)
 	bluffChars := registry.Characters(g.SelectedBluffs)
 
+	// Base-edition games follow the printed night sheet. Requires the script
+	// edge to be eager-loaded; without it the global order is served.
+	edition := ""
+	if s := g.Edges.Script; s != nil {
+		edition = s.Edition
+	}
+
 	var dist *clockkeeperv1.RoleDistribution
 	if d, err := botc.DistributionForPlayerCount(g.PlayerCount); err == nil {
 		adjusted := botc.ApplySetupModifiers(d, chars).Distribution
@@ -351,12 +376,12 @@ func entGameToProto(g *ent.Game, registry *botc.Registry) *clockkeeperv1.Game {
 		ExtraCharacterIds:           g.ExtraCharacters,
 		State:                       gameStateToProto[g.State],
 		Distribution:                dist,
-		SelectedCharacters:          charactersToProto(chars),
-		SelectedTravellerCharacters: charactersToProto(travellerChars),
-		ExtraCharacterDetails:       charactersToProto(extraChars),
+		SelectedCharacters:          charactersToProtoForEdition(chars, edition, registry),
+		SelectedTravellerCharacters: charactersToProtoForEdition(travellerChars, edition, registry),
+		ExtraCharacterDetails:       charactersToProtoForEdition(extraChars, edition, registry),
 		ReminderTokens:              tokens,
 		SelectedBluffIds:            g.SelectedBluffs,
-		SelectedBluffCharacters:     charactersToProto(bluffChars),
+		SelectedBluffCharacters:     charactersToProtoForEdition(bluffChars, edition, registry),
 		BagSubstitutions:            bagSubstitutionsToProto(g.BagSubstitutions),
 		RolePromotions:              rolePromotionsToProto(g.RolePromotions),
 		TokenBagPhase:               tokenBagPhaseToProto(g.TokenBagPhase),
