@@ -13,6 +13,9 @@ type Registry struct {
 	byTeam     map[Team][]*Character
 	jinxes     map[string][]Jinx
 	nightSheet *NightSheet
+	// Printed-sheet night positions per base edition, keyed by edition then
+	// character ID. See printedNightOrders.
+	editionNightPos map[string]map[string]*nightPos
 }
 
 // NewRegistry creates a registry from the raw JSON data files.
@@ -61,6 +64,10 @@ func NewRegistry(rolesJSON, jinxesJSON, nightSheetJSON []byte) (*Registry, error
 
 	for _, cj := range charJinxes {
 		r.jinxes[cj.ID] = cj.Jinx
+	}
+
+	if err := r.applyPrintedOrders(); err != nil {
+		return nil, fmt.Errorf("applying printed night orders: %w", err)
 	}
 
 	return r, nil

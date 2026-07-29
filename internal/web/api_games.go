@@ -119,6 +119,13 @@ func (h *ClockKeeperServiceHandler) CreateGame(ctx context.Context, req *connect
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// Re-fetch: Create() returns no edges, but the proto conversion needs the
+	// script edition for the printed night order.
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return connect.NewResponse(&clockkeeperv1.CreateGameResponse{
 		Game: entGameToProto(g, h.registry),
 	}), nil
@@ -679,6 +686,12 @@ func (h *ClockKeeperServiceHandler) UpdateBagSubstitutions(ctx context.Context, 
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 
+	// Re-fetch: Save() drops eager-loaded edges (script edition, phases).
+	g, err = h.getOwnedGame(ctx, g.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return connect.NewResponse(&clockkeeperv1.UpdateBagSubstitutionsResponse{
 		Game: entGameToProto(g, h.registry),
 	}), nil
@@ -856,6 +869,7 @@ func (h *ClockKeeperServiceHandler) getOwnedGame(ctx context.Context, gameID int
 
 	g, err := h.db.Game.Query().
 		Where(game.ID(gameID)).
+		WithScript().
 		WithPhases(func(q *ent.PhaseQuery) {
 			q.WithDeaths().
 				Order(ent.Asc(phase.FieldID))
