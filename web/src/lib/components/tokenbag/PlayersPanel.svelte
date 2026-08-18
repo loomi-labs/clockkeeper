@@ -685,11 +685,16 @@
 </div>
 
 {#if qrModal}
-  <div class="fixed inset-0 z-50 flex items-center justify-center">
+  <!-- mb-0 undoes the space-y-* margin the setup page puts on its children:
+       on a fixed inset-0 box that margin shortens the cover and leaves a strip
+       of the page showing along the bottom edge. -->
+  <div class="fixed inset-0 z-50 mb-0 flex items-center justify-center">
+    <!-- Opaque, not dimmed: this code gets shown to the table, so the roles in
+         play behind it must not read through. -->
     <button
       type="button"
       tabindex="-1"
-      class="absolute inset-0 bg-black/70"
+      class="absolute inset-0 bg-black"
       onclick={() => (qrModal = null)}
       aria-label="Close"
     ></button>
@@ -697,7 +702,7 @@
       role="dialog"
       aria-modal="true"
       aria-label={qrModal.label}
-      class="relative z-10 flex max-h-[95dvh] w-full max-w-lg flex-col items-center gap-4 overflow-y-auto rounded-xl border border-border bg-surface p-5 shadow-xl"
+      class="relative z-10 flex max-h-[95dvh] w-full max-w-lg flex-col items-center gap-4 overflow-y-auto rounded-xl bg-surface p-5"
     >
       <QrCode value={qrModal.url} label={qrModal.label} size={modalQrSize} />
       <p
