@@ -205,6 +205,14 @@
   const bagEditable = $derived(
     phase === TokenBagPhase.OPEN || phase === TokenBagPhase.CLOSED,
   );
+  /**
+   * The phases in which players place their neighbors — from the moment they
+   * join until the reveal. So the picks are worth showing (and worth arranging
+   * the grimoire from) well before registration closes.
+   */
+  const picksLive = $derived(
+    phase === TokenBagPhase.OPEN || phase === TokenBagPhase.CLOSED,
+  );
 
   // The page mirrors the registrant names into its assignment UI. Whether the bag
   // still takes registrations rides along, because the page has one name-writing
@@ -318,9 +326,9 @@
     }
   }
 
-  /** Neighbor picks, for a waiting chip's tooltip while registration is closed. */
+  /** Neighbor picks, for a waiting chip's tooltip. Players pick from OPEN on. */
   function neighborHint(player: BagPlayer): string | undefined {
-    if (phase !== TokenBagPhase.CLOSED) return undefined;
+    if (!picksLive) return undefined;
     if (player.leftId === NO_ID && player.rightId === NO_ID) return "no picks";
     const nameOf = (id: string) =>
       id === NO_ID
@@ -567,7 +575,7 @@
     {onunassign}
     {ontogglelock}
     {seatMeta}
-    showNeighborCaptions={phase === TokenBagPhase.CLOSED}
+    showNeighborCaptions={picksLive}
   />
 
   {#if arrangeConflicts.length > 0}
@@ -636,7 +644,12 @@
         {/if}
       {/if}
 
-      {#if phase === TokenBagPhase.CLOSED}
+      <!--
+        Arranging is offered as soon as the picks exist, registration still open
+        or not: the seating it produces is best-effort anyway, and a Storyteller
+        who arranges early can re-arrange once the last player has answered.
+      -->
+      {#if picksLive}
         <button
           type="button"
           onclick={doArrange}
@@ -648,6 +661,9 @@
         >
           {arranging ? "Arranging…" : "Arrange grimoire from neighbor picks"}
         </button>
+      {/if}
+
+      {#if phase === TokenBagPhase.CLOSED}
         <button
           type="button"
           onclick={() => (confirming = "reveal")}

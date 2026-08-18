@@ -1165,27 +1165,29 @@ func TestRemoveTokenBagRegistration_RejectsForeignRegistration(t *testing.T) {
 
 // --- Neighbors ---
 
-func TestSetTokenBagNeighbors_OnlyWhileClosed(t *testing.T) {
+// Picks are open for the whole registered-but-not-revealed window: a player
+// places their neighbors while the rest of the table is still joining.
+func TestSetTokenBagNeighbors_UntilTheReveal(t *testing.T) {
 	h := testHandler(t)
 	ctx := context.Background()
 	bag := createBagGame(t, h)
 	aliceID, aliceSecret := joinBag(t, h, bag.joinCode, "Alice")
-	_, bobSecret := joinBag(t, h, bag.joinCode, "Bob")
+	bobID, bobSecret := joinBag(t, h, bag.joinCode, "Bob")
 
-	// While open: too early.
+	// While registration is still open.
 	_, err := h.SetTokenBagNeighbors(ctx, connect.NewRequest(&clockkeeperv1.SetTokenBagNeighborsRequest{
 		RegistrationSecret: bobSecret,
 		LeftRegistrationId: aliceID,
 	}))
-	require.Error(t, err)
-	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	require.NoError(t, err)
 
 	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"chef": "Alice", "imp": "Bob"})
 	closeBag(t, h, bag)
 
+	// And still once it has closed.
 	_, err = h.SetTokenBagNeighbors(ctx, connect.NewRequest(&clockkeeperv1.SetTokenBagNeighborsRequest{
-		RegistrationSecret: bobSecret,
-		LeftRegistrationId: aliceID,
+		RegistrationSecret: aliceSecret,
+		LeftRegistrationId: bobID,
 	}))
 	require.NoError(t, err)
 

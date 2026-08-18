@@ -14,6 +14,7 @@
     characters,
     selectedIds,
     excludeIds,
+    unavailable,
     excludeTeams,
     team,
     onselect,
@@ -23,7 +24,14 @@
     title: string;
     characters: Character[];
     selectedIds: Set<string>;
+    /** Dropped from the list entirely. */
     excludeIds?: Set<string>;
+    /**
+     * Character id -> why it is a poor choice. Listed and still pickable, but
+     * dimmed and captioned with the reason. For choices the caller wants to warn
+     * about rather than forbid — see `poorBluffReasons`.
+     */
+    unavailable?: ReadonlyMap<string, string>;
     excludeTeams?: Team[];
     team?: Team;
     onselect: (char: Character) => void;
@@ -207,11 +215,15 @@
       <div class="grid gap-2 sm:grid-cols-2">
         {#each filteredCharacters as char (char.id)}
           {@const added = selectedIds.has(char.id)}
+          {@const reason = unavailable?.get(char.id)}
           <button
             onclick={() => (added ? ondeselect(char.id) : onselect(char))}
             onmouseenter={(e) => onCharHover(e, char)}
             onmouseleave={clearHoverTimer}
-            class="card-slate rounded-lg border p-2.5 text-left transition-colors {added
+            title={reason ? `${char.name} — ${reason}` : undefined}
+            class="card-slate rounded-lg border p-2.5 text-left transition-colors {reason
+              ? 'opacity-60'
+              : ''} {added
               ? (teamCardColorsSelected[char.team] ??
                   'border-border-strong bg-hover') + ' hover:brightness-90'
               : (teamCardColors[char.team] ?? 'border-border bg-hover') +
@@ -234,6 +246,11 @@
                     ? (teamNameColors[char.team] ?? 'text-primary')
                     : 'text-primary'}">{char.name}</span
                 >
+                {#if reason}
+                  <span class="block truncate text-[11px] text-muted"
+                    >{reason}</span
+                  >
+                {/if}
               </div>
               {#if added}
                 <svg

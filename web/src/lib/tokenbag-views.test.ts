@@ -3,56 +3,22 @@ import { TokenBagPhase } from "./gen/clockkeeper/v1/clockkeeper_pb";
 import type { PlayerView } from "./tokenbag";
 import { deriveDeviceView, refinePlayerView } from "./tokenbag-views";
 
-const FRESH = { settled: false, editing: false, streamDead: false };
+const FRESH = { streamDead: false };
 
 describe("refinePlayerView", () => {
-  it("shows the picker while nothing has been submitted or skipped", () => {
-    const view: PlayerView = { kind: "neighbor_pick", hasNeighbors: false };
-    expect(refinePlayerView(view, FRESH)).toEqual(view);
-  });
-
-  it("switches to waiting after submitting", () => {
-    const view: PlayerView = { kind: "neighbor_pick", hasNeighbors: true };
-    expect(refinePlayerView(view, { ...FRESH, settled: true })).toEqual({
-      kind: "waiting_reveal",
-    });
-  });
-
-  it("switches to waiting after skipping, with no neighbors saved", () => {
-    const view: PlayerView = { kind: "neighbor_pick", hasNeighbors: false };
-    expect(refinePlayerView(view, { ...FRESH, settled: true })).toEqual({
-      kind: "waiting_reveal",
-    });
-  });
-
-  it("waits when the server already knows this player's neighbors", () => {
-    // A reload during the closed phase: nothing was settled in this session, but
-    // the answer is already in.
-    const view: PlayerView = { kind: "neighbor_pick", hasNeighbors: true };
-    expect(refinePlayerView(view, FRESH)).toEqual({ kind: "waiting_reveal" });
-  });
-
-  it("reopens the picker while editing, even once settled", () => {
-    const view: PlayerView = { kind: "neighbor_pick", hasNeighbors: true };
-    expect(
-      refinePlayerView(view, { ...FRESH, settled: true, editing: true }),
-    ).toEqual(view);
-  });
-
-  it("passes every other view through untouched", () => {
+  it("passes every view through while the stream is alive", () => {
     for (const view of [
       { kind: "loading" },
       { kind: "enter_name" },
-      { kind: "waiting_open" },
+      { kind: "in_bag", registrationOpen: true },
+      { kind: "in_bag", registrationOpen: false },
       { kind: "revealed_shown" },
       { kind: "revealed_hidden" },
       { kind: "removed" },
       { kind: "game_started" },
       { kind: "gone" },
     ] satisfies PlayerView[]) {
-      expect(
-        refinePlayerView(view, { ...FRESH, settled: true, editing: true }),
-      ).toBe(view);
+      expect(refinePlayerView(view, FRESH)).toBe(view);
     }
   });
 
@@ -61,24 +27,16 @@ describe("refinePlayerView", () => {
     // no screen derived from it may keep claiming to be live.
     for (const view of [
       { kind: "enter_name" },
-      { kind: "waiting_open" },
-      { kind: "neighbor_pick", hasNeighbors: false },
-      { kind: "waiting_reveal" },
+      { kind: "in_bag", registrationOpen: true },
+      { kind: "in_bag", registrationOpen: false },
       { kind: "revealed_shown" },
       { kind: "revealed_hidden" },
       { kind: "removed" },
     ] satisfies PlayerView[]) {
-      expect(refinePlayerView(view, { ...FRESH, streamDead: true })).toEqual({
+      expect(refinePlayerView(view, { streamDead: true })).toEqual({
         kind: "gone",
       });
     }
-  });
-
-  it("lets a dead stream win over an open picker", () => {
-    const view: PlayerView = { kind: "neighbor_pick", hasNeighbors: false };
-    expect(
-      refinePlayerView(view, { ...FRESH, editing: true, streamDead: true }),
-    ).toEqual({ kind: "gone" });
   });
 });
 

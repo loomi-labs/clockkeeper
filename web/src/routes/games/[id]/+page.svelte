@@ -66,6 +66,7 @@
     bluffCharactersInPlay,
     bluffCharactersShownByBagSubs,
     inPlayCharacterIds,
+    poorBluffReasons,
   } from "~/lib/game-warnings";
   import {
     assignNameInMap,
@@ -696,18 +697,12 @@
 
   function rerollBluffs() {
     if (!game || !script) return;
-    const selectedIds = new Set([
-      ...(game.selectedRoleIds ?? []),
-      ...(game.extraCharacterIds ?? []),
-    ]);
-    // A bag substitution's shown token (the character the Drunk believes they
-    // are) acts "in play" from the players' perspective — never re-roll it in.
-    for (const bs of game.bagSubstitutions ?? []) {
-      if (bs.characterId) selectedIds.add(bs.characterId);
-    }
+    // Never re-roll in a character the picker would dim: in play, or a bag
+    // substitution's shown token. A dimmed one is only ever a deliberate pick.
+    const poor = poorBluffReasons(game);
     const goodChars = (script.characters ?? []).filter(
       (c) =>
-        !selectedIds.has(c.id) &&
+        !poor.has(c.id) &&
         (c.team === Team.TOWNSFOLK || c.team === Team.OUTSIDER),
     );
     // Shuffle and pick 3
@@ -2485,6 +2480,15 @@
 
 <svelte:document onfullscreenchange={onFullscreenChange} />
 
+<!--
+  The music control for the round header. Fullscreen hides the page toolbar this
+  panel normally lives in, so PhaseHeader renders this copy instead — never both
+  at once, because the header only asks for it while fullscreen.
+-->
+{#snippet fullscreenMusic()}
+  <SpotifyPanel {activeIsDay} />
+{/snippet}
+
 {#if loading}
   <p class="text-secondary">Loading...</p>
 {:else if error && !game}
@@ -2884,6 +2888,7 @@
           onviewchange={(v) => (inProgressView = v)}
           {isFullscreen}
           ontogglefullscreen={toggleFullscreen}
+          musicControl={spotify.available ? fullscreenMusic : undefined}
           onshowcards={() => (infoCardPickerOpen = true)}
           dayActive={activeIsDay}
           {nominationMode}
@@ -3367,10 +3372,7 @@
       title="Select Demon Bluff"
       characters={script?.characters ?? []}
       selectedIds={new Set(game.selectedBluffIds ?? [])}
-      excludeIds={new Set([
-        ...(game.selectedRoleIds ?? []),
-        ...(game.extraCharacterIds ?? []),
-      ])}
+      unavailable={poorBluffReasons(game)}
       excludeTeams={[
         Team.MINION,
         Team.DEMON,

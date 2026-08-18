@@ -11,6 +11,7 @@ import {
   getStartGameWarnings,
   bluffCharactersInPlay,
   bluffCharactersShownByBagSubs,
+  poorBluffReasons,
   type CurrentDistribution,
 } from "./game-warnings";
 
@@ -88,6 +89,71 @@ describe("bluffCharactersShownByBagSubs", () => {
       selectedBluffCharacters: [char("chef", "Chef")],
     });
     expect(bluffCharactersShownByBagSubs(game)).toEqual([]);
+  });
+});
+
+describe("poorBluffReasons", () => {
+  it("reports every kind of in-play character", () => {
+    const game = makeGame({
+      selectedRoleIds: ["chef"],
+      extraCharacterIds: ["empath"],
+      selectedTravellerIds: ["scapegoat"],
+    });
+    expect([...poorBluffReasons(game).entries()].sort()).toEqual([
+      ["chef", "in play"],
+      ["empath", "in play"],
+      ["scapegoat", "in play"],
+    ]);
+  });
+
+  it("names the substitution a shown token belongs to", () => {
+    const game = makeGame({
+      bagSubstitutions: [
+        {
+          causedById: "drunk",
+          causedByName: "Drunk",
+          characterId: "washerwoman",
+          characterName: "Washerwoman",
+          team: "townsfolk",
+        },
+      ],
+    });
+    expect(poorBluffReasons(game).get("washerwoman")).toBe("Drunk's token");
+  });
+
+  it("ignores a substitution with no token picked yet", () => {
+    const game = makeGame({
+      bagSubstitutions: [
+        {
+          causedById: "drunk",
+          causedByName: "Drunk",
+          characterId: "",
+          characterName: "",
+          team: "townsfolk",
+        },
+      ],
+    });
+    expect(poorBluffReasons(game).size).toBe(0);
+  });
+
+  it("prefers in play over shown token when a character is both", () => {
+    const game = makeGame({
+      selectedRoleIds: ["chef"],
+      bagSubstitutions: [
+        {
+          causedById: "drunk",
+          causedByName: "Drunk",
+          characterId: "chef",
+          characterName: "Chef",
+          team: "townsfolk",
+        },
+      ],
+    });
+    expect(poorBluffReasons(game).get("chef")).toBe("in play");
+  });
+
+  it("is empty for a game with nothing set up", () => {
+    expect(poorBluffReasons(makeGame()).size).toBe(0);
   });
 });
 

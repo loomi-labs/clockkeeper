@@ -48,6 +48,30 @@ export function bluffCharactersShownByBagSubs(game: Game): Character[] {
 }
 
 /**
+ * Every good character that makes a poor demon bluff, mapped to the reason why:
+ * it is in play, or it is a bag substitution's shown token (the character the
+ * Drunk believes they are, which acts in play from the players' side).
+ *
+ * The single source of truth for that judgement. The bluff picker dims these and
+ * captions them with the reason but still lets the Storyteller choose one — a
+ * knowing in-play bluff is legitimate (Pit-Hag) — while "Reroll" skips them
+ * outright, because nothing there says the choice was deliberate.
+ */
+export function poorBluffReasons(game: Game): ReadonlyMap<string, string> {
+  const reasons = new Map<string, string>();
+  // Shown tokens first, so "in play" wins for a character that is both.
+  for (const bs of game.bagSubstitutions ?? []) {
+    if (bs.characterId) {
+      reasons.set(bs.characterId, `${bs.causedByName}'s token`);
+    }
+  }
+  for (const id of inPlayCharacterIds(game)) {
+    reasons.set(id, "in play");
+  }
+  return reasons;
+}
+
+/**
  * Compute the advisory warnings shown before starting a game.
  *
  * Covers: unpicked bag-substitute tokens, missing demon bluffs (7+ players),

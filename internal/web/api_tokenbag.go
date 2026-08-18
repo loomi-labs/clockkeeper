@@ -113,8 +113,8 @@ func (h *ClockKeeperServiceHandler) OpenTokenBagRegistration(ctx context.Context
 	return connect.NewResponse(&clockkeeperv1.OpenTokenBagRegistrationResponse{TokenBag: bag}), nil
 }
 
-// CloseTokenBagRegistration stops new players from joining. Neighbor picks
-// happen after this point.
+// CloseTokenBagRegistration stops new players from joining. Neighbor picks are
+// unaffected — they are open for the whole OPEN / CLOSED window.
 func (h *ClockKeeperServiceHandler) CloseTokenBagRegistration(ctx context.Context, req *connect.Request[clockkeeperv1.CloseTokenBagRegistrationRequest]) (*connect.Response[clockkeeperv1.CloseTokenBagRegistrationResponse], error) {
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
@@ -544,14 +544,18 @@ func (h *ClockKeeperServiceHandler) JoinTokenBag(ctx context.Context, req *conne
 
 // SetTokenBagNeighbors records who a player sits between. Picking the same player
 // on both sides is allowed — tiny circles have a single other player.
+//
+// Open from the moment a player joins until the reveal: players place their
+// neighbors while the rest of the table is still registering, and change the
+// answer as more people arrive.
 func (h *ClockKeeperServiceHandler) SetTokenBagNeighbors(ctx context.Context, req *connect.Request[clockkeeperv1.SetTokenBagNeighborsRequest]) (*connect.Response[clockkeeperv1.SetTokenBagNeighborsResponse], error) {
 	r, g, err := h.registrationBySecret(ctx, req.Msg.RegistrationSecret)
 	if err != nil {
 		return nil, err
 	}
 
-	if g.TokenBagPhase != game.TokenBagPhaseClosed {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("neighbors can only be picked after registration closes and before the reveal"))
+	if g.TokenBagPhase != game.TokenBagPhaseOpen && g.TokenBagPhase != game.TokenBagPhaseClosed {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("neighbors can only be picked before the reveal"))
 	}
 
 	leftID := int(req.Msg.LeftRegistrationId)
