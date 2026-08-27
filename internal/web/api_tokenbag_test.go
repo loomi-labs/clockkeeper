@@ -1208,7 +1208,7 @@ func TestSetTokenBagNeighbors_UntilTheReveal(t *testing.T) {
 // lock rather than raced on timing — the transaction below holds the very
 // registration row the handler must write, exactly as RevealTokenBag does.
 func TestSetTokenBagNeighbors_RevealMidFlightWins(t *testing.T) {
-	h := testHandler(t)
+	h, rawDB := testHandlerWithDB(t)
 	ctx := context.Background()
 	bag := createBagGame(t, h)
 	aliceID, aliceSecret := joinBag(t, h, bag.joinCode, "Alice")
@@ -1235,8 +1235,22 @@ func TestSetTokenBagNeighbors_RevealMidFlightWins(t *testing.T) {
 		pickErr <- err
 	}()
 
-	// Long enough for the handler to reach that write, then let the reveal land.
-	time.Sleep(300 * time.Millisecond)
+	// Wait for Postgres to report a backend parked on a lock — that is the
+	// handler's write queued behind the row held above, which proves it cleared
+	// the pre-transaction phase check and reached the transaction. A fixed sleep
+	// would not: a goroutine that started late would be rejected by the fast
+	// path, and the test would pass without ever exercising the gate it guards.
+	require.Eventually(t, func() bool {
+		var waiting int
+		err := rawDB.QueryRowContext(ctx, `
+			SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND wait_event_type = 'Lock'
+			  AND pid <> pg_backend_pid()`).Scan(&waiting)
+		return err == nil && waiting > 0
+	}, 15*time.Second, 25*time.Millisecond, "the pick never blocked on the held registration row")
+
+	// Now let the reveal land, mid-flight.
 	require.NoError(t, tx.Commit())
 
 	select {
