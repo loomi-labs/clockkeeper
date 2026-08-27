@@ -19,6 +19,7 @@
     onviewchange,
     isFullscreen = false,
     ontogglefullscreen,
+    musicControl,
     onshowcards,
     dayActive = false,
     nominationMode = false,
@@ -34,6 +35,12 @@
     onviewchange?: (view: "nightsheet" | "grimoire") => void;
     isFullscreen?: boolean;
     ontogglefullscreen?: () => void;
+    /**
+     * The page's music control, rendered here ONLY in fullscreen — the page
+     * toolbar that normally holds it is hidden then. Omitted when there is no
+     * music to control.
+     */
+    musicControl?: Snippet;
     onshowcards?: () => void;
     // True when the current round's active step is its Day (phases advance
     // step-wise: Night N → Day N → Night N+1). Only meaningful for the current
@@ -89,22 +96,30 @@
 </script>
 
 {#if isFullscreen && headerHidden}
-  <button
-    onclick={() => (headerHidden = false)}
-    class="no-print rounded-lg border border-border bg-surface/80 p-1.5 text-secondary transition-colors hover:bg-hover hover:text-medium"
-    title="Show header"
-    aria-label="Show header"
-  >
-    <svg
-      class="h-4 w-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      stroke-width="2"
+  <!-- The music control rides along: a hidden header must not take it away. -->
+  <div class="no-print flex items-center gap-1.5">
+    <button
+      onclick={() => (headerHidden = false)}
+      class="rounded-lg border border-border bg-surface/80 p-1.5 text-secondary transition-colors hover:bg-hover hover:text-medium"
+      title="Show header"
+      aria-label="Show header"
     >
-      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-  </button>
+      <svg
+        class="h-4 w-4"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M19 9l-7 7-7-7"
+        />
+      </svg>
+    </button>
+    {@render musicControl?.()}
+  </div>
 {:else}
   <div class="no-print rounded-lg border border-border bg-surface p-3 sm:p-4">
     <div
@@ -264,6 +279,10 @@
                   />
                 </svg>
               </button>
+            {/if}
+            <!-- Fullscreen only: outside it the page toolbar shows this. -->
+            {#if isFullscreen}
+              {@render musicControl?.()}
             {/if}
             {#if onshowcards}
               <button

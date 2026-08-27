@@ -132,17 +132,15 @@ export function deviceUrl(origin: string, sharedCode: string): string {
 /**
  * What a player's device should show.
  *
- * `waiting_reveal` is a page-side refinement: {@link derivePlayerView} returns
- * `neighbor_pick` for the whole closed phase and hands over `hasNeighbors`, so
- * the page can decide between "pick your neighbors" and "you're done, waiting"
- * (and let the player go back to editing).
+ * `in_bag` is the one screen for the whole wait — registered, not yet revealed.
+ * It carries the neighbor picker (which saves on select, so there is nothing to
+ * settle and no reason to leave), the live player count and the waiting line.
+ * `registrationOpen` is what those last two read differently.
  */
 export type PlayerView =
   | { kind: "loading" }
   | { kind: "enter_name" }
-  | { kind: "waiting_open" }
-  | { kind: "neighbor_pick"; hasNeighbors: boolean }
-  | { kind: "waiting_reveal" }
+  | { kind: "in_bag"; registrationOpen: boolean }
   | { kind: "revealed_shown" }
   | { kind: "revealed_hidden" }
   | { kind: "removed" }
@@ -151,7 +149,6 @@ export type PlayerView =
 
 export type PlayerViewInput = {
   phase: TokenBagPhase;
-  players: readonly BagPlayer[];
   /** This device's registration id, `"0"` / `""` when it has none. */
   selfId: string;
   hasCredential: boolean;
@@ -161,18 +158,8 @@ export type PlayerViewInput = {
   streamStatus: WatchStatus;
 };
 
-/** True once the player has claimed both sides of their seat. */
-export function hasBothNeighbors(
-  players: readonly BagPlayer[],
-  selfId: string,
-): boolean {
-  const self = players.find((player) => player.id === selfId);
-  if (!self) return false;
-  return self.leftId !== NO_ID && self.rightId !== NO_ID;
-}
-
 export function derivePlayerView(input: PlayerViewInput): PlayerView {
-  const { phase, players, selfId, hasCredential, dismissed } = input;
+  const { phase, selfId, hasCredential, dismissed } = input;
 
   // No snapshot yet. A stopped stream at this point means the loop hit a fatal
   // error (unknown code) rather than that it is still on its way.
@@ -205,12 +192,9 @@ export function derivePlayerView(input: PlayerViewInput): PlayerView {
 
   switch (phase) {
     case TokenBagPhase.OPEN:
-      return { kind: "waiting_open" };
+      return { kind: "in_bag", registrationOpen: true };
     case TokenBagPhase.CLOSED:
-      return {
-        kind: "neighbor_pick",
-        hasNeighbors: hasBothNeighbors(players, selfId),
-      };
+      return { kind: "in_bag", registrationOpen: false };
     case TokenBagPhase.REVEALED:
       return dismissed
         ? { kind: "revealed_hidden" }

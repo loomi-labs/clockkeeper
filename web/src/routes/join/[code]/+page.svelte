@@ -3,7 +3,7 @@
   //
   // Public route: the root layout renders it bare and never mints a session, so
   // everything here goes through the unauthenticated player bag. One screen at a
-  // time, driven by `derivePlayerView` plus this page's own picker flags.
+  // time, driven by `derivePlayerView`.
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import ConfirmDialog from "~/lib/components/ConfirmDialog.svelte";
@@ -24,10 +24,8 @@
   let leftPick = $state(NO_ID);
   let rightPick = $state(NO_ID);
   let savingNeighbors = $state(false);
-  /** The picker has had its turn on this device (submitted or skipped). */
-  let neighborsSettled = $state(false);
-  /** The player reopened the picker to change an earlier answer. */
-  let editingNeighbors = $state(false);
+  /** True from a successful save until the next pick — the "Saved ✓" line. */
+  let neighborsSaved = $state(false);
 
   let confirmShow = $state(false);
   let showingToken = $state(false);
@@ -44,7 +42,6 @@
   const baseView = $derived(
     derivePlayerView({
       phase: bag.state.phase,
-      players: bag.state.players,
       selfId: bag.state.selfId,
       hasCredential: bag.state.hasCredential,
       dismissed: bag.state.dismissed,
@@ -54,8 +51,6 @@
   );
   const view = $derived(
     refinePlayerView(baseView, {
-      settled: neighborsSettled,
-      editing: editingNeighbors,
       // `gone` is the factory's verdict on an unknown code; a stopped stream
       // covers the other fatal errors (a rejected credential, say). Either way
       // this device will never hear from the bag again.
@@ -81,25 +76,22 @@
   const unclaimed = $derived(
     bag.state.players.filter((player) => player.viaSharedDevice),
   );
-  function nameOf(id: string): string {
-    if (id === NO_ID) return "";
-    return bag.state.players.find((player) => player.id === id)?.name ?? "";
-  }
-
-  /** Plain local: prefilling must not re-run on every snapshot. */
-  let picksPrefilled = false;
+  /**
+   * The selects follow the server. Re-synced on every snapshot, not just the
+   * first: a pick the bag invalidated — the Storyteller removed that player, so
+   * the server cleared the reference — has to disappear here too, and a second
+   * device on the same registration has to stay in step.
+   *
+   * Skipped while a save is in flight, where the local value is the newer of the
+   * two. The save flipping back to idle re-runs this, so the answer the server
+   * actually stored is what ends up on screen either way.
+   */
   $effect(() => {
-    if (baseView.kind !== "neighbor_pick") {
-      // Registration reopened, or the bag was reset — the picker starts over.
-      picksPrefilled = false;
-      neighborsSettled = false;
-      editingNeighbors = false;
-      return;
-    }
-    if (picksPrefilled) return;
-    picksPrefilled = true;
-    leftPick = self?.leftId ?? NO_ID;
-    rightPick = self?.rightId ?? NO_ID;
+    const left = self?.leftId ?? NO_ID;
+    const right = self?.rightId ?? NO_ID;
+    if (savingNeighbors) return;
+    leftPick = left;
+    rightPick = right;
   });
 
   /**
@@ -138,26 +130,36 @@
     await submitName(nameInput.trim());
   }
 
-  /**
-   * Submit is always available (bar the in-flight guard): one side, neither side
-   * and both sides are all legal answers. `SetTokenBagNeighbors` reads id 0 as
-   * "no neighbor on that side", so submitting with a picker back on "Not sure
-   * yet" is how a player *clears* an earlier answer — a predicate demanding both
-   * sides would make a wrong pick unremovable.
-   */
-  async function submitNeighbors() {
-    if (savingNeighbors) return;
-    savingNeighbors = true;
-    const ok = await bag.setNeighbors(leftPick, rightPick);
-    savingNeighbors = false;
-    if (!ok) return;
-    neighborsSettled = true;
-    editingNeighbors = false;
-  }
+  /** Plain local: a queued re-save is not something the screen renders. */
+  let resaveNeighbors = false;
 
-  function skipNeighbors() {
-    neighborsSettled = true;
-    editingNeighbors = false;
+  /**
+   * Saves the moment a select changes — there is no Submit button. One side,
+   * neither side and both sides are all legal answers: `SetTokenBagNeighbors`
+   * reads id 0 as "no neighbor on that side", so picking "Not sure yet" back is
+   * how a player *clears* an earlier answer.
+   *
+   * Single-flight with a re-run, so touching the second select while the first
+   * is still in flight is not lost. A failed save sets nothing: the sync effect
+   * puts the selects back to whatever the bag last reported, and `errorBox` says
+   * why.
+   */
+  async function saveNeighbors(left: string, right: string) {
+    leftPick = left;
+    rightPick = right;
+    neighborsSaved = false;
+    if (savingNeighbors) {
+      resaveNeighbors = true;
+      return;
+    }
+    savingNeighbors = true;
+    let ok = false;
+    do {
+      resaveNeighbors = false;
+      ok = await bag.setNeighbors(leftPick, rightPick);
+    } while (ok && resaveNeighbors);
+    savingNeighbors = false;
+    neighborsSaved = ok;
   }
 
   async function revealAgain() {
@@ -290,83 +292,74 @@
             {joining ? "Joining…" : "Join"}
           </button>
         </form>
-      {:else if view.kind === "waiting_open"}
-        <div class="flex flex-1 flex-col items-center justify-center gap-3">
-          <p class="text-lg font-semibold text-primary">
-            You're in{selfName ? `, ${selfName}` : ""}
-          </p>
-          <p class="text-sm text-secondary">
-            {bag.state.players.length}
-            {bag.state.players.length === 1 ? "player" : "players"} joined
-          </p>
-          <p class="text-xs text-muted">Waiting for the Storyteller…</p>
-          {@render errorBox()}
-        </div>
-      {:else if view.kind === "neighbor_pick"}
-        <div class="space-y-4">
-          <div>
-            <h2 class="text-base font-semibold text-primary">
-              Who's next to you?
-            </h2>
-            <p class="mt-1 text-sm text-secondary">
-              Optional — helps the Storyteller arrange the grimoire.
+      {:else if view.kind === "in_bag"}
+        <!--
+          One screen for the whole wait. The picker saves on select, so there is
+          nothing to submit and no reason to leave it — which is what lets it
+          open the moment a player joins, while the rest of the table is still
+          registering and the options list is still growing.
+        -->
+        <div class="flex flex-1 flex-col gap-5">
+          <div class="text-center">
+            <p class="text-lg font-semibold text-primary">
+              You're in{selfName ? `, ${selfName}` : ""}
+            </p>
+            {#if view.registrationOpen}
+              <p class="mt-0.5 text-sm text-secondary">
+                {bag.state.players.length}
+                {bag.state.players.length === 1 ? "player" : "players"} joined
+              </p>
+            {/if}
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <h2 class="text-base font-semibold text-primary">
+                Who's next to you?
+              </h2>
+              <p class="mt-1 text-sm text-secondary">
+                Optional — helps the Storyteller arrange the grimoire. Saved as
+                you pick.
+              </p>
+            </div>
+            {#if options.length === 0}
+              <p class="text-sm text-muted">Nobody else has joined yet.</p>
+            {:else}
+              {@render neighborPicker(
+                "left-neighbor",
+                "On your left",
+                leftPick,
+                (next) => saveNeighbors(next, rightPick),
+              )}
+              {@render neighborPicker(
+                "right-neighbor",
+                "On your right",
+                rightPick,
+                (next) => saveNeighbors(leftPick, next),
+              )}
+              <!-- Fixed height: the line must not shift the selects as it changes. -->
+              <p class="h-4 text-xs">
+                {#if savingNeighbors}
+                  <span class="text-muted">Saving…</span>
+                {:else if neighborsSaved}
+                  <span class="text-green-600 dark:text-green-400">Saved ✓</span
+                  >
+                {/if}
+              </p>
+            {/if}
+            {@render errorBox()}
+          </div>
+
+          <div class="mt-auto flex flex-col items-center gap-2 pt-2">
+            {#if !view.registrationOpen}
+              {@render spinner()}
+            {/if}
+            <p class="text-xs text-muted">
+              {view.registrationOpen
+                ? "Waiting for the Storyteller…"
+                : "Waiting for the reveal…"}
             </p>
           </div>
-          {#if options.length === 0}
-            <p class="text-sm text-muted">Nobody else has joined.</p>
-          {:else}
-            {@render neighborPicker(
-              "left-neighbor",
-              "On your left",
-              leftPick,
-              (next) => (leftPick = next),
-            )}
-            {@render neighborPicker(
-              "right-neighbor",
-              "On your right",
-              rightPick,
-              (next) => (rightPick = next),
-            )}
-          {/if}
-          {@render errorBox()}
-          <div class="flex gap-3">
-            <button
-              type="button"
-              onclick={skipNeighbors}
-              class="flex-1 rounded-lg border border-border px-4 py-3 text-base font-medium text-secondary transition-colors hover:bg-hover hover:text-medium"
-            >
-              Skip
-            </button>
-            <button
-              type="button"
-              onclick={submitNeighbors}
-              disabled={savingNeighbors}
-              class="flex-1 rounded-lg bg-indigo-600 px-4 py-3 text-base font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
-            >
-              {savingNeighbors ? "Saving…" : "Submit"}
-            </button>
-          </div>
-        </div>
-      {:else if view.kind === "waiting_reveal"}
-        <div class="flex flex-1 flex-col items-center justify-center gap-4">
-          {@render spinner()}
-          <p class="text-sm text-secondary">Waiting for the reveal…</p>
-          {#if self && (self.leftId !== NO_ID || self.rightId !== NO_ID)}
-            <p class="text-center text-xs text-muted">
-              Left: {nameOf(self.leftId) || "—"} · Right: {nameOf(
-                self.rightId,
-              ) || "—"}
-            </p>
-          {/if}
-          <button
-            type="button"
-            onclick={() => (editingNeighbors = true)}
-            class="rounded-lg border border-border px-4 py-2 text-sm font-medium text-secondary transition-colors hover:bg-hover hover:text-medium"
-          >
-            {self && (self.leftId !== NO_ID || self.rightId !== NO_ID)
-              ? "Edit neighbors"
-              : "Add neighbors"}
-          </button>
         </div>
       {:else if view.kind === "revealed_shown"}
         <div class="flex flex-1 flex-col items-center justify-between gap-6">

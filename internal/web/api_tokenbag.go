@@ -113,8 +113,8 @@ func (h *ClockKeeperServiceHandler) OpenTokenBagRegistration(ctx context.Context
 	return connect.NewResponse(&clockkeeperv1.OpenTokenBagRegistrationResponse{TokenBag: bag}), nil
 }
 
-// CloseTokenBagRegistration stops new players from joining. Neighbor picks
-// happen after this point.
+// CloseTokenBagRegistration stops new players from joining. Neighbor picks are
+// unaffected — they are open for the whole OPEN / CLOSED window.
 func (h *ClockKeeperServiceHandler) CloseTokenBagRegistration(ctx context.Context, req *connect.Request[clockkeeperv1.CloseTokenBagRegistrationRequest]) (*connect.Response[clockkeeperv1.CloseTokenBagRegistrationResponse], error) {
 	g, err := h.getOwnedGame(ctx, int(req.Msg.GameId))
 	if err != nil {
@@ -544,14 +544,18 @@ func (h *ClockKeeperServiceHandler) JoinTokenBag(ctx context.Context, req *conne
 
 // SetTokenBagNeighbors records who a player sits between. Picking the same player
 // on both sides is allowed — tiny circles have a single other player.
+//
+// Open from the moment a player joins until the reveal: players place their
+// neighbors while the rest of the table is still registering, and change the
+// answer as more people arrive.
 func (h *ClockKeeperServiceHandler) SetTokenBagNeighbors(ctx context.Context, req *connect.Request[clockkeeperv1.SetTokenBagNeighborsRequest]) (*connect.Response[clockkeeperv1.SetTokenBagNeighborsResponse], error) {
 	r, g, err := h.registrationBySecret(ctx, req.Msg.RegistrationSecret)
 	if err != nil {
 		return nil, err
 	}
 
-	if g.TokenBagPhase != game.TokenBagPhaseClosed {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("neighbors can only be picked after registration closes and before the reveal"))
+	if g.TokenBagPhase != game.TokenBagPhaseOpen && g.TokenBagPhase != game.TokenBagPhaseClosed {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("neighbors can only be picked before the reveal"))
 	}
 
 	leftID := int(req.Msg.LeftRegistrationId)
@@ -565,7 +569,24 @@ func (h *ClockKeeperServiceHandler) SetTokenBagNeighbors(ctx context.Context, re
 		}
 	}
 
-	upd := r.Update()
+	// The phase gate above is only a fast path: it reads the game outside any
+	// transaction, so a reveal can commit between that read and this write and
+	// leave a pick on an already-revealed bag. The write and the DECIDING gate
+	// therefore share one transaction.
+	//
+	// The order inside it carries the guarantee. RevealTokenBag assigns a role to
+	// EVERY registration of the game in the same transaction as the phase change
+	// — it refuses to reveal otherwise — so writing this registration first takes
+	// a row lock that a reveal has to wait on. Re-reading the phase after that
+	// write is then decisive: a reveal either committed already (we read REVEALED
+	// and abandon) or cannot commit until we do.
+	tx, err := h.db.Tx(ctx)
+	if err != nil {
+		slog.Error("start transaction failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	upd := tx.Registration.UpdateOneID(r.ID)
 	if leftID == 0 {
 		upd = upd.ClearLeftNeighborID()
 	} else {
@@ -578,7 +599,24 @@ func (h *ClockKeeperServiceHandler) SetTokenBagNeighbors(ctx context.Context, re
 	}
 	r, err = upd.Save(ctx)
 	if err != nil {
+		_ = tx.Rollback()
 		slog.Error("save neighbor picks failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+
+	current, err := tx.Game.Get(ctx, g.ID)
+	if err != nil {
+		_ = tx.Rollback()
+		slog.Error("re-read token bag phase failed", "err", err)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
+	}
+	if current.TokenBagPhase != game.TokenBagPhaseOpen && current.TokenBagPhase != game.TokenBagPhaseClosed {
+		_ = tx.Rollback()
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("neighbors can only be picked before the reveal"))
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("commit failed", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 	}
 	h.publishTokenBag(g.ID)

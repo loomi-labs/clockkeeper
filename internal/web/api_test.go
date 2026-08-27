@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -20,9 +21,19 @@ func TestMain(m *testing.M) {
 func testHandler(t *testing.T) *ClockKeeperServiceHandler {
 	t.Helper()
 
+	h, _ := testHandlerWithDB(t)
+	return h
+}
+
+// testHandlerWithDB is testHandler plus the raw pool behind it, for a test that
+// has to ask Postgres itself something Ent does not model — see
+// TestSetTokenBagNeighbors_RevealMidFlightWins, which waits on a lock wait.
+func testHandlerWithDB(t *testing.T) (*ClockKeeperServiceHandler, *sql.DB) {
+	t.Helper()
+
 	config := database.CreateTestDatabase(t)
 
-	client, _, err := database.NewClient(config)
+	client, sqlDB, err := database.NewClient(config)
 	if err != nil {
 		t.Fatalf("failed to create ent client: %v", err)
 	}
@@ -44,7 +55,7 @@ func testHandler(t *testing.T) *ClockKeeperServiceHandler {
 		auth:     auth,
 		registry: registry,
 		hub:      hub,
-	}
+	}, sqlDB
 }
 
 // authedCtx returns a context with the given user ID set for auth.

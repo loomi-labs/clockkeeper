@@ -35,3 +35,6 @@ SECURITY-REVIEW.md
 
 # jj workspaces (per-developer)
 /.workspaces/
+
+# Claude Code local settings (per-developer)
+.claude/settings.local.json

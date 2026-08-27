@@ -11,7 +11,6 @@ import {
   derivePlayerView,
   deviceUrl,
   emptySnapshot,
-  hasBothNeighbors,
   joinUrl,
   neighborOptions,
   normalizeName,
@@ -171,7 +170,6 @@ describe("derivePlayerView", () => {
   function view(over: Partial<PlayerViewInput> = {}) {
     const input: PlayerViewInput = {
       phase: TokenBagPhase.OPEN,
-      players: [],
       selfId: "0",
       hasCredential: false,
       dismissed: false,
@@ -221,27 +219,22 @@ describe("derivePlayerView", () => {
   const registered = {
     hasCredential: true,
     selfId: "5",
-    players: [player("5"), player("6")],
   };
 
-  it("phase open with a credential -> waiting_open", () => {
-    expect(view({ ...registered, phase: TokenBagPhase.OPEN }).kind).toBe(
-      "waiting_open",
-    );
+  // One screen for both, told apart only by whether more players can still
+  // join: the neighbor picker is up from the moment a player is registered.
+  it("phase open with a credential -> in_bag, registration open", () => {
+    expect(view({ ...registered, phase: TokenBagPhase.OPEN })).toEqual({
+      kind: "in_bag",
+      registrationOpen: true,
+    });
   });
 
-  it("phase closed with a credential -> neighbor_pick", () => {
+  it("phase closed with a credential -> in_bag, registration shut", () => {
     expect(view({ ...registered, phase: TokenBagPhase.CLOSED })).toEqual({
-      kind: "neighbor_pick",
-      hasNeighbors: false,
+      kind: "in_bag",
+      registrationOpen: false,
     });
-    expect(
-      view({
-        ...registered,
-        phase: TokenBagPhase.CLOSED,
-        players: [player("5", { leftId: "6", rightId: "6" }), player("6")],
-      }),
-    ).toEqual({ kind: "neighbor_pick", hasNeighbors: true });
   });
 
   it("phase revealed respects the dismissed flag", () => {
@@ -303,34 +296,13 @@ describe("derivePlayerView", () => {
       TokenBagPhase.CLOSED,
       TokenBagPhase.REVEALED,
     ]) {
-      expect(
-        view({
-          phase,
-          hasCredential: true,
-          selfId: "0",
-          players: [player("6")],
-        }).kind,
-      ).toBe("removed");
-      expect(
-        view({ phase, hasCredential: true, selfId: "", players: [player("6")] })
-          .kind,
-      ).toBe("removed");
+      expect(view({ phase, hasCredential: true, selfId: "0" }).kind).toBe(
+        "removed",
+      );
+      expect(view({ phase, hasCredential: true, selfId: "" }).kind).toBe(
+        "removed",
+      );
     }
-  });
-});
-
-describe("hasBothNeighbors", () => {
-  it("needs both sides claimed", () => {
-    expect(hasBothNeighbors([player("1")], "1")).toBe(false);
-    expect(hasBothNeighbors([player("1", { leftId: "2" })], "1")).toBe(false);
-    expect(hasBothNeighbors([player("1", { rightId: "2" })], "1")).toBe(false);
-    expect(
-      hasBothNeighbors([player("1", { leftId: "2", rightId: "3" })], "1"),
-    ).toBe(true);
-  });
-
-  it("is false when self is not in the list", () => {
-    expect(hasBothNeighbors([player("2")], "1")).toBe(false);
   });
 });
 
