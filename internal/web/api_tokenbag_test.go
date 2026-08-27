@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/loomi-labs/clockkeeper/ent"
+	"github.com/loomi-labs/clockkeeper/ent/game"
 	"github.com/loomi-labs/clockkeeper/ent/registration"
 	"github.com/loomi-labs/clockkeeper/ent/user"
 	clockkeeperv1 "github.com/loomi-labs/clockkeeper/gen/clockkeeper/v1"
@@ -1200,6 +1201,56 @@ func TestSetTokenBagNeighbors_UntilTheReveal(t *testing.T) {
 	}))
 	require.Error(t, err)
 	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+}
+
+// A reveal that commits while a pick is in flight has to win: the pick is
+// refused and leaves nothing behind. The interleaving is forced with a real row
+// lock rather than raced on timing — the transaction below holds the very
+// registration row the handler must write, exactly as RevealTokenBag does.
+func TestSetTokenBagNeighbors_RevealMidFlightWins(t *testing.T) {
+	h := testHandler(t)
+	ctx := context.Background()
+	bag := createBagGame(t, h)
+	aliceID, aliceSecret := joinBag(t, h, bag.joinCode, "Alice")
+	bobID, _ := joinBag(t, h, bag.joinCode, "Bob")
+	setGrimoireNames(t, h, bag.ownerID, bag.gameID, map[string]string{"chef": "Alice", "imp": "Bob"})
+	closeBag(t, h, bag)
+
+	// Stands in for a reveal that has done its work but not committed: it holds
+	// Alice's row and has already moved the phase.
+	tx, err := h.db.Tx(ctx)
+	require.NoError(t, err)
+	_, err = tx.Registration.UpdateOneID(int(aliceID)).SetAssignedRoleID("chef").Save(ctx)
+	require.NoError(t, err)
+	_, err = tx.Game.UpdateOneID(int(bag.gameID)).SetTokenBagPhase(game.TokenBagPhaseRevealed).Save(ctx)
+	require.NoError(t, err)
+
+	// The handler's own write blocks on that row lock until the commit lands.
+	pickErr := make(chan error, 1)
+	go func() {
+		_, err := h.SetTokenBagNeighbors(ctx, connect.NewRequest(&clockkeeperv1.SetTokenBagNeighborsRequest{
+			RegistrationSecret: aliceSecret,
+			LeftRegistrationId: bobID,
+		}))
+		pickErr <- err
+	}()
+
+	// Long enough for the handler to reach that write, then let the reveal land.
+	time.Sleep(300 * time.Millisecond)
+	require.NoError(t, tx.Commit())
+
+	select {
+	case got := <-pickErr:
+		require.Error(t, got, "a pick must not survive a reveal that committed first")
+		assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(got))
+	case <-time.After(15 * time.Second):
+		t.Fatal("SetTokenBagNeighbors never returned")
+	}
+
+	alice, err := h.db.Registration.Get(ctx, int(aliceID))
+	require.NoError(t, err)
+	assert.Zero(t, alice.LeftNeighborID, "the refused pick must leave no trace")
+	assert.Zero(t, alice.RightNeighborID)
 }
 
 func TestSetTokenBagNeighbors_RejectsSelfAndForeignPlayers(t *testing.T) {
